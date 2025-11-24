@@ -1,0 +1,6 @@
+> Jag vill skriva en android app som optimerar Nibe värmepumpar genom att skapa sig en förståelse för hur systemet är uppbyggt genom att användaren
+  beskriver systemet med text och bilder. Appen ska vägleda användaren att ta reda på hur systemet fungerar om den inte vet detta själv. Därefter hämtar
+  appen data från Nibe API och sammanställser detta i en databas. Om användaren inte vill ansluta systemet till Nibe API kan datan även hämtas genom att 
+exportera .csv filer från MyUplink och importera dessa i nibe_auto_tuner. Därefter analyserar appen datan i databasen med hjälp av förståelsen för hur 
+systemet är uppbyggt, beräkningar och genom att ändra inställningar i värmepumpen och se effekten av dessa. Även inställningarna kan implementeras manuellt
+om användaren inte har denna funktion i Nibe API och därefter meddela nibe_autotuner vilka inställningar som ändrats.
