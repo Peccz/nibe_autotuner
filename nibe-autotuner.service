@@ -1,0 +1,22 @@
+[Unit]
+Description=Nibe Autotuner Data Logger
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=peccz
+WorkingDirectory=/home/peccz/AI/nibe_autotuner
+Environment="PATH=/home/peccz/AI/nibe_autotuner/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/peccz/AI/nibe_autotuner/venv/bin/python src/data_logger.py --interval 300
+
+# Restart policy
+Restart=always
+RestartSec=30
+
+# Logging
+StandardOutput=append:/home/peccz/AI/nibe_autotuner/logs/data_logger.log
+StandardError=append:/home/peccz/AI/nibe_autotuner/logs/data_logger_error.log
+
+[Install]
+WantedBy=multi-user.target

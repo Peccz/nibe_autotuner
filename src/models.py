@@ -1,0 +1,209 @@
+"""
+Database models for Nibe Autotuner
+"""
+from datetime import datetime
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    String,
+    Float,
+    Boolean,
+    DateTime,
+    Text,
+    ForeignKey,
+    Index
+)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.sql import func
+
+Base = declarative_base()
+
+
+class System(Base):
+    """Heat pump system"""
+    __tablename__ = 'systems'
+
+    id = Column(Integer, primary_key=True)
+    system_id = Column(String(50), unique=True, nullable=False, index=True)
+    name = Column(String(100))
+    country = Column(String(50))
+    security_level = Column(String(20))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    devices = relationship('Device', back_populates='system')
+
+    def __repr__(self):
+        return f"<System(id={self.id}, name='{self.name}')>"
+
+
+class Device(Base):
+    """Heat pump device"""
+    __tablename__ = 'devices'
+
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String(100), unique=True, nullable=False, index=True)
+    system_id = Column(Integer, ForeignKey('systems.id'), nullable=False)
+    product_name = Column(String(100))
+    serial_number = Column(String(50))
+    firmware_version = Column(String(20))
+    connection_state = Column(String(20))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    system = relationship('System', back_populates='devices')
+    readings = relationship('ParameterReading', back_populates='device')
+    changes = relationship('ParameterChange', back_populates='device')
+    recommendations = relationship('Recommendation', back_populates='device')
+
+    def __repr__(self):
+        return f"<Device(id={self.id}, name='{self.product_name}')>"
+
+
+class Parameter(Base):
+    """Parameter metadata (catalog of all available parameters)"""
+    __tablename__ = 'parameters'
+
+    id = Column(Integer, primary_key=True)
+    parameter_id = Column(String(10), unique=True, nullable=False, index=True)
+    parameter_name = Column(String(200))
+    parameter_unit = Column(String(20))
+    category = Column(String(100))
+    writable = Column(Boolean, default=False)
+    min_value = Column(Float)
+    max_value = Column(Float)
+    step_value = Column(Float)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    readings = relationship('ParameterReading', back_populates='parameter')
+    changes = relationship('ParameterChange', back_populates='parameter')
+    recommendations = relationship('Recommendation', back_populates='parameter')
+
+    def __repr__(self):
+        return f"<Parameter(id={self.parameter_id}, name='{self.parameter_name}')>"
+
+
+class ParameterReading(Base):
+    """Time-series parameter readings"""
+    __tablename__ = 'parameter_readings'
+
+    id = Column(Integer, primary_key=True)
+    device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+    parameter_id = Column(Integer, ForeignKey('parameters.id'), nullable=False)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    value = Column(Float, nullable=False)
+    str_value = Column(String(50))
+
+    # Relationships
+    device = relationship('Device', back_populates='readings')
+    parameter = relationship('Parameter', back_populates='readings')
+
+    # Indexes for fast time-series queries
+    __table_args__ = (
+        Index('idx_device_timestamp', 'device_id', 'timestamp'),
+        Index('idx_param_timestamp', 'parameter_id', 'timestamp'),
+        Index('idx_device_param_timestamp', 'device_id', 'parameter_id', 'timestamp'),
+    )
+
+    def __repr__(self):
+        return f"<Reading(param={self.parameter_id}, value={self.value}, time={self.timestamp})>"
+
+
+class ParameterChange(Base):
+    """Track manual parameter changes"""
+    __tablename__ = 'parameter_changes'
+
+    id = Column(Integer, primary_key=True)
+    device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+    parameter_id = Column(Integer, ForeignKey('parameters.id'), nullable=False)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    old_value = Column(Float)
+    new_value = Column(Float)
+    reason = Column(Text)
+    applied_by = Column(String(50))  # 'user', 'system', 'recommendation'
+    recommendation_id = Column(Integer, ForeignKey('recommendations.id'))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    device = relationship('Device', back_populates='changes')
+    parameter = relationship('Parameter', back_populates='changes')
+    recommendation = relationship('Recommendation', back_populates='changes')
+
+    def __repr__(self):
+        return f"<Change(param={self.parameter_id}, {self.old_value}->{self.new_value})>"
+
+
+class Recommendation(Base):
+    """AI-generated optimization recommendations"""
+    __tablename__ = 'recommendations'
+
+    id = Column(Integer, primary_key=True)
+    device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+    parameter_id = Column(Integer, ForeignKey('parameters.id'), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    recommended_value = Column(Float)
+    current_value = Column(Float)
+    expected_impact = Column(Text)  # JSON with expected changes
+    priority = Column(String(20))  # 'high', 'medium', 'low'
+    status = Column(String(20), default='pending')  # 'pending', 'applied', 'rejected', 'expired'
+    applied_at = Column(DateTime)
+    expired_at = Column(DateTime)
+
+    # Relationships
+    device = relationship('Device', back_populates='recommendations')
+    parameter = relationship('Parameter', back_populates='recommendations')
+    changes = relationship('ParameterChange', back_populates='recommendation')
+    results = relationship('RecommendationResult', back_populates='recommendation')
+
+    def __repr__(self):
+        return f"<Recommendation(id={self.id}, param={self.parameter_id}, status={self.status})>"
+
+
+class RecommendationResult(Base):
+    """Track effectiveness of applied recommendations"""
+    __tablename__ = 'recommendation_results'
+
+    id = Column(Integer, primary_key=True)
+    recommendation_id = Column(Integer, ForeignKey('recommendations.id'), nullable=False)
+    measured_at = Column(DateTime, nullable=False)
+    metric_name = Column(String(50))  # e.g., 'energy_consumption', 'comfort_level'
+    before_value = Column(Float)
+    after_value = Column(Float)
+    change_percent = Column(Float)
+    success = Column(Boolean)
+
+    # Relationships
+    recommendation = relationship('Recommendation', back_populates='results')
+
+    def __repr__(self):
+        return f"<Result(rec={self.recommendation_id}, metric={self.metric_name}, change={self.change_percent}%)>"
+
+
+# Database initialization
+def init_db(database_url='sqlite:///./data/nibe_autotuner.db'):
+    """Initialize the database"""
+    engine = create_engine(database_url, echo=False)
+    Base.metadata.create_all(engine)
+    return engine
+
+
+def get_session(engine):
+    """Get a database session"""
+    Session = sessionmaker(bind=engine)
+    return Session()
+
+
+if __name__ == '__main__':
+    # Test database creation
+    from loguru import logger
+
+    logger.info("Creating database...")
+    engine = init_db()
+    logger.info(f"✓ Database created successfully!")
+    logger.info(f"✓ Tables: {', '.join(Base.metadata.tables.keys())}")

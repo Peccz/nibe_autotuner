@@ -22,7 +22,7 @@ CLIENT_SECRET = os.getenv('MYUPLINK_CLIENT_SECRET')
 REDIRECT_URI = os.getenv('MYUPLINK_CALLBACK_URL', 'http://localhost:8080/oauth/callback')
 AUTH_URL = os.getenv('MYUPLINK_AUTH_URL', 'https://api.myuplink.com/oauth/authorize')
 TOKEN_URL = os.getenv('MYUPLINK_TOKEN_URL', 'https://api.myuplink.com/oauth/token')
-TOKENS_FILE = Path('tokens.json')
+TOKENS_FILE = Path.home() / '.myuplink_tokens.json'
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
@@ -103,6 +103,8 @@ class MyUplinkAuth:
 
     def exchange_code_for_token(self, authorization_code):
         """Exchange authorization code for access token"""
+        import time
+
         data = {
             'grant_type': 'authorization_code',
             'code': authorization_code,
@@ -115,18 +117,28 @@ class MyUplinkAuth:
         response.raise_for_status()
 
         self.tokens = response.json()
+
+        # Add expiration timestamp
+        if 'expires_in' in self.tokens:
+            self.tokens['expires_at'] = time.time() + self.tokens['expires_in']
+
         self.save_tokens()
         logger.info("Successfully obtained access token")
         return self.tokens
 
     def refresh_access_token(self):
         """Refresh the access token using refresh token"""
+        import time
+
         if not self.tokens or 'refresh_token' not in self.tokens:
             raise ValueError("No refresh token available")
 
+        # Keep the old refresh_token in case the new response doesn't include it
+        old_refresh_token = self.tokens['refresh_token']
+
         data = {
             'grant_type': 'refresh_token',
-            'refresh_token': self.tokens['refresh_token'],
+            'refresh_token': old_refresh_token,
             'client_id': self.client_id,
             'client_secret': self.client_secret
         }
@@ -135,6 +147,16 @@ class MyUplinkAuth:
         response.raise_for_status()
 
         self.tokens = response.json()
+
+        # Some OAuth implementations don't return a new refresh_token
+        # In that case, keep the old one
+        if 'refresh_token' not in self.tokens:
+            self.tokens['refresh_token'] = old_refresh_token
+
+        # Add expiration timestamp
+        if 'expires_in' in self.tokens:
+            self.tokens['expires_at'] = time.time() + self.tokens['expires_in']
+
         self.save_tokens()
         logger.info("Successfully refreshed access token")
         return self.tokens
@@ -156,14 +178,30 @@ class MyUplinkAuth:
 
     def get_access_token(self):
         """Get valid access token (refresh if needed)"""
+        import time
+
         if not self.tokens:
             self.load_tokens()
 
         if not self.tokens:
             raise ValueError("No tokens available. Please authenticate first.")
 
-        # TODO: Check token expiration and refresh if needed
-        # For now, just return the access token
+        # Check if token is expired or about to expire (within 5 minutes)
+        if 'expires_at' in self.tokens:
+            expires_at = self.tokens['expires_at']
+            current_time = time.time()
+
+            # Refresh if token expires within 5 minutes
+            if current_time >= (expires_at - 300):
+                logger.info("Access token expiring soon, refreshing...")
+                try:
+                    self.refresh_access_token()
+                except Exception as e:
+                    logger.error(f"Failed to refresh token: {e}")
+                    raise ValueError(
+                        "Token refresh failed. Please re-authenticate with: python src/auth.py"
+                    )
+
         return self.tokens.get('access_token')
 
     def authenticate(self):

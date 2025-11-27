@@ -136,7 +136,11 @@ class MyUplinkClient:
         """
         logger.info(f"Fetching data points for device {device_id}...")
         data = self._make_request('GET', f'/v2/devices/{device_id}/points')
-        points = data.get('points', [])
+        # API returns a list directly, not a dict with 'points' key
+        if isinstance(data, list):
+            points = data
+        else:
+            points = data.get('points', [])
         logger.info(f"Found {len(points)} data point(s)")
         return points
 
