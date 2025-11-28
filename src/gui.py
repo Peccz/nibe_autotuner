@@ -156,11 +156,12 @@ def main():
             st.rerun()
 
     # Main content tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Dashboard",
         "🎯 Recommendations",
         "📈 Visualizations",
         "📉 Historical Data",
+        "📝 Change Log",
         "📚 Documentation"
     ])
 
@@ -380,8 +381,183 @@ def main():
                 else:
                     st.warning("No data found for selected parameter and time range.")
 
-    # Tab 5: Documentation
+    # Tab 5: Change Log
     with tab5:
+        st.header("📝 Manual Change Log")
+        st.markdown("Logga manuella ändringar du gör på värmepumpen för att kunna analysera effekten över tid.")
+
+        # Form for logging a new change
+        with st.form("log_change"):
+            st.subheader("Logga Ny Ändring")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                change_date = st.date_input(
+                    "Datum för ändring",
+                    value=datetime.now().date(),
+                    help="När gjorde du ändringen?"
+                )
+                change_time = st.time_input(
+                    "Tid",
+                    value=datetime.now().time(),
+                    help="Ungefär vilken tid?"
+                )
+
+            with col2:
+                parameter_type = st.selectbox(
+                    "Parameter som ändrades",
+                    [
+                        "Värmekurva (Heating Curve)",
+                        "Kurvförskjutning (Curve Offset)",
+                        "Gradminuter start",
+                        "Gradminuter stopp",
+                        "Varmvatten temperatur",
+                        "Kompressor inställningar",
+                        "Annat"
+                    ]
+                )
+
+                if parameter_type == "Annat":
+                    custom_parameter = st.text_input("Specificera parameter")
+
+            col3, col4 = st.columns(2)
+
+            with col3:
+                old_value = st.text_input(
+                    "Gammalt värde",
+                    help="Vilket värde hade parametern innan?"
+                )
+
+            with col4:
+                new_value = st.text_input(
+                    "Nytt värde",
+                    help="Vilket värde satte du?"
+                )
+
+            reason = st.text_area(
+                "Anledning / Mål med ändringen",
+                help="Varför gjorde du denna ändring? Vad hoppas du uppnå?",
+                placeholder="T.ex. 'Huset var för kallt på morgonen' eller 'Vill testa lägre värmekurva för att spara energi'"
+            )
+
+            notes = st.text_area(
+                "Anteckningar (valfritt)",
+                help="Övriga observationer, väderförhållanden, etc.",
+                placeholder="T.ex. 'Mycket kallt ute (-10°C)' eller 'Testade efter att ha läst rekommendation'"
+            )
+
+            submitted = st.form_submit_button("💾 Spara Ändring", use_container_width=True)
+
+            if submitted:
+                # Combine date and time
+                change_timestamp = datetime.combine(change_date, change_time)
+
+                # Get parameter name
+                param_name = custom_parameter if parameter_type == "Annat" else parameter_type
+
+                # Store in database
+                from models import ParameterChange
+
+                try:
+                    device = st.session_state.analyzer.get_device()
+
+                    # Try to find matching parameter ID
+                    parameter_id = None
+                    if "Heating Curve" in parameter_type or "Värmekurva" in parameter_type:
+                        parameter_id = st.session_state.analyzer.get_parameter_id('47007')
+                    elif "Curve Offset" in parameter_type or "Kurvförskjutning" in parameter_type:
+                        parameter_id = st.session_state.analyzer.get_parameter_id('47011')
+
+                    change = ParameterChange(
+                        device_id=device.id,
+                        parameter_id=parameter_id,
+                        timestamp=change_timestamp,
+                        old_value=float(old_value) if old_value and old_value.replace('.', '').replace('-', '').isdigit() else None,
+                        new_value=float(new_value) if new_value and new_value.replace('.', '').replace('-', '').isdigit() else None,
+                        old_value_text=old_value if old_value else None,
+                        new_value_text=new_value if new_value else None,
+                        reason=reason if reason else None,
+                        notes=notes if notes else None,
+                        applied_by="manual"
+                    )
+
+                    st.session_state.analyzer.session.add(change)
+                    st.session_state.analyzer.session.commit()
+
+                    st.success(f"✅ Ändring sparad! {param_name}: {old_value} → {new_value}")
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"Fel vid sparande: {e}")
+
+        st.markdown("---")
+
+        # Display change history
+        st.subheader("📜 Ändringshistorik")
+
+        try:
+            from models import ParameterChange
+
+            device = st.session_state.analyzer.get_device()
+
+            # Query all changes
+            changes = st.session_state.analyzer.session.query(ParameterChange).filter(
+                ParameterChange.device_id == device.id
+            ).order_by(ParameterChange.timestamp.desc()).all()
+
+            if changes:
+                for change in changes:
+                    with st.expander(
+                        f"{change.timestamp.strftime('%Y-%m-%d %H:%M')} - "
+                        f"{change.parameter.parameter_name if change.parameter else 'Okänd parameter'}: "
+                        f"{change.old_value_text or change.old_value} → {change.new_value_text or change.new_value}",
+                        expanded=False
+                    ):
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            st.markdown(f"**Datum:** {change.timestamp.strftime('%Y-%m-%d %H:%M')}")
+                            st.markdown(f"**Parameter:** {change.parameter.parameter_name if change.parameter else 'Manuell logg'}")
+                            st.markdown(f"**Ändring:** {change.old_value_text or change.old_value} → {change.new_value_text or change.new_value}")
+
+                        with col2:
+                            if change.reason:
+                                st.markdown(f"**Anledning:** {change.reason}")
+                            if change.notes:
+                                st.markdown(f"**Anteckningar:** {change.notes}")
+
+                        # Show metrics before and after
+                        st.markdown("**📊 Prestanda före/efter ändringen:**")
+
+                        try:
+                            # Metrics 24h before change
+                            before_start = change.timestamp - timedelta(days=1)
+                            before_end = change.timestamp
+
+                            # Metrics 24h after change
+                            after_start = change.timestamp
+                            after_end = change.timestamp + timedelta(days=1)
+
+                            # This would require custom query - simplified for now
+                            st.info("Jämförelse av prestanda före/efter kommer i nästa uppdatering!")
+
+                        except Exception as e:
+                            st.caption(f"Kunde inte hämta prestanda-data: {e}")
+
+                        if st.button(f"🗑️ Ta bort", key=f"delete_{change.id}"):
+                            st.session_state.analyzer.session.delete(change)
+                            st.session_state.analyzer.session.commit()
+                            st.success("Ändring borttagen!")
+                            st.rerun()
+            else:
+                st.info("Inga ändringar loggade än. Använd formuläret ovan för att logga din första ändring!")
+
+        except Exception as e:
+            st.error(f"Fel vid hämtning av ändringshistorik: {e}")
+
+    # Tab 6: Documentation
+    with tab6:
         st.header("📚 Documentation & Resources")
 
         st.markdown("""
