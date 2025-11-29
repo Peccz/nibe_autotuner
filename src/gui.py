@@ -320,7 +320,7 @@ def main():
         if available_plots:
             for name, path in available_plots.items():
                 st.subheader(name)
-                st.image(path, use_container_width=True)
+                st.image(path, use_column_width=True)
         else:
             st.info("No visualizations available yet.")
             st.markdown("Click **Generate Plots** in the sidebar to create visualizations.")
