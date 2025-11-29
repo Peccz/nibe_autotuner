@@ -1,0 +1,17 @@
+[Unit]
+Description=Nibe Autotuner Mobile PWA
+After=network.target
+
+[Service]
+Type=simple
+User=peccz
+WorkingDirectory=/home/peccz/AI/nibe_autotuner
+Environment="PATH=/home/peccz/AI/nibe_autotuner/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/home/peccz/AI/nibe_autotuner/venv/bin/python src/mobile_app.py
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

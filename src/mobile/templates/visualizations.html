@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+
+{% block title %}Visualiseringar - Nibe Autotuner{% endblock %}
+
+{% block extra_css %}
+<style>
+.chart-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+}
+
+.chart-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.chart-container {
+    position: relative;
+    height: 250px;
+    margin-bottom: 8px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Time period selector -->
+<section class="section">
+    <label for="timePeriod" class="form-label">Tidsperiod:</label>
+    <select id="timePeriod" class="form-select" onchange="loadAllCharts()">
+        <option value="1">Senaste timmen</option>
+        <option value="6">Senaste 6 timmarna</option>
+        <option value="24" selected>Senaste 24 timmarna</option>
+        <option value="72">Senaste 3 dagarna</option>
+        <option value="168">Senaste veckan</option>
+    </select>
+</section>
+
+<!-- Loading indicator -->
+<div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Laddar grafer...</p>
+</div>
+
+<!-- Error message -->
+<div id="error" class="error" style="display: none;"></div>
+
+<!-- Charts -->
+<div id="chartsContainer" style="display: none;">
+    <div class="chart-card">
+        <h3 class="chart-title">🌡️ Utomhustemperatur</h3>
+        <div class="chart-container">
+            <canvas id="outdoorChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3 class="chart-title">🏠 Inomhustemperatur</h3>
+        <div class="chart-container">
+            <canvas id="indoorChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3 class="chart-title">🔥 Fram & Returtemperatur</h3>
+        <div class="chart-container">
+            <canvas id="supplyReturnChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3 class="chart-title">⚙️ Kompressorfrekvens</h3>
+        <div class="chart-container">
+            <canvas id="compressorChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3 class="chart-title">💧 Varmvattentemperatur</h3>
+        <div class="chart-container">
+            <canvas id="hotWaterChart"></canvas>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+let charts = {};
+
+const chartConfig = {
+    outdoor: {
+        label: 'Utomhus',
+        borderColor: '#2196f3',
+        backgroundColor: 'rgba(33, 150, 243, 0.1)',
+        unit: '°C'
+    },
+    indoor: {
+        label: 'Inomhus',
+        borderColor: '#4caf50',
+        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+        unit: '°C'
+    },
+    supply: {
+        label: 'Framledning',
+        borderColor: '#f44336',
+        backgroundColor: 'rgba(244, 67, 54, 0.1)',
+        unit: '°C'
+    },
+    return: {
+        label: 'Retur',
+        borderColor: '#ff9800',
+        backgroundColor: 'rgba(255, 152, 0, 0.1)',
+        unit: '°C'
+    },
+    compressor: {
+        label: 'Frekvens',
+        borderColor: '#9c27b0',
+        backgroundColor: 'rgba(156, 39, 176, 0.1)',
+        unit: ' Hz'
+    },
+    hot_water: {
+        label: 'Varmvatten',
+        borderColor: '#ff5722',
+        backgroundColor: 'rgba(255, 87, 34, 0.1)',
+        unit: '°C'
+    }
+};
+
+function createChart(canvasId, type, config) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: config.label,
+                data: [],
+                borderColor: config.borderColor,
+                backgroundColor: config.backgroundColor,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.y.toFixed(1) + config.unit;
+                        },
+                        title: function(context) {
+                            const date = new Date(context[0].label);
+                            return date.toLocaleString('sv-SE', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            hour: 'HH:mm',
+                            day: 'MMM d'
+                        }
+                    },
+                    ticks: {
+                        maxTicksLimit: 6,
+                        font: {
+                            size: 10
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    ticks: {
+                        callback: function(value) {
+                            return value + config.unit;
+                        },
+                        font: {
+                            size: 10
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createDualChart(canvasId) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Framledning',
+                    data: [],
+                    borderColor: chartConfig.supply.borderColor,
+                    backgroundColor: chartConfig.supply.backgroundColor,
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: false,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Retur',
+                    data: [],
+                    borderColor: chartConfig.return.borderColor,
+                    backgroundColor: chartConfig.return.backgroundColor,
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: false,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        boxWidth: 12,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '°C';
+                        },
+                        title: function(context) {
+                            const date = new Date(context[0].label);
+                            return date.toLocaleString('sv-SE', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            hour: 'HH:mm',
+                            day: 'MMM d'
+                        }
+                    },
+                    ticks: {
+                        maxTicksLimit: 6,
+                        font: {
+                            size: 10
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    ticks: {
+                        callback: function(value) {
+                            return value + '°C';
+                        },
+                        font: {
+                            size: 10
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+async function loadChartData(chartType, chartInstance) {
+    const hours = document.getElementById('timePeriod').value;
+
+    try {
+        const response = await fetch(`/api/chart/${chartType}?hours=${hours}`);
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error);
+        }
+
+        const data = result.data;
+
+        // Update chart data
+        chartInstance.data.labels = data.labels;
+        chartInstance.data.datasets[0].data = data.values;
+        chartInstance.update('none');
+
+    } catch (err) {
+        console.error(`Error loading ${chartType} chart:`, err);
+        throw err;
+    }
+}
+
+async function loadAllCharts() {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const container = document.getElementById('chartsContainer');
+
+    loading.style.display = 'block';
+    error.style.display = 'none';
+    container.style.display = 'none';
+
+    try {
+        // Load all chart data
+        await Promise.all([
+            loadChartData('outdoor', charts.outdoor),
+            loadChartData('indoor', charts.indoor),
+            loadChartData('compressor', charts.compressor),
+            loadChartData('hot_water', charts.hotWater)
+        ]);
+
+        // Load supply and return for dual chart
+        const hours = document.getElementById('timePeriod').value;
+
+        const [supplyRes, returnRes] = await Promise.all([
+            fetch(`/api/chart/supply?hours=${hours}`),
+            fetch(`/api/chart/return?hours=${hours}`)
+        ]);
+
+        const supplyData = await supplyRes.json();
+        const returnData = await returnRes.json();
+
+        if (supplyData.success && returnData.success) {
+            charts.supplyReturn.data.labels = supplyData.data.labels;
+            charts.supplyReturn.data.datasets[0].data = supplyData.data.values;
+            charts.supplyReturn.data.datasets[1].data = returnData.data.values;
+            charts.supplyReturn.update('none');
+        }
+
+        container.style.display = 'block';
+
+    } catch (err) {
+        error.textContent = '❌ Fel vid laddning av grafer: ' + err.message;
+        error.style.display = 'block';
+        console.error('Error loading charts:', err);
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+// Initialize charts on page load
+document.addEventListener('DOMContentLoaded', () => {
+    // Create all charts
+    charts.outdoor = createChart('outdoorChart', 'outdoor', chartConfig.outdoor);
+    charts.indoor = createChart('indoorChart', 'indoor', chartConfig.indoor);
+    charts.supplyReturn = createDualChart('supplyReturnChart');
+    charts.compressor = createChart('compressorChart', 'compressor', chartConfig.compressor);
+    charts.hotWater = createChart('hotWaterChart', 'hot_water', chartConfig.hot_water);
+
+    // Load data
+    loadAllCharts();
+});
+
+// Refresh button
+function refreshData() {
+    loadAllCharts();
+}
+</script>
+{% endblock %}

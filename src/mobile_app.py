@@ -1,0 +1,202 @@
+"""
+Nibe Autotuner - Mobile PWA
+Lightweight Flask app optimized for mobile devices
+"""
+
+from flask import Flask, render_template, jsonify, request, send_from_directory
+from datetime import datetime, timedelta
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from analyzer import HeatPumpAnalyzer
+from models import ParameterChange, init_db
+from sqlalchemy.orm import sessionmaker
+
+app = Flask(__name__,
+            template_folder='mobile/templates',
+            static_folder='mobile/static')
+
+# Initialize database and analyzer
+# HeatPumpAnalyzer expects a relative path from working directory
+# The systemd service sets WorkingDirectory to the project root
+analyzer = HeatPumpAnalyzer('data/nibe_autotuner.db')
+engine = analyzer.engine
+SessionMaker = sessionmaker(bind=engine)
+
+@app.route('/')
+def index():
+    """Main dashboard"""
+    return render_template('dashboard.html')
+
+@app.route('/api/metrics')
+def get_metrics():
+    """Get current metrics for dashboard"""
+    hours = request.args.get('hours', 24, type=int)
+
+    try:
+        metrics = analyzer.calculate_metrics(hours_back=hours)
+
+        # Format metrics for JSON
+        data = {
+            'cop': float(metrics.estimated_cop) if metrics.estimated_cop else None,
+            'degree_minutes': float(metrics.degree_minutes),
+            'delta_t_active': float(metrics.delta_t_active) if metrics.delta_t_active else None,
+            'delta_t_hot_water': float(metrics.delta_t_hot_water) if metrics.delta_t_hot_water else None,
+            'avg_compressor_freq': float(metrics.avg_compressor_freq),
+            'avg_outdoor_temp': float(metrics.avg_outdoor_temp),
+            'avg_indoor_temp': float(metrics.avg_indoor_temp),
+            'avg_supply_temp': float(metrics.avg_supply_temp),
+            'avg_return_temp': float(metrics.avg_return_temp),
+            'heating_curve': float(metrics.heating_curve),
+            'curve_offset': float(metrics.curve_offset),
+            'period_start': metrics.period_start.isoformat(),
+            'period_end': metrics.period_end.isoformat(),
+            'timestamp': datetime.now().isoformat()
+        }
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/chart/<chart_type>')
+def get_chart_data(chart_type):
+    """Get data for charts"""
+    hours = request.args.get('hours', 24, type=int)
+
+    try:
+        device = analyzer.get_device()
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(hours=hours)
+
+        # Map chart types to parameter IDs
+        param_map = {
+            'outdoor': 40004,    # Outdoor temp
+            'indoor': 40033,     # Indoor temp
+            'supply': 40008,     # Supply temp
+            'return': 40012,     # Return temp
+            'compressor': 43424, # Compressor frequency
+            'hot_water': 40013   # Hot water temp
+        }
+
+        if chart_type not in param_map:
+            return jsonify({'success': False, 'error': 'Invalid chart type'}), 400
+
+        readings = analyzer.get_readings(device, param_map[chart_type], start_time, end_time)
+
+        # Format for Chart.js
+        data = {
+            'labels': [r[0].isoformat() for r in readings],
+            'values': [float(r[1]) for r in readings]
+        }
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/changes')
+def changes():
+    """Change log page"""
+    return render_template('changes.html')
+
+@app.route('/api/changes', methods=['GET', 'POST'])
+def handle_changes():
+    """Get or create parameter changes"""
+    session = SessionMaker()
+
+    try:
+        if request.method == 'POST':
+            # Create new change
+            data = request.json
+
+            change = ParameterChange(
+                timestamp=datetime.fromisoformat(data['timestamp']),
+                parameter_type=data['parameter_type'],
+                parameter_name=data.get('parameter_name'),
+                old_value=data.get('old_value'),
+                new_value=data.get('new_value'),
+                reason=data.get('reason'),
+                notes=data.get('notes')
+            )
+
+            session.add(change)
+            session.commit()
+
+            return jsonify({'success': True, 'message': 'Change logged successfully'})
+
+        else:
+            # Get all changes
+            changes = session.query(ParameterChange)\
+                .order_by(ParameterChange.timestamp.desc())\
+                .limit(100)\
+                .all()
+
+            data = [{
+                'id': c.id,
+                'timestamp': c.timestamp.isoformat(),
+                'parameter_type': c.parameter_type,
+                'parameter_name': c.parameter_name,
+                'old_value': c.old_value,
+                'new_value': c.new_value,
+                'reason': c.reason,
+                'notes': c.notes
+            } for c in changes]
+
+            return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    finally:
+        session.close()
+
+@app.route('/visualizations')
+def visualizations():
+    """Visualizations page"""
+    return render_template('visualizations.html')
+
+@app.route('/baseline')
+def baseline():
+    """Baseline documentation"""
+    return render_template('baseline.html')
+
+@app.route('/manifest.json')
+def manifest():
+    """PWA manifest"""
+    return jsonify({
+        'name': 'Nibe Autotuner',
+        'short_name': 'Nibe',
+        'description': 'Nibe F730 Heat Pump Monitor & Optimizer',
+        'start_url': '/',
+        'display': 'standalone',
+        'background_color': '#1e1e1e',
+        'theme_color': '#2d5f8e',
+        'orientation': 'portrait',
+        'icons': [
+            {
+                'src': '/static/icons/icon-192.png',
+                'sizes': '192x192',
+                'type': 'image/png',
+                'purpose': 'any maskable'
+            },
+            {
+                'src': '/static/icons/icon-512.png',
+                'sizes': '512x512',
+                'type': 'image/png',
+                'purpose': 'any maskable'
+            }
+        ]
+    })
+
+@app.route('/sw.js')
+def service_worker():
+    """Service Worker for offline support"""
+    return send_from_directory('mobile/static/js', 'sw.js')
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8502, debug=False)

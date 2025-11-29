@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+
+{% block title %}Baseline - Nibe Autotuner{% endblock %}
+
+{% block extra_css %}
+<style>
+.baseline-nav {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.baseline-nav-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    background: white;
+    border-radius: 20px;
+    font-size: 14px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.baseline-nav-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.baseline-content {
+    display: none;
+}
+
+.baseline-content.active {
+    display: block;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Navigation -->
+<div class="baseline-nav">
+    <button class="baseline-nav-btn active" onclick="showSection('nibe')">📘 Nibe F730</button>
+    <button class="baseline-nav-btn" onclick="showSection('deltaT')">🌡️ Delta T</button>
+    <button class="baseline-nav-btn" onclick="showSection('cop')">⚡ COP</button>
+    <button class="baseline-nav-btn" onclick="showSection('tips')">💡 Tips</button>
+</div>
+
+<!-- Nibe F730 Section -->
+<div id="nibe" class="baseline-content active">
+    <section class="section">
+        <h2 class="section-title">📘 Nibe F730 - Frånluftsvärmepump</h2>
+
+        <div class="baseline-section">
+            <h3>Systemöversikt</h3>
+            <p>Nibe F730 är en frånluftsvärmepump för CU 3x400V system. Den tar tillvara på värmen från frånluften och värmer upp varmvatten och uppvärmningssystem.</p>
+        </div>
+
+        <div class="baseline-section">
+            <h3>📊 Optimala Värden</h3>
+            <table class="baseline-table">
+                <tr>
+                    <th>Parameter</th>
+                    <th>Optimalt värde</th>
+                </tr>
+                <tr>
+                    <td>Delta T (Aktiv uppvärmning)</td>
+                    <td>3-8°C</td>
+                </tr>
+                <tr>
+                    <td>COP (Värmefaktor)</td>
+                    <td>≥3.0</td>
+                </tr>
+                <tr>
+                    <td>Gradminuter</td>
+                    <td>-100 till -300</td>
+                </tr>
+                <tr>
+                    <td>Värmekurva (typiskt)</td>
+                    <td>35-45</td>
+                </tr>
+                <tr>
+                    <td>Varmvatten</td>
+                    <td>50-55°C</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="baseline-section">
+            <h3>⚙️ Viktiga Inställningar</h3>
+            <ul>
+                <li><strong>Värmekurva:</strong> Bestämmer framledningstemperatur baserat på utomhustemperatur</li>
+                <li><strong>Kurvjustering:</strong> Finjustering av inomhustemperatur (±5°C)</li>
+                <li><strong>Gradminuter:</strong> Hur länge kompressorn ska vara aktiv per grad temperaturskillnad</li>
+                <li><strong>Varmvattenprioritet:</strong> Stoppar uppvärmning när varmvatten produceras</li>
+            </ul>
+        </div>
+
+        <div class="baseline-section">
+            <h3>🔧 Underhåll</h3>
+            <ul>
+                <li>Rengör/byt luftfilter var 3:e månad</li>
+                <li>Kontrollera tryck i systemet regelbundet (ca 1.5 bar)</li>
+                <li>Professionell service vartannat år</li>
+                <li>Rensa dränering från kondens</li>
+            </ul>
+        </div>
+    </section>
+</div>
+
+<!-- Delta T Section -->
+<div id="deltaT" class="baseline-content">
+    <section class="section">
+        <h2 class="section-title">🌡️ Delta T - Temperaturskillnad</h2>
+
+        <div class="baseline-section">
+            <h3>Vad är Delta T?</h3>
+            <p>Delta T (ΔT) är skillnaden mellan framledningstemperatur och returtemperatur i värmesystemet:</p>
+            <p style="text-align: center; font-weight: 600; font-size: 18px; margin: 16px 0;">
+                ΔT = T<sub>fram</sub> - T<sub>retur</sub>
+            </p>
+        </div>
+
+        <div class="baseline-section">
+            <h3>📊 Optimala Värden</h3>
+            <table class="baseline-table">
+                <tr>
+                    <th>Situation</th>
+                    <th>Delta T</th>
+                    <th>Status</th>
+                </tr>
+                <tr>
+                    <td>Aktiv uppvärmning</td>
+                    <td>3-8°C</td>
+                    <td>✅ Optimalt</td>
+                </tr>
+                <tr>
+                    <td>Under 3°C</td>
+                    <td>&lt;3°C</td>
+                    <td>⚠️ För lågt flöde</td>
+                </tr>
+                <tr>
+                    <td>Över 8°C</td>
+                    <td>&gt;8°C</td>
+                    <td>⚠️ För högt flöde</td>
+                </tr>
+                <tr>
+                    <td>Standby</td>
+                    <td>0-2°C</td>
+                    <td>✅ Normal</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="baseline-section">
+            <h3>🔍 Varför Delta T är Viktigt</h3>
+            <ul>
+                <li><strong>Energieffektivitet:</strong> Visar hur väl värmen överförs till systemet</li>
+                <li><strong>Pumpeffekt:</strong> För låg ΔT kan innebära för hög pumpeffekt (slöseri)</li>
+                <li><strong>Komfort:</strong> Rätt ΔT ger jämn värmefördelning</li>
+                <li><strong>Livslängd:</strong> Optimalt ΔT minskar slitage på kompressor</li>
+            </ul>
+        </div>
+
+        <div class="baseline-section">
+            <h3>🛠️ Justera Delta T</h3>
+            <p><strong>Om ΔT är för låg (&lt;3°C):</strong></p>
+            <ul>
+                <li>Minska cirkulationspumpens hastighet</li>
+                <li>Kontrollera termostatventiler (kan vara för öppna)</li>
+            </ul>
+
+            <p><strong>Om ΔT är för hög (&gt;8°C):</strong></p>
+            <ul>
+                <li>Öka cirkulationspumpens hastighet</li>
+                <li>Kontrollera att inga ventiler är stängda</li>
+                <li>Se över värmekurvan</li>
+            </ul>
+        </div>
+    </section>
+</div>
+
+<!-- COP Section -->
+<div id="cop" class="baseline-content">
+    <section class="section">
+        <h2 class="section-title">⚡ COP - Coefficient of Performance</h2>
+
+        <div class="baseline-section">
+            <h3>Vad är COP?</h3>
+            <p>COP (värmefaktor) visar hur effektiv värmepumpen är:</p>
+            <p style="text-align: center; font-weight: 600; font-size: 18px; margin: 16px 0;">
+                COP = Tillförd värmeenergi / Använd elenergi
+            </p>
+            <p><strong>Exempel:</strong> COP 3.5 betyder att 1 kWh el ger 3.5 kWh värme.</p>
+        </div>
+
+        <div class="baseline-section">
+            <h3>📊 Typiska COP-värden</h3>
+            <table class="baseline-table">
+                <tr>
+                    <th>Utomhustemperatur</th>
+                    <th>Förväntad COP</th>
+                </tr>
+                <tr>
+                    <td>+7°C eller varmare</td>
+                    <td>3.5-4.5</td>
+                </tr>
+                <tr>
+                    <td>0°C till +7°C</td>
+                    <td>3.0-3.5</td>
+                </tr>
+                <tr>
+                    <td>-7°C till 0°C</td>
+                    <td>2.5-3.0</td>
+                </tr>
+                <tr>
+                    <td>Under -7°C</td>
+                    <td>2.0-2.5</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="baseline-section">
+            <h3>🎯 Förbättra COP</h3>
+            <ul>
+                <li><strong>Sänk framledningstemperatur:</strong> Lägre temp = högre COP</li>
+                <li><strong>Optimera värmekurvan:</strong> Rätt kurva för ditt hus</li>
+                <li><strong>Balansera värmesystemet:</strong> Jämn värmefördelning</li>
+                <li><strong>Isolera väl:</strong> Mindre värmebehov = lägre temperaturer</li>
+                <li><strong>Nattsänkning:</strong> Sänk temperaturen på natten</li>
+            </ul>
+        </div>
+
+        <div class="baseline-section">
+            <h3>💰 Ekonomiska Besparingar</h3>
+            <p>Med COP 3.5 istället för direktverkande el (COP 1.0):</p>
+            <ul>
+                <li>71% lägre elkostnad för uppvärmning</li>
+                <li>Återbetalningstid: 5-10 år (beroende på installation)</li>
+                <li>Högre fastighetsvärde</li>
+            </ul>
+        </div>
+    </section>
+</div>
+
+<!-- Tips Section -->
+<div id="tips" class="baseline-content">
+    <section class="section">
+        <h2 class="section-title">💡 Optimeringstips</h2>
+
+        <div class="baseline-section">
+            <h3>🎯 Vår/Höst (5-15°C ute)</h3>
+            <ul>
+                <li>Bästa COP under dessa månader</li>
+                <li>Optimera värmekurvan nu</li>
+                <li>Testa att sänka framledningstemperatur</li>
+                <li>Perfekt tid att balansera systemet</li>
+            </ul>
+        </div>
+
+        <div class="baseline-section">
+            <h3>❄️ Vinter (-15 till +5°C ute)</h3>
+            <ul>
+                <li>Undvik onödiga temperatursänkningar</li>
+                <li>Håll jämn innetemperatur (lättare värma)</li>
+                <li>Kontrollera att inget fryser (balkonger, källare)</li>
+                <li>COP blir lägre - normalt!</li>
+            </ul>
+        </div>
+
+        <div class="baseline-section">
+            <h3>☀️ Sommar (över +15°C ute)</h3>
+            <ul>
+                <li>Stäng av uppvärmning helt</li>
+                <li>Behåll varmvattenproduktion</li>
+                <li>Bra tid för underhåll och rengöring</li>
+                <li>Kontrollera tryck i systemet</li>
+            </ul>
+        </div>
+
+        <div class="baseline-section">
+            <h3>🏠 Generella Tips</h3>
+            <ul>
+                <li><strong>Börja försiktigt:</strong> Ändra max 1-2 steg åt gången</li>
+                <li><strong>Vänta 24-48h:</strong> Systemet behöver tid att stabiliseras</li>
+                <li><strong>Logga ändringar:</strong> Använd ändringsloggen för att spåra effekter</li>
+                <li><strong>Följ trender:</strong> Se långsiktig data, inte enskilda timmar</li>
+                <li><strong>Balansera radiatorer:</strong> Jämn värme = lägre temperaturer = bättre COP</li>
+            </ul>
+        </div>
+
+        <div class="baseline-section">
+            <h3>⚠️ Varningssignaler</h3>
+            <ul>
+                <li>Delta T konstant under 2°C eller över 10°C</li>
+                <li>COP under 2.0 vid normal utetemperatur</li>
+                <li>Gradminuter över 0 eller under -500</li>
+                <li>Konstanta temperaturblyckningar</li>
+                <li>Ökad elkostnader trots stabila temperaturer</li>
+            </ul>
+            <p style="margin-top: 8px; font-style: italic; color: var(--text-secondary);">
+                Vid ovanstående, kontakta installatör eller Nibe support.
+            </p>
+        </div>
+    </section>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showSection(sectionId) {
+    // Hide all sections
+    document.querySelectorAll('.baseline-content').forEach(content => {
+        content.classList.remove('active');
+    });
+
+    // Remove active from all buttons
+    document.querySelectorAll('.baseline-nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    // Show selected section
+    document.getElementById(sectionId).classList.add('active');
+
+    // Add active to clicked button
+    event.target.classList.add('active');
+
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+{% endblock %}

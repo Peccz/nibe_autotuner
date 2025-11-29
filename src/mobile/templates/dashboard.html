@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Nibe Autotuner{% endblock %}
+
+{% block content %}
+<!-- Loading indicator -->
+<div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Laddar data...</p>
+</div>
+
+<!-- Error message -->
+<div id="error" class="error" style="display: none;"></div>
+
+<!-- Last updated -->
+<div class="last-updated">
+    <small>Uppdaterad: <span id="lastUpdate">-</span></small>
+</div>
+
+<!-- Main metrics -->
+<section class="metrics-grid">
+    <div class="metric-card highlight">
+        <div class="metric-icon">⚡</div>
+        <div class="metric-value" id="cop">-</div>
+        <div class="metric-label">COP</div>
+        <div class="metric-status" id="copStatus"></div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon">📐</div>
+        <div class="metric-value" id="degreeMinutes">-</div>
+        <div class="metric-label">Gradminuter</div>
+        <div class="metric-status" id="dmStatus"></div>
+    </div>
+
+    <div class="metric-card highlight">
+        <div class="metric-icon">🌡️</div>
+        <div class="metric-value" id="deltaT">-</div>
+        <div class="metric-label">Delta T (Aktiv)</div>
+        <div class="metric-status" id="dtStatus"></div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon">⚙️</div>
+        <div class="metric-value" id="compressor">-</div>
+        <div class="metric-label">Kompressor Hz</div>
+    </div>
+</section>
+
+<!-- Temperatures -->
+<section class="section">
+    <h2 class="section-title">🌡️ Temperaturer</h2>
+    <div class="temp-grid">
+        <div class="temp-item">
+            <span class="temp-label">Ute</span>
+            <span class="temp-value" id="outdoorTemp">-</span>
+        </div>
+        <div class="temp-item">
+            <span class="temp-label">Inne</span>
+            <span class="temp-value" id="indoorTemp">-</span>
+        </div>
+        <div class="temp-item">
+            <span class="temp-label">Fram</span>
+            <span class="temp-value" id="supplyTemp">-</span>
+        </div>
+        <div class="temp-item">
+            <span class="temp-label">Retur</span>
+            <span class="temp-value" id="returnTemp">-</span>
+        </div>
+    </div>
+</section>
+
+<!-- Delta T Breakdown -->
+<section class="section">
+    <h2 class="section-title">📊 Delta T Analys</h2>
+    <div class="delta-grid">
+        <div class="delta-item">
+            <div class="delta-label">Uppvärmning (Aktiv)</div>
+            <div class="delta-value" id="deltaTActive">-</div>
+            <div class="delta-status" id="deltaTActiveStatus"></div>
+        </div>
+        <div class="delta-item">
+            <div class="delta-label">Varmvatten</div>
+            <div class="delta-value" id="deltaTHotWater">-</div>
+        </div>
+    </div>
+</section>
+
+<!-- System Settings -->
+<section class="section">
+    <h2 class="section-title">⚙️ Systeminställningar</h2>
+    <div class="settings-grid">
+        <div class="setting-item">
+            <span class="setting-label">Värmekurva</span>
+            <span class="setting-value" id="heatingCurve">-</span>
+        </div>
+        <div class="setting-item">
+            <span class="setting-label">Kurvjustering</span>
+            <span class="setting-value" id="curveOffset">-</span>
+        </div>
+    </div>
+</section>
+
+<!-- Time period selector -->
+<section class="section">
+    <label for="timePeriod" class="form-label">Analysperiod:</label>
+    <select id="timePeriod" class="form-select" onchange="loadDashboard()">
+        <option value="1">Senaste timmen</option>
+        <option value="6">Senaste 6 timmarna</option>
+        <option value="24" selected>Senaste 24 timmarna</option>
+        <option value="72">Senaste 3 dagarna</option>
+        <option value="168">Senaste veckan</option>
+    </select>
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let autoRefreshInterval = null;
+
+async function loadDashboard() {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const hours = document.getElementById('timePeriod').value;
+
+    loading.style.display = 'block';
+    error.style.display = 'none';
+
+    try {
+        const response = await fetch(`/api/metrics?hours=${hours}`);
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error);
+        }
+
+        const data = result.data;
+
+        // Update main metrics
+        document.getElementById('cop').textContent = data.cop ? data.cop.toFixed(2) : 'N/A';
+        document.getElementById('copStatus').textContent = data.cop && data.cop >= 3.0 ? '✅ Utmärkt' : '⚠️';
+
+        document.getElementById('degreeMinutes').textContent = data.degree_minutes.toFixed(0);
+        const dmOk = data.degree_minutes >= -300 && data.degree_minutes <= -100;
+        document.getElementById('dmStatus').textContent = dmOk ? '✅' : '⚠️';
+
+        if (data.delta_t_active) {
+            document.getElementById('deltaT').textContent = data.delta_t_active.toFixed(1) + '°C';
+            const dtOk = data.delta_t_active >= 3 && data.delta_t_active <= 8;
+            document.getElementById('dtStatus').textContent = dtOk ? '✅ Optimalt' : '⚠️ Justera';
+        } else {
+            document.getElementById('deltaT').textContent = 'N/A';
+            document.getElementById('dtStatus').textContent = '';
+        }
+
+        document.getElementById('compressor').textContent = data.avg_compressor_freq.toFixed(0) + ' Hz';
+
+        // Update temperatures
+        document.getElementById('outdoorTemp').textContent = data.avg_outdoor_temp.toFixed(1) + '°C';
+        document.getElementById('indoorTemp').textContent = data.avg_indoor_temp.toFixed(1) + '°C';
+        document.getElementById('supplyTemp').textContent = data.avg_supply_temp.toFixed(1) + '°C';
+        document.getElementById('returnTemp').textContent = data.avg_return_temp.toFixed(1) + '°C';
+
+        // Update Delta T breakdown
+        if (data.delta_t_active) {
+            document.getElementById('deltaTActive').textContent = data.delta_t_active.toFixed(1) + '°C';
+            const dtOk = data.delta_t_active >= 3 && data.delta_t_active <= 8;
+            document.getElementById('deltaTActiveStatus').textContent = dtOk ? '✅ 3-8°C optimal' : '⚠️ Bör vara 3-8°C';
+        } else {
+            document.getElementById('deltaTActive').textContent = 'N/A';
+            document.getElementById('deltaTActiveStatus').textContent = 'Ingen aktiv uppvärmning';
+        }
+
+        if (data.delta_t_hot_water) {
+            document.getElementById('deltaTHotWater').textContent = data.delta_t_hot_water.toFixed(1) + '°C';
+        } else {
+            document.getElementById('deltaTHotWater').textContent = 'N/A';
+        }
+
+        // Update settings
+        document.getElementById('heatingCurve').textContent = data.heating_curve.toFixed(1);
+        document.getElementById('curveOffset').textContent = data.curve_offset.toFixed(1);
+
+        // Update timestamp
+        const timestamp = new Date(data.timestamp);
+        document.getElementById('lastUpdate').textContent = timestamp.toLocaleTimeString('sv-SE');
+
+    } catch (err) {
+        error.textContent = '❌ Fel vid laddning av data: ' + err.message;
+        error.style.display = 'block';
+        console.error('Error loading dashboard:', err);
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+function refreshData() {
+    const icon = document.getElementById('refreshIcon');
+    icon.classList.add('spinning');
+
+    loadDashboard().finally(() => {
+        setTimeout(() => icon.classList.remove('spinning'), 500);
+    });
+}
+
+// Auto-refresh every 5 minutes
+function startAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+    autoRefreshInterval = setInterval(loadDashboard, 5 * 60 * 1000);
+}
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadDashboard();
+    startAutoRefresh();
+});
+
+// Refresh when page becomes visible
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        loadDashboard();
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="#2d5f8e"/>
+
+  <!-- Flame icon -->
+  <g transform="translate(256, 256)">
+    <!-- Outer flame -->
+    <path d="M-60,-120 Q-80,-60 -60,0 Q-40,60 0,100 Q40,60 60,0 Q80,-60 60,-120 Q40,-140 0,-160 Q-40,-140 -60,-120 Z"
+          fill="#ff6b35" opacity="0.8"/>
+
+    <!-- Middle flame -->
+    <path d="M-40,-80 Q-50,-40 -40,0 Q-30,40 0,70 Q30,40 40,0 Q50,-40 40,-80 Q30,-100 0,-110 Q-30,-100 -40,-80 Z"
+          fill="#f7931e"/>
+
+    <!-- Inner flame -->
+    <path d="M-20,-40 Q-25,-20 -20,0 Q-15,20 0,35 Q15,20 20,0 Q25,-20 20,-40 Q15,-50 0,-55 Q-15,-50 -20,-40 Z"
+          fill="#ffd500"/>
+
+    <!-- Delta T symbol -->
+    <g transform="translate(0, 50)">
+      <!-- Delta -->
+      <path d="M-15,20 L0,-20 L15,20 Z" fill="none" stroke="white" stroke-width="6" stroke-linejoin="round"/>
+      <!-- T -->
+      <text x="0" y="55" font-family="Arial, sans-serif" font-size="40" font-weight="bold"
+            fill="white" text-anchor="middle">T</text>
+    </g>
+  </g>
+
+  <!-- Nibe text -->
+  <text x="256" y="460" font-family="Arial, sans-serif" font-size="48" font-weight="bold"
+        fill="white" text-anchor="middle">NIBE</text>
+</svg>
