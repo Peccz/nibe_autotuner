@@ -390,7 +390,14 @@ async function loadAllCharts() {
 }
 
 // Initialize charts on page load
-document.addEventListener('DOMContentLoaded', () => {
+function initCharts() {
+    // Ensure Chart.js is loaded
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js not loaded yet, retrying...');
+        setTimeout(initCharts, 100);
+        return;
+    }
+
     // Create all charts
     charts.outdoor = createChart('outdoorChart', 'outdoor', chartConfig.outdoor);
     charts.indoor = createChart('indoorChart', 'indoor', chartConfig.indoor);
@@ -400,7 +407,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load data
     loadAllCharts();
-});
+}
+
+document.addEventListener('DOMContentLoaded', initCharts);
 
 // Refresh button
 function refreshData() {
