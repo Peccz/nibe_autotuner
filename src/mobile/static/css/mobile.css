@@ -508,7 +508,63 @@ body {
     font-size: 14px;
 }
 
+/* Comparison grid for heating vs hot water */
+.comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.comparison-column {
+    display: flex;
+    flex-direction: column;
+}
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.metric-row:last-child {
+    border-bottom: none;
+}
+
+.metric-small-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.metric-small-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Performance badges */
+.performance-badge {
+    display: none;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 8px;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    margin-top: 4px;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+}
+
 /* Responsive adjustments */
+@media (max-width: 600px) {
+    .comparison-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 360px) {
     .metrics-grid {
         grid-template-columns: 1fr;

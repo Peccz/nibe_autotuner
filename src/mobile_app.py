@@ -57,7 +57,75 @@ def get_metrics():
             'timestamp': datetime.now().isoformat()
         }
 
+        # Add separate heating metrics
+        if metrics.heating_metrics:
+            hm = metrics.heating_metrics
+            cop_rating = analyzer.get_cop_rating_heating(hm.cop)
+            delta_t_rating = analyzer.get_delta_t_rating(hm.delta_t)
+
+            data['heating'] = {
+                'cop': float(hm.cop) if hm.cop else None,
+                'cop_rating': cop_rating,
+                'delta_t': float(hm.delta_t) if hm.delta_t else None,
+                'delta_t_rating': delta_t_rating,
+                'avg_outdoor_temp': float(hm.avg_outdoor_temp) if hm.avg_outdoor_temp else None,
+                'avg_supply_temp': float(hm.avg_supply_temp) if hm.avg_supply_temp else None,
+                'avg_return_temp': float(hm.avg_return_temp) if hm.avg_return_temp else None,
+                'avg_compressor_freq': float(hm.avg_compressor_freq) if hm.avg_compressor_freq else None,
+                'runtime_hours': float(hm.runtime_hours) if hm.runtime_hours else None,
+                'num_cycles': hm.num_cycles
+            }
+
+        # Add separate hot water metrics
+        if metrics.hot_water_metrics:
+            hwm = metrics.hot_water_metrics
+            cop_rating = analyzer.get_cop_rating_hot_water(hwm.cop)
+            delta_t_rating = analyzer.get_delta_t_rating(hwm.delta_t)
+
+            data['hot_water'] = {
+                'cop': float(hwm.cop) if hwm.cop else None,
+                'cop_rating': cop_rating,
+                'delta_t': float(hwm.delta_t) if hwm.delta_t else None,
+                'delta_t_rating': delta_t_rating,
+                'avg_outdoor_temp': float(hwm.avg_outdoor_temp) if hwm.avg_outdoor_temp else None,
+                'avg_hot_water_temp': float(hwm.avg_hot_water_temp) if hwm.avg_hot_water_temp else None,
+                'avg_supply_temp': float(hwm.avg_supply_temp) if hwm.avg_supply_temp else None,
+                'avg_return_temp': float(hwm.avg_return_temp) if hwm.avg_return_temp else None,
+                'avg_compressor_freq': float(hwm.avg_compressor_freq) if hwm.avg_compressor_freq else None,
+                'runtime_hours': float(hwm.runtime_hours) if hwm.runtime_hours else None,
+                'num_cycles': hwm.num_cycles
+            }
+
+        # Add cost analysis
+        if metrics.heating_metrics or metrics.hot_water_metrics:
+            cost_analysis = analyzer.calculate_cost_analysis(
+                metrics.heating_metrics,
+                metrics.hot_water_metrics
+            )
+            data['cost_analysis'] = cost_analysis
+
+        # Add optimization score
+        opt_score = analyzer.calculate_optimization_score(metrics)
+        data['optimization_score'] = opt_score
+
         return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/cop_analysis')
+def get_cop_analysis():
+    """Get COP vs outdoor temperature analysis"""
+    hours = request.args.get('hours', 168, type=int)  # Default 1 week
+
+    try:
+        device = analyzer.get_device()
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(hours=hours)
+
+        cop_data = analyzer.get_cop_vs_outdoor_temp(device, start_time, end_time)
+
+        return jsonify({'success': True, 'data': cop_data})
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

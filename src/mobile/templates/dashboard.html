@@ -17,6 +17,45 @@
     <small>Uppdaterad: <span id="lastUpdate">-</span></small>
 </div>
 
+<!-- Optimization Score Banner -->
+<section class="optimization-banner" id="optimizationBanner" style="display: none;">
+    <div class="opt-score-container">
+        <div class="opt-score-circle" id="optScoreCircle">
+            <div class="opt-score-value" id="optScoreValue">-</div>
+            <div class="opt-score-label">Poäng</div>
+        </div>
+        <div class="opt-score-details">
+            <div class="opt-score-badge" id="optScoreBadge">-</div>
+            <div class="opt-score-subtitle">Systemets övergripande prestanda</div>
+        </div>
+    </div>
+</section>
+
+<!-- Cost Analysis -->
+<section class="section" id="costSection" style="display: none;">
+    <h2 class="section-title">💰 Kostnadsanalys</h2>
+    <div class="cost-grid">
+        <div class="cost-card">
+            <div class="cost-icon">🔥</div>
+            <div class="cost-label">Uppvärmning</div>
+            <div class="cost-value" id="heatingCost">-</div>
+            <div class="cost-detail" id="heatingCostDetail">-</div>
+        </div>
+        <div class="cost-card">
+            <div class="cost-icon">💧</div>
+            <div class="cost-label">Varmvatten</div>
+            <div class="cost-value" id="hotWaterCost">-</div>
+            <div class="cost-detail" id="hotWaterCostDetail">-</div>
+        </div>
+        <div class="cost-card total">
+            <div class="cost-icon">💵</div>
+            <div class="cost-label">Total kostnad</div>
+            <div class="cost-value" id="totalCost">-</div>
+            <div class="cost-detail" id="totalCostDetail">-</div>
+        </div>
+    </div>
+</section>
+
 <!-- Main metrics -->
 <section class="metrics-grid">
     <div class="metric-card highlight">
@@ -82,6 +121,75 @@
         <div class="delta-item">
             <div class="delta-label">Varmvatten</div>
             <div class="delta-value" id="deltaTHotWater">-</div>
+        </div>
+    </div>
+</section>
+
+<!-- Separate Metrics: Heating vs Hot Water -->
+<section class="section">
+    <h2 class="section-title">🔥 Uppvärmning vs 💧 Varmvatten</h2>
+
+    <div class="comparison-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+        <!-- Heating Column -->
+        <div class="comparison-column">
+            <h3 style="color: var(--primary-color); text-align: center; margin-bottom: 0.5rem;">🔥 Uppvärmning</h3>
+            <div class="metric-card" id="heatingCard">
+                <div class="metric-row">
+                    <span class="metric-small-label">COP:</span>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                        <span class="metric-small-value" id="heatingCOP">-</span>
+                        <span class="performance-badge" id="heatingCOPBadge"></span>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-small-label">Delta T:</span>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                        <span class="metric-small-value" id="heatingDeltaT">-</span>
+                        <span class="performance-badge" id="heatingDeltaTBadge"></span>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-small-label">Runtime:</span>
+                    <span class="metric-small-value" id="heatingRuntime">-</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-small-label">Cykler:</span>
+                    <span class="metric-small-value" id="heatingCycles">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hot Water Column -->
+        <div class="comparison-column">
+            <h3 style="color: #ff5722; text-align: center; margin-bottom: 0.5rem;">💧 Varmvatten</h3>
+            <div class="metric-card" id="hotWaterCard">
+                <div class="metric-row">
+                    <span class="metric-small-label">COP:</span>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                        <span class="metric-small-value" id="hotWaterCOP">-</span>
+                        <span class="performance-badge" id="hotWaterCOPBadge"></span>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-small-label">Delta T:</span>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                        <span class="metric-small-value" id="hotWaterDeltaT">-</span>
+                        <span class="performance-badge" id="hotWaterDeltaTBadge"></span>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-small-label">VV Temp:</span>
+                    <span class="metric-small-value" id="hotWaterTemp">-</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-small-label">Runtime:</span>
+                    <span class="metric-small-value" id="hotWaterRuntime">-</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-small-label">Cykler:</span>
+                    <span class="metric-small-value" id="hotWaterCycles">-</span>
+                </div>
+            </div>
         </div>
     </div>
 </section>
@@ -181,6 +289,63 @@ async function loadDashboard() {
         // Update settings
         document.getElementById('heatingCurve').textContent = data.heating_curve.toFixed(1);
         document.getElementById('curveOffset').textContent = data.curve_offset.toFixed(1);
+
+        // Update separate heating metrics
+        const heatingCard = document.getElementById('heatingCard');
+        if (data.heating) {
+            heatingCard.style.display = 'block';
+            document.getElementById('heatingCOP').textContent = data.heating.cop ? data.heating.cop.toFixed(2) : 'N/A';
+            document.getElementById('heatingDeltaT').textContent = data.heating.delta_t ? data.heating.delta_t.toFixed(1) + '°C' : 'N/A';
+            document.getElementById('heatingRuntime').textContent = data.heating.runtime_hours ? data.heating.runtime_hours.toFixed(1) + 'h' : 'N/A';
+            document.getElementById('heatingCycles').textContent = data.heating.num_cycles || '0';
+
+            // Set COP badge
+            const copBadge = document.getElementById('heatingCOPBadge');
+            if (data.heating.cop_rating) {
+                copBadge.textContent = data.heating.cop_rating.badge;
+                copBadge.style.backgroundColor = data.heating.cop_rating.color;
+                copBadge.style.display = 'inline-block';
+            }
+
+            // Set Delta T badge
+            const deltaTBadge = document.getElementById('heatingDeltaTBadge');
+            if (data.heating.delta_t_rating) {
+                deltaTBadge.textContent = data.heating.delta_t_rating.badge;
+                deltaTBadge.style.backgroundColor = data.heating.delta_t_rating.color;
+                deltaTBadge.style.display = 'inline-block';
+            }
+        } else {
+            heatingCard.style.display = 'none';
+        }
+
+        // Update separate hot water metrics
+        const hotWaterCard = document.getElementById('hotWaterCard');
+        if (data.hot_water) {
+            hotWaterCard.style.display = 'block';
+            document.getElementById('hotWaterCOP').textContent = data.hot_water.cop ? data.hot_water.cop.toFixed(2) : 'N/A';
+            document.getElementById('hotWaterDeltaT').textContent = data.hot_water.delta_t ? data.hot_water.delta_t.toFixed(1) + '°C' : 'N/A';
+            document.getElementById('hotWaterTemp').textContent = data.hot_water.avg_hot_water_temp ? data.hot_water.avg_hot_water_temp.toFixed(1) + '°C' : 'N/A';
+            document.getElementById('hotWaterRuntime').textContent = data.hot_water.runtime_hours ? data.hot_water.runtime_hours.toFixed(1) + 'h' : 'N/A';
+            document.getElementById('hotWaterCycles').textContent = data.hot_water.num_cycles || '0';
+
+            // Set COP badge
+            const copBadge = document.getElementById('hotWaterCOPBadge');
+            if (data.hot_water.cop_rating) {
+                copBadge.textContent = data.hot_water.cop_rating.badge;
+                copBadge.style.backgroundColor = data.hot_water.cop_rating.color;
+                copBadge.style.display = 'inline-block';
+            }
+
+            // Set Delta T badge
+            const deltaTBadge = document.getElementById('hotWaterDeltaTBadge');
+            if (data.hot_water.delta_t_rating) {
+                deltaTBadge.textContent = data.hot_water.delta_t_rating.badge;
+                deltaTBadge.style.backgroundColor = data.hot_water.delta_t_rating.color;
+                deltaTBadge.style.display = 'inline-block';
+            }
+        } else {
+            hotWaterCard.style.display = 'none';
+        }
 
         // Update timestamp
         const timestamp = new Date(data.timestamp);
