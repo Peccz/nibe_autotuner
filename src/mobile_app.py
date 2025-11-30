@@ -155,6 +155,12 @@ def get_chart_data(chart_type):
 
         readings = analyzer.get_readings(device, param_map[chart_type], start_time, end_time)
 
+        # Decimate data for performance (max 200 points for charts)
+        max_points = 200
+        if len(readings) > max_points:
+            step = len(readings) // max_points
+            readings = readings[::step]
+
         # Format for Chart.js
         data = {
             'labels': [r[0].isoformat() for r in readings],
