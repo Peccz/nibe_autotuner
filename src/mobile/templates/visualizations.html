@@ -134,7 +134,12 @@ const chartConfig = {
 };
 
 function createChart(canvasId, type, config) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        console.error(`Canvas element not found: ${canvasId}`);
+        return null;
+    }
+    const ctx = canvas.getContext('2d');
 
     return new Chart(ctx, {
         type: 'line',
@@ -217,7 +222,12 @@ function createChart(canvasId, type, config) {
 }
 
 function createDualChart(canvasId) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        console.error(`Canvas element not found: ${canvasId}`);
+        return null;
+    }
+    const ctx = canvas.getContext('2d');
 
     return new Chart(ctx, {
         type: 'line',
@@ -319,6 +329,11 @@ function createDualChart(canvasId) {
 }
 
 async function loadChartData(chartType, chartInstance) {
+    if (!chartInstance) {
+        console.warn(`Skipping ${chartType} chart - instance is null`);
+        return;
+    }
+
     const hours = document.getElementById('timePeriod').value;
 
     try {
@@ -371,7 +386,7 @@ async function loadAllCharts() {
         const supplyData = await supplyRes.json();
         const returnData = await returnRes.json();
 
-        if (supplyData.success && returnData.success) {
+        if (charts.supplyReturn && supplyData.success && returnData.success) {
             charts.supplyReturn.data.labels = supplyData.data.labels;
             charts.supplyReturn.data.datasets[0].data = supplyData.data.values;
             charts.supplyReturn.data.datasets[1].data = returnData.data.values;
