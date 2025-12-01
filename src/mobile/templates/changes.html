@@ -15,7 +15,11 @@
 <section class="section">
     <h2 class="section-title">📝 Logga Ny Ändring</h2>
 
-    <form id="changeForm">
+    <div class="info" style="margin-bottom: 16px; padding: 12px; background: rgba(33, 150, 243, 0.1); border-left: 3px solid #2196f3; color: var(--text-primary);">
+        <strong>ℹ️ OBS:</strong> Ändringsloggen är tillfälligt inaktiverad för uppdatering. Data loggas automatiskt av systemet.
+    </div>
+
+    <form id="changeForm" style="opacity: 0.5; pointer-events: none;">
         <div class="form-group">
             <label for="changeDate" class="form-label">Datum</label>
             <input type="date" id="changeDate" class="form-input" required>
