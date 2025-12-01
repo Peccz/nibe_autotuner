@@ -202,6 +202,49 @@ class HeatPumpAnalyzer:
 
         return [(r.timestamp, r.value) for r in readings]
 
+    def get_cop_timeseries(
+        self,
+        device: Device,
+        start_time: datetime,
+        end_time: datetime,
+        interval_minutes: int = 15
+    ) -> List[Tuple[datetime, float]]:
+        """
+        Calculate COP values over time in intervals
+
+        Args:
+            device: Device to analyze
+            start_time: Start of time range
+            end_time: End of time range
+            interval_minutes: Time interval for COP calculation (default 15 minutes)
+
+        Returns:
+            List of (timestamp, cop) tuples
+        """
+        cop_timeseries = []
+        current_time = start_time
+        interval_delta = timedelta(minutes=interval_minutes)
+
+        while current_time < end_time:
+            interval_end = current_time + interval_delta
+
+            # Get average values for this interval
+            avg_outdoor = self.calculate_average(device, self.PARAM_OUTDOOR_TEMP, current_time, interval_end)
+            avg_supply = self.calculate_average(device, self.PARAM_SUPPLY_TEMP, current_time, interval_end)
+            avg_return = self.calculate_average(device, self.PARAM_RETURN_TEMP, current_time, interval_end)
+            avg_compressor = self.calculate_average(device, self.PARAM_COMPRESSOR_FREQ, current_time, interval_end)
+
+            # Only calculate COP if compressor was active
+            if all(v is not None for v in [avg_outdoor, avg_supply, avg_return, avg_compressor]):
+                if avg_compressor >= self.COMPRESSOR_ACTIVE_THRESHOLD:
+                    cop = self._estimate_cop(avg_outdoor, avg_supply, avg_return)
+                    if cop:
+                        cop_timeseries.append((current_time, cop))
+
+            current_time = interval_end
+
+        return cop_timeseries
+
     def calculate_average(
         self,
         device: Device,
@@ -452,9 +495,9 @@ class HeatPumpAnalyzer:
         efficiency_factor = 0.45
         estimated_cop = carnot_cop * efficiency_factor
 
-        # Typical COP range for air-source heat pumps: 2.0 - 5.0
-        # Clamp to reasonable bounds
-        return max(2.0, min(5.0, estimated_cop))
+        # Return estimated COP without artificial limits
+        # Allow actual measured performance to be displayed
+        return max(1.0, estimated_cop)  # Only prevent impossible values < 1.0
 
     def _calculate_separate_metrics(
         self,

@@ -147,13 +147,32 @@ def get_chart_data(chart_type):
             'supply': 40008,     # Supply temp
             'return': 40012,     # Return temp
             'compressor': 43424, # Compressor frequency
-            'hot_water': 40013   # Hot water temp
+            'hot_water': 40013,  # Hot water temp
+            'pump_speed': 43437  # Circulation pump speed (GP1)
         }
 
-        if chart_type not in param_map:
-            return jsonify({'success': False, 'error': 'Invalid chart type'}), 400
+        # Handle special chart types that need calculation
+        if chart_type == 'delta_t':
+            # Calculate delta T from supply and return temps
+            supply_readings = analyzer.get_readings(device, 40008, start_time, end_time)
+            return_readings = analyzer.get_readings(device, 40012, start_time, end_time)
 
-        readings = analyzer.get_readings(device, param_map[chart_type], start_time, end_time)
+            # Match timestamps and calculate delta
+            delta_readings = []
+            return_dict = {r[0]: r[1] for r in return_readings}
+            for timestamp, supply_val in supply_readings:
+                if timestamp in return_dict:
+                    delta = supply_val - return_dict[timestamp]
+                    delta_readings.append((timestamp, delta))
+
+            readings = delta_readings
+        elif chart_type == 'cop':
+            # Calculate COP over time periods
+            readings = analyzer.get_cop_timeseries(device, start_time, end_time)
+        elif chart_type in param_map:
+            readings = analyzer.get_readings(device, param_map[chart_type], start_time, end_time)
+        else:
+            return jsonify({'success': False, 'error': 'Invalid chart type'}), 400
 
         # Decimate data for performance (max 200 points for charts)
         max_points = 200

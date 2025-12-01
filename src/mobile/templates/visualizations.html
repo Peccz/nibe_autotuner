@@ -85,6 +85,27 @@
             <canvas id="hotWaterChart"></canvas>
         </div>
     </div>
+
+    <div class="chart-card">
+        <h3 class="chart-title">🔄 Pump, Delta T & COP</h3>
+        <div class="chart-container">
+            <canvas id="pumpDeltaCopChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3 class="chart-title">🌡️ Inne- & Utetemperatur</h3>
+        <div class="chart-container">
+            <canvas id="indoorOutdoorChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3 class="chart-title">⚡ COP & Utetemperatur</h3>
+        <div class="chart-container">
+            <canvas id="copOutdoorChart"></canvas>
+        </div>
+    </div>
 </div>
 
 {% endblock %}
@@ -131,6 +152,24 @@ const chartConfig = {
         borderColor: '#ff5722',
         backgroundColor: 'rgba(255, 87, 34, 0.1)',
         unit: '°C'
+    },
+    pump_speed: {
+        label: 'Pump',
+        borderColor: '#00bcd4',
+        backgroundColor: 'rgba(0, 188, 212, 0.1)',
+        unit: '%'
+    },
+    delta_t: {
+        label: 'Delta T',
+        borderColor: '#ff9800',
+        backgroundColor: 'rgba(255, 152, 0, 0.1)',
+        unit: '°C'
+    },
+    cop: {
+        label: 'COP',
+        borderColor: '#4caf50',
+        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+        unit: ''
     }
 };
 
@@ -337,6 +376,113 @@ function createDualChart(canvasId) {
     });
 }
 
+function createMultiAxisChart(canvasId, datasets, yAxes) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        console.error(`Canvas element not found: ${canvasId}`);
+        return null;
+    }
+    const ctx = canvas.getContext('2d');
+
+    // Build scales configuration
+    const scales = {
+        x: {
+            ticks: {
+                maxTicksLimit: 6,
+                font: {
+                    size: 10
+                },
+                callback: function(value, index, ticks) {
+                    const label = this.getLabelForValue(value);
+                    if (label) {
+                        const date = new Date(label);
+                        const hours = date.getHours().toString().padStart(2, '0');
+                        const mins = date.getMinutes().toString().padStart(2, '0');
+                        return `${hours}:${mins}`;
+                    }
+                    return label;
+                }
+            },
+            grid: {
+                display: false
+            }
+        }
+    };
+
+    // Add Y axes
+    yAxes.forEach((axis, index) => {
+        scales[axis.id] = {
+            type: 'linear',
+            position: axis.position,
+            ticks: {
+                callback: function(value) {
+                    return value + axis.unit;
+                },
+                font: {
+                    size: 10
+                }
+            },
+            grid: {
+                color: index === 0 ? 'rgba(0, 0, 0, 0.05)' : 'rgba(0, 0, 0, 0)',
+                drawOnChartArea: index === 0
+            },
+            title: {
+                display: true,
+                text: axis.label,
+                font: {
+                    size: 11
+                }
+            }
+        };
+    });
+
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        boxWidth: 12,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const axis = yAxes.find(a => a.id === context.dataset.yAxisID);
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + (axis ? axis.unit : '');
+                        },
+                        title: function(context) {
+                            const date = new Date(context[0].label);
+                            return date.toLocaleString('sv-SE', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        }
+                    }
+                }
+            },
+            scales: scales
+        }
+    });
+}
+
 async function loadChartData(chartType, chartInstance) {
     if (!chartInstance) {
         console.warn(`Skipping ${chartType} chart - instance is null`);
@@ -402,6 +548,47 @@ async function loadAllCharts() {
             charts.supplyReturn.update('none');
         }
 
+        // Load data for new multi-axis charts
+        const [pumpRes, deltaRes, copRes] = await Promise.all([
+            fetch(`/api/chart/pump_speed?hours=${hours}`),
+            fetch(`/api/chart/delta_t?hours=${hours}`),
+            fetch(`/api/chart/cop?hours=${hours}`)
+        ]);
+
+        const pumpData = await pumpRes.json();
+        const deltaData = await deltaRes.json();
+        const copData = await copRes.json();
+
+        // Update Pump, Delta T & COP chart
+        if (charts.pumpDeltaCop && pumpData.success && deltaData.success && copData.success) {
+            charts.pumpDeltaCop.data.labels = pumpData.data.labels;
+            charts.pumpDeltaCop.data.datasets[0].data = pumpData.data.values;
+            charts.pumpDeltaCop.data.datasets[1].data = deltaData.data.values;
+            charts.pumpDeltaCop.data.datasets[2].data = copData.data.values;
+            charts.pumpDeltaCop.update('none');
+        }
+
+        // Reuse already loaded data for Indoor & Outdoor chart
+        const indoorRes = await fetch(`/api/chart/indoor?hours=${hours}`);
+        const outdoorRes = await fetch(`/api/chart/outdoor?hours=${hours}`);
+        const indoorData = await indoorRes.json();
+        const outdoorData = await outdoorRes.json();
+
+        if (charts.indoorOutdoor && indoorData.success && outdoorData.success) {
+            charts.indoorOutdoor.data.labels = indoorData.data.labels;
+            charts.indoorOutdoor.data.datasets[0].data = indoorData.data.values;
+            charts.indoorOutdoor.data.datasets[1].data = outdoorData.data.values;
+            charts.indoorOutdoor.update('none');
+        }
+
+        // Update COP & Outdoor chart
+        if (charts.copOutdoor && copData.success && outdoorData.success) {
+            charts.copOutdoor.data.labels = copData.data.labels;
+            charts.copOutdoor.data.datasets[0].data = copData.data.values;
+            charts.copOutdoor.data.datasets[1].data = outdoorData.data.values;
+            charts.copOutdoor.update('none');
+        }
+
         container.style.display = 'block';
 
     } catch (err) {
@@ -428,6 +615,114 @@ function initCharts() {
     charts.supplyReturn = createDualChart('supplyReturnChart');
     charts.compressor = createChart('compressorChart', 'compressor', chartConfig.compressor);
     charts.hotWater = createChart('hotWaterChart', 'hot_water', chartConfig.hot_water);
+
+    // Create new multi-axis charts
+    // Pump, Delta T & COP chart
+    charts.pumpDeltaCop = createMultiAxisChart('pumpDeltaCopChart',
+        [
+            {
+                label: 'Pump',
+                data: [],
+                borderColor: chartConfig.pump_speed.borderColor,
+                backgroundColor: chartConfig.pump_speed.backgroundColor,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y1'
+            },
+            {
+                label: 'Delta T',
+                data: [],
+                borderColor: chartConfig.delta_t.borderColor,
+                backgroundColor: chartConfig.delta_t.backgroundColor,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y2'
+            },
+            {
+                label: 'COP',
+                data: [],
+                borderColor: chartConfig.cop.borderColor,
+                backgroundColor: chartConfig.cop.backgroundColor,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y3'
+            }
+        ],
+        [
+            { id: 'y1', position: 'left', unit: '%', label: 'Pump (%)' },
+            { id: 'y2', position: 'right', unit: '°C', label: 'Delta T (°C)' },
+            { id: 'y3', position: 'right', unit: '', label: 'COP' }
+        ]
+    );
+
+    // Indoor & Outdoor Temperature chart
+    charts.indoorOutdoor = createMultiAxisChart('indoorOutdoorChart',
+        [
+            {
+                label: 'Inne',
+                data: [],
+                borderColor: chartConfig.indoor.borderColor,
+                backgroundColor: chartConfig.indoor.backgroundColor,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y1'
+            },
+            {
+                label: 'Ute',
+                data: [],
+                borderColor: chartConfig.outdoor.borderColor,
+                backgroundColor: chartConfig.outdoor.backgroundColor,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y1'
+            }
+        ],
+        [
+            { id: 'y1', position: 'left', unit: '°C', label: 'Temperatur (°C)' }
+        ]
+    );
+
+    // COP & Outdoor Temperature chart
+    charts.copOutdoor = createMultiAxisChart('copOutdoorChart',
+        [
+            {
+                label: 'COP',
+                data: [],
+                borderColor: chartConfig.cop.borderColor,
+                backgroundColor: chartConfig.cop.backgroundColor,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y1'
+            },
+            {
+                label: 'Ute',
+                data: [],
+                borderColor: chartConfig.outdoor.borderColor,
+                backgroundColor: chartConfig.outdoor.backgroundColor,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y2'
+            }
+        ],
+        [
+            { id: 'y1', position: 'left', unit: '', label: 'COP' },
+            { id: 'y2', position: 'right', unit: '°C', label: 'Utetemperatur (°C)' }
+        ]
+    );
 
     // Load data
     loadAllCharts();
