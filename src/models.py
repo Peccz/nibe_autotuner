@@ -130,13 +130,79 @@ class ParameterChange(Base):
     recommendation_id = Column(Integer, ForeignKey('recommendations.id'))
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # A/B Testing - Metrics captured before/after change
+    metrics_before_captured = Column(Boolean, default=False)
+    metrics_after_captured = Column(Boolean, default=False)
+    evaluation_status = Column(String(20), default='pending')  # 'pending', 'evaluating', 'completed'
+
     # Relationships
     device = relationship('Device', back_populates='changes')
     parameter = relationship('Parameter', back_populates='changes')
     recommendation = relationship('Recommendation', back_populates='changes')
+    ab_test_results = relationship('ABTestResult', back_populates='parameter_change')
 
     def __repr__(self):
         return f"<Change(param={self.parameter_id}, {self.old_value}->{self.new_value})>"
+
+
+class ABTestResult(Base):
+    """A/B Testing results - Compare metrics before and after parameter changes"""
+    __tablename__ = 'ab_test_results'
+
+    id = Column(Integer, primary_key=True)
+    parameter_change_id = Column(Integer, ForeignKey('parameter_changes.id'), nullable=False, index=True)
+
+    # Time periods
+    before_start = Column(DateTime, nullable=False)
+    before_end = Column(DateTime, nullable=False)
+    after_start = Column(DateTime, nullable=False)
+    after_end = Column(DateTime, nullable=False)
+
+    # COP metrics
+    cop_before = Column(Float)
+    cop_after = Column(Float)
+    cop_change_percent = Column(Float)
+
+    # Delta T metrics
+    delta_t_before = Column(Float)
+    delta_t_after = Column(Float)
+    delta_t_change_percent = Column(Float)
+
+    # Temperature metrics
+    indoor_temp_before = Column(Float)
+    indoor_temp_after = Column(Float)
+    indoor_temp_change = Column(Float)
+
+    outdoor_temp_before = Column(Float)
+    outdoor_temp_after = Column(Float)
+
+    # Compressor metrics
+    compressor_freq_before = Column(Float)
+    compressor_freq_after = Column(Float)
+    compressor_cycles_before = Column(Integer)
+    compressor_cycles_after = Column(Integer)
+
+    # Runtime metrics
+    runtime_hours_before = Column(Float)
+    runtime_hours_after = Column(Float)
+
+    # Cost metrics (calculated)
+    cost_per_day_before = Column(Float)  # SEK
+    cost_per_day_after = Column(Float)   # SEK
+    cost_savings_per_day = Column(Float) # SEK
+    cost_savings_per_year = Column(Float) # SEK
+
+    # Overall evaluation
+    success_score = Column(Float)  # 0-100 score
+    recommendation = Column(Text)  # 'Keep', 'Revert', 'Adjust further'
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    parameter_change = relationship('ParameterChange', back_populates='ab_test_results')
+
+    def __repr__(self):
+        return f"<ABTestResult(change_id={self.parameter_change_id}, cop_change={self.cop_change_percent}%)>"
 
 
 class Recommendation(Base):

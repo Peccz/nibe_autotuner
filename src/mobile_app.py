@@ -12,8 +12,9 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from analyzer import HeatPumpAnalyzer
-from models import ParameterChange, Device, Parameter, init_db
+from models import ParameterChange, Device, Parameter, ABTestResult, init_db
 from sqlalchemy.orm import sessionmaker
+from ab_tester import ABTester
 
 app = Flask(__name__,
             template_folder='mobile/templates',
@@ -25,6 +26,7 @@ app = Flask(__name__,
 analyzer = HeatPumpAnalyzer('data/nibe_autotuner.db')
 engine = analyzer.engine
 SessionMaker = sessionmaker(bind=engine)
+ab_tester = ABTester(analyzer)
 
 @app.route('/')
 def index():
@@ -271,6 +273,145 @@ def visualizations():
 def baseline():
     """Baseline documentation"""
     return render_template('baseline.html')
+
+@app.route('/ab-testing')
+def ab_testing():
+    """A/B Testing page"""
+    return render_template('ab_testing.html')
+
+@app.route('/api/ab-tests')
+def get_ab_tests():
+    """Get all A/B test results"""
+    session = SessionMaker()
+    try:
+        limit = request.args.get('limit', 20, type=int)
+
+        results = session.query(ABTestResult)\
+            .join(ParameterChange)\
+            .join(Parameter)\
+            .order_by(ABTestResult.created_at.desc())\
+            .limit(limit)\
+            .all()
+
+        data = []
+        for result in results:
+            change = result.parameter_change
+            data.append({
+                'id': result.id,
+                'change_id': change.id,
+                'parameter_name': change.parameter.parameter_name,
+                'old_value': change.old_value,
+                'new_value': change.new_value,
+                'timestamp': change.timestamp.isoformat(),
+                'cop_before': result.cop_before,
+                'cop_after': result.cop_after,
+                'cop_change_percent': result.cop_change_percent,
+                'delta_t_before': result.delta_t_before,
+                'delta_t_after': result.delta_t_after,
+                'indoor_temp_before': result.indoor_temp_before,
+                'indoor_temp_after': result.indoor_temp_after,
+                'indoor_temp_change': result.indoor_temp_change,
+                'cost_savings_per_day': result.cost_savings_per_day,
+                'cost_savings_per_year': result.cost_savings_per_year,
+                'success_score': result.success_score,
+                'recommendation': result.recommendation,
+                'evaluated_at': result.created_at.isoformat()
+            })
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        session.close()
+
+@app.route('/api/ab-test/<int:change_id>')
+def get_ab_test_detail(change_id):
+    """Get detailed A/B test result for a specific change"""
+    session = SessionMaker()
+    try:
+        result = session.query(ABTestResult)\
+            .filter_by(parameter_change_id=change_id)\
+            .first()
+
+        if not result:
+            return jsonify({'success': False, 'error': 'No test result found'}), 404
+
+        change = result.parameter_change
+
+        data = {
+            'id': result.id,
+            'change': {
+                'id': change.id,
+                'parameter_name': change.parameter.parameter_name,
+                'parameter_id': change.parameter.parameter_id,
+                'old_value': change.old_value,
+                'new_value': change.new_value,
+                'timestamp': change.timestamp.isoformat(),
+                'reason': change.reason,
+                'applied_by': change.applied_by
+            },
+            'periods': {
+                'before_start': result.before_start.isoformat(),
+                'before_end': result.before_end.isoformat(),
+                'after_start': result.after_start.isoformat(),
+                'after_end': result.after_end.isoformat()
+            },
+            'cop': {
+                'before': result.cop_before,
+                'after': result.cop_after,
+                'change_percent': result.cop_change_percent
+            },
+            'delta_t': {
+                'before': result.delta_t_before,
+                'after': result.delta_t_after,
+                'change_percent': result.delta_t_change_percent
+            },
+            'temperature': {
+                'indoor_before': result.indoor_temp_before,
+                'indoor_after': result.indoor_temp_after,
+                'indoor_change': result.indoor_temp_change,
+                'outdoor_before': result.outdoor_temp_before,
+                'outdoor_after': result.outdoor_temp_after
+            },
+            'compressor': {
+                'freq_before': result.compressor_freq_before,
+                'freq_after': result.compressor_freq_after,
+                'cycles_before': result.compressor_cycles_before,
+                'cycles_after': result.compressor_cycles_after
+            },
+            'runtime': {
+                'before': result.runtime_hours_before,
+                'after': result.runtime_hours_after
+            },
+            'cost': {
+                'per_day_before': result.cost_per_day_before,
+                'per_day_after': result.cost_per_day_after,
+                'savings_per_day': result.cost_savings_per_day,
+                'savings_per_year': result.cost_savings_per_year
+            },
+            'evaluation': {
+                'success_score': result.success_score,
+                'recommendation': result.recommendation,
+                'evaluated_at': result.created_at.isoformat()
+            }
+        }
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        session.close()
+
+@app.route('/api/evaluate-pending', methods=['POST'])
+def evaluate_pending_changes():
+    """Manually trigger evaluation of pending changes"""
+    try:
+        ab_tester.evaluate_all_pending()
+        return jsonify({'success': True, 'message': 'Evaluation completed'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/manifest.json')
 def manifest():

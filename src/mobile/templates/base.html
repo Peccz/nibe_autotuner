@@ -52,13 +52,13 @@
             <span class="nav-item-icon">📈</span>
             <span class="nav-item-label">Grafer</span>
         </a>
+        <a href="/ab-testing" class="nav-item {% if request.path == '/ab-testing' %}active{% endif %}">
+            <span class="nav-item-icon">🧪</span>
+            <span class="nav-item-label">A/B Test</span>
+        </a>
         <a href="/changes" class="nav-item {% if request.path == '/changes' %}active{% endif %}">
             <span class="nav-item-icon">📝</span>
-            <span class="nav-item-label">Ändringar</span>
-        </a>
-        <a href="/baseline" class="nav-item {% if request.path == '/baseline' %}active{% endif %}">
-            <span class="nav-item-icon">📚</span>
-            <span class="nav-item-label">Baseline</span>
+            <span class="nav-item-label">Log</span>
         </a>
     </nav>
 

@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+
+{% block title %}A/B Testning - Nibe Autotuner{% endblock %}
+
+{% block extra_css %}
+<style>
+.test-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+}
+
+.test-card.success {
+    border-left: 4px solid #4caf50;
+}
+
+.test-card.warning {
+    border-left: 4px solid #ff9800;
+}
+
+.test-card.danger {
+    border-left: 4px solid #f44336;
+}
+
+.test-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.test-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.test-date {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.change-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(33, 150, 243, 0.1);
+    color: var(--primary-color);
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin: 12px 0;
+}
+
+.metric-box {
+    background: rgba(0,0,0,0.02);
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.metric-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.metric-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.metric-change {
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.metric-change.positive {
+    color: #4caf50;
+}
+
+.metric-change.negative {
+    color: #f44336;
+}
+
+.metric-change.neutral {
+    color: var(--text-secondary);
+}
+
+.score-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+}
+
+.score-circle.excellent {
+    background: linear-gradient(135deg, #4caf50, #66bb6a);
+}
+
+.score-circle.good {
+    background: linear-gradient(135deg, #8bc34a, #9ccc65);
+}
+
+.score-circle.neutral {
+    background: linear-gradient(135deg, #ff9800, #ffa726);
+}
+
+.score-circle.poor {
+    background: linear-gradient(135deg, #f44336, #e57373);
+}
+
+.recommendation-box {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.recommendation-box.keep {
+    background: rgba(76, 175, 80, 0.1);
+    color: #4caf50;
+}
+
+.recommendation-box.adjust {
+    background: rgba(255, 152, 0, 0.1);
+    color: #ff9800;
+}
+
+.recommendation-box.revert {
+    background: rgba(244, 67, 54, 0.1);
+    color: #f44336;
+}
+
+.savings-highlight {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(76, 175, 80, 0.05));
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.savings-amount {
+    font-size: 24px;
+    font-weight: 700;
+    color: #4caf50;
+}
+
+.savings-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+}
+
+.info-box {
+    background: rgba(33, 150, 243, 0.1);
+    border-left: 3px solid var(--primary-color);
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="info-box">
+    <strong>💡 Så fungerar A/B-testning:</strong> När du ändrar en parameter jämförs automatiskt 48h före och 48h efter ändringen. Efter 48h får du en vetenskaplig utvärdering av om ändringen var bra!
+</div>
+
+<!-- Loading indicator -->
+<div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Laddar resultat...</p>
+</div>
+
+<!-- Error message -->
+<div id="error" class="error" style="display: none;"></div>
+
+<!-- Results container -->
+<div id="resultsContainer" style="display: none;"></div>
+
+<!-- Empty state -->
+<div id="emptyState" class="empty-state" style="display: none;">
+    <p style="font-size: 48px;">📊</p>
+    <p><strong>Inga A/B-tester ännu</strong></p>
+    <p style="font-size: 14px; margin-top: 8px;">
+        Gör en parameterändring och vänta 48 timmar, så får du automatiskt en utvärdering här!
+    </p>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadABTests() {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const container = document.getElementById('resultsContainer');
+    const emptyState = document.getElementById('emptyState');
+
+    loading.style.display = 'block';
+    error.style.display = 'none';
+    container.style.display = 'none';
+    emptyState.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/ab-tests');
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error);
+        }
+
+        const tests = result.data;
+
+        if (tests.length === 0) {
+            emptyState.style.display = 'block';
+        } else {
+            container.innerHTML = '';
+            tests.forEach(test => {
+                const card = createTestCard(test);
+                container.appendChild(card);
+            });
+            container.style.display = 'block';
+        }
+
+    } catch (err) {
+        error.textContent = '❌ Fel vid laddning: ' + err.message;
+        error.style.display = 'block';
+        console.error('Error loading AB tests:', err);
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+function createTestCard(test) {
+    const card = document.createElement('div');
+
+    // Determine card class based on score
+    let cardClass = 'test-card';
+    let scoreClass = 'neutral';
+    if (test.success_score >= 70) {
+        cardClass += ' success';
+        scoreClass = 'excellent';
+    } else if (test.success_score >= 55) {
+        cardClass += ' success';
+        scoreClass = 'good';
+    } else if (test.success_score >= 30) {
+        cardClass += ' warning';
+        scoreClass = 'neutral';
+    } else {
+        cardClass += ' danger';
+        scoreClass = 'poor';
+    }
+
+    card.className = cardClass;
+
+    // Format date
+    const date = new Date(test.timestamp);
+    const dateStr = date.toLocaleDateString('sv-SE', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    // Determine recommendation class
+    let recClass = 'keep';
+    if (test.recommendation.includes('ÅTERSTÄLL') || test.recommendation.includes('JUSTERA')) {
+        recClass = 'revert';
+    } else if (test.recommendation.includes('NEUTRAL') || test.recommendation.includes('ÖVERVÄG')) {
+        recClass = 'adjust';
+    }
+
+    card.innerHTML = `
+        <div class="test-header">
+            <div>
+                <div class="test-title">${test.parameter_name}</div>
+                <div class="test-date">${dateStr}</div>
+            </div>
+            <div class="score-circle ${scoreClass}">
+                ${Math.round(test.success_score)}
+            </div>
+        </div>
+
+        <div class="change-badge">
+            ${formatValue(test.old_value)} → ${formatValue(test.new_value)}
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-box">
+                <div class="metric-label">COP</div>
+                <div class="metric-value">${formatValue(test.cop_after)}</div>
+                <div class="metric-change ${getChangeClass(test.cop_change_percent)}">
+                    ${formatChange(test.cop_change_percent)}
+                </div>
+            </div>
+
+            <div class="metric-box">
+                <div class="metric-label">Delta T</div>
+                <div class="metric-value">${formatValue(test.delta_t_after)}°C</div>
+                <div class="metric-change ${getChangeClass(test.delta_t_change_percent, false)}">
+                    ${formatChange(test.delta_t_change_percent)}
+                </div>
+            </div>
+
+            <div class="metric-box">
+                <div class="metric-label">Innetemperatur</div>
+                <div class="metric-value">${formatValue(test.indoor_temp_after)}°C</div>
+                <div class="metric-change ${getChangeClass(test.indoor_temp_change, true, true)}">
+                    ${formatChange(test.indoor_temp_change, true)}
+                </div>
+            </div>
+
+            <div class="metric-box">
+                <div class="metric-label">Kostnad/dag</div>
+                <div class="metric-value">${formatValue(test.cost_savings_per_day)} kr</div>
+                <div class="metric-change positive">
+                    Sparar ${Math.round(test.cost_savings_per_year)} kr/år
+                </div>
+            </div>
+        </div>
+
+        ${test.cost_savings_per_day > 0 ? `
+            <div class="savings-highlight">
+                <div>
+                    <div class="savings-amount">+${Math.round(test.cost_savings_per_year)} kr</div>
+                    <div class="savings-label">Beräknad årsbesparing</div>
+                </div>
+            </div>
+        ` : ''}
+
+        <div class="recommendation-box ${recClass}">
+            ${test.recommendation}
+        </div>
+    `;
+
+    return card;
+}
+
+function formatValue(val) {
+    if (val === null || val === undefined) return 'N/A';
+    return typeof val === 'number' ? val.toFixed(1) : val;
+}
+
+function formatChange(val, absolute = false) {
+    if (val === null || val === undefined || val === 0) return '—';
+    const prefix = val > 0 ? '+' : '';
+    const suffix = absolute ? '°C' : '%';
+    return prefix + val.toFixed(1) + suffix;
+}
+
+function getChangeClass(val, higherIsBetter = true, absolute = false) {
+    if (val === null || val === undefined || val === 0) return 'neutral';
+
+    if (absolute) {
+        // For absolute values (like temp change), closer to 0 is better
+        return Math.abs(val) < 0.5 ? 'positive' : 'negative';
+    }
+
+    if (higherIsBetter) {
+        return val > 0 ? 'positive' : 'negative';
+    } else {
+        return val < 0 ? 'positive' : 'negative';
+    }
+}
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', loadABTests);
+
+// Refresh button
+function refreshData() {
+    loadABTests();
+}
+</script>
+{% endblock %}
