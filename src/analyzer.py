@@ -15,6 +15,7 @@ from models import (
     init_db
 )
 from sqlalchemy.orm import sessionmaker
+from cop_model import COPModel
 
 
 @dataclass
@@ -460,44 +461,48 @@ class HeatPumpAnalyzer:
         self,
         outdoor_temp: Optional[float],
         supply_temp: Optional[float],
-        return_temp: Optional[float]
+        return_temp: Optional[float],
+        compressor_freq: Optional[float] = None,
+        pump_speed: Optional[float] = None,
+        num_cycles: Optional[int] = None,
+        runtime_hours: Optional[float] = None
     ) -> Optional[float]:
         """
         Estimate Coefficient of Performance (COP) based on temperatures
 
-        This is a simplified estimation. Real COP would require energy meter data.
-        Formula based on Carnot efficiency adjusted for real-world heat pump performance.
+        Uses empirical model based on Nibe F730 manufacturer specifications
+        instead of theoretical Carnot formula for more realistic estimates.
 
-        Scientific Basis:
-        - Carnot COP = T_hot / (T_hot - T_cold) where T is in Kelvin
-        - Real heat pumps achieve 30-60% of Carnot efficiency (we use 45%)
-        - See docs/SCIENTIFIC_BASELINE.md for references
+        Real COP would require energy meter data, but this provides a good
+        estimate based on operating conditions.
+
+        Args:
+            outdoor_temp: Outdoor air temperature (°C)
+            supply_temp: Supply water temperature (°C)
+            return_temp: Return water temperature (°C)
+            compressor_freq: Compressor frequency (Hz), optional
+            pump_speed: Circulation pump speed (%), optional
+            num_cycles: Number of compressor cycles, optional
+            runtime_hours: Runtime hours for cycle analysis, optional
+
+        Returns:
+            Estimated COP or None if insufficient data
         """
         if not all([outdoor_temp, supply_temp, return_temp]):
             return None
 
-        # Average water temperature in heating system
-        avg_water_temp = (supply_temp + return_temp) / 2
+        # Use empirical model based on Nibe F730 specifications
+        cop = COPModel.estimate_cop_empirical(
+            outdoor_temp=outdoor_temp,
+            supply_temp=supply_temp,
+            return_temp=return_temp,
+            compressor_freq=compressor_freq,
+            pump_speed=pump_speed,
+            num_cycles=num_cycles,
+            runtime_hours=runtime_hours
+        )
 
-        # Temperature lift (difference between output and input)
-        temp_lift = avg_water_temp - outdoor_temp
-
-        if temp_lift <= 0:
-            return None
-
-        # Carnot COP: T_hot / (T_hot - T_cold) where T is in Kelvin
-        t_hot_k = avg_water_temp + 273.15
-        t_cold_k = outdoor_temp + 273.15
-        carnot_cop = t_hot_k / (t_hot_k - t_cold_k)
-
-        # Real heat pump achieves ~40-50% of Carnot efficiency
-        # Better pumps at moderate temperatures can reach 50%
-        efficiency_factor = 0.45
-        estimated_cop = carnot_cop * efficiency_factor
-
-        # Return estimated COP without artificial limits
-        # Allow actual measured performance to be displayed
-        return max(1.0, estimated_cop)  # Only prevent impossible values < 1.0
+        return cop
 
     def _calculate_separate_metrics(
         self,

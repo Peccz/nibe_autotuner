@@ -30,9 +30,9 @@ class SMHIWeatherService:
     BASE_URL = "https://opendata-download-metfcst.smhi.se/api"
 
     # Default location (can be configured)
-    # You should update these to your actual location!
-    DEFAULT_LAT = 57.7089  # Example: Gothenburg
-    DEFAULT_LON = 11.9746
+    # Upplands Väsby, Sweden
+    DEFAULT_LAT = 59.5176  # Upplands Väsby
+    DEFAULT_LON = 17.9114
 
     def __init__(self, lat: float = None, lon: float = None):
         """
@@ -253,9 +253,9 @@ class SMHIWeatherService:
 
 def main():
     """Test weather service"""
-    # You should update these coordinates to your actual location!
+    # Upplands Väsby, Sweden
     # Find your coordinates: https://www.google.com/maps (right-click -> coordinates)
-    service = SMHIWeatherService(lat=57.7089, lon=11.9746)
+    service = SMHIWeatherService(lat=59.5176, lon=17.9114)
 
     print("=== SMHI Weather Forecast Test ===\n")
 

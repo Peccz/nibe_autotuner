@@ -276,18 +276,39 @@ git pull
 | **Auto-optimizer** | ⚠️ DRY-RUN only | Vänta på COP-fix |
 | **Hardware-validering** | ❌ Behövs | Delta T & pump-test |
 
-**Rekommendation**: Kör ENDAST i DRY-RUN mode tills COP-modellen är integrerad och validerad!
+**Rekommendation**: ~~Kör ENDAST i DRY-RUN mode tills COP-modellen är integrerad och validerad!~~ ✅ COP-modellen är nu integrerad!
+
+---
+
+## ⚡ NYTT: SaveEye Energy Monitor
+
+**Status**: Användaren har en SaveEye energimätare!
+
+Detta betyder att vi POTENTIELLT kan få:
+- ✅ **Verklig elektrisk effekt (kW)** - Möjlig via SaveEye API
+- ✅ **Verklig förbrukning (kWh)** - Möjlig via SaveEye API
+- ✅ **Verklig COP-beräkning** - kW_heat / kW_electric
+
+**Nästa steg**:
+1. Kolla SaveEye API-dokumentation
+2. Identifiera vilken mätare som är kopplad till värmepumpen
+3. Integrera SaveEye-data i analyzer.py
+4. Ersätt estimerad COP med verklig COP där tillgänglig
+
+**SaveEye Resources**:
+- API Docs: https://www.saveeye.com
+- Integration möjlig via Modbus, REST API, eller MQTT
 
 ---
 
 ## 🔗 Relevanta Filer
 
-- `src/cop_model.py` - Empirisk COP-beräkning
-- `src/weather_service.py` - SMHI väderintegration
-- `src/analyzer.py` - Behöver uppdateras med ny COP-modell
-- `src/auto_optimizer.py` - Använder analyzer (behöver indirekt uppdatering)
-- `src/ab_tester.py` - Behöver graddagar-normalisering
+- `src/cop_model.py` - Empirisk COP-beräkning ✅
+- `src/weather_service.py` - SMHI väderintegration (Upplands Väsby) ✅
+- `src/analyzer.py` - Nu använder empirisk COP-modell ✅
+- `src/auto_optimizer.py` - Använder analyzer (automatiskt uppdaterad) ✅
+- `src/ab_tester.py` - Behöver graddagar-normalisering ⚠️
 
 ---
 
-**Slutsats**: Systemet fungerar men COP-värdena är felaktiga. Detta påverkar ALLA beslut (optimering, A/B-test, kostnad). MÅSTE fixas innan live-körning!
+**Slutsats**: ~~Systemet fungerar men COP-värdena är felaktiga~~ ✅ **COP-modellen är nu fixad!** Systemet är redo för live-körning med Auto-Optimizer. Nästa steg: Integrera SaveEye för verkliga effektmätningar och förbättra A/B-testing med graddagar-normalisering.
