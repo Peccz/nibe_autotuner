@@ -12,7 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from analyzer import HeatPumpAnalyzer
-from models import ParameterChange, init_db
+from models import ParameterChange, Device, Parameter, init_db
 from sqlalchemy.orm import sessionmaker
 
 app = Flask(__name__,
@@ -187,14 +187,27 @@ def handle_changes():
             # Create new change
             data = request.json
 
+            # Get device and parameter from database
+            device = session.query(Device).first()
+            if not device:
+                return jsonify({'success': False, 'error': 'No device found'}), 404
+
+            # Get parameter by ID
+            parameter = session.query(Parameter).filter_by(
+                parameter_id=int(data.get('parameter_id', 0))
+            ).first()
+
+            if not parameter:
+                return jsonify({'success': False, 'error': 'Parameter not found'}), 404
+
             change = ParameterChange(
+                device_id=device.id,
+                parameter_id=parameter.id,
                 timestamp=datetime.fromisoformat(data['timestamp']),
-                parameter_type=data['parameter_type'],
-                parameter_name=data.get('parameter_name'),
                 old_value=data.get('old_value'),
                 new_value=data.get('new_value'),
                 reason=data.get('reason'),
-                notes=data.get('notes')
+                applied_by=data.get('applied_by', 'user')
             )
 
             session.add(change)
@@ -203,8 +216,9 @@ def handle_changes():
             return jsonify({'success': True, 'message': 'Change logged successfully'})
 
         else:
-            # Get all changes
+            # Get all changes with parameter info
             changes = session.query(ParameterChange)\
+                .join(Parameter)\
                 .order_by(ParameterChange.timestamp.desc())\
                 .limit(100)\
                 .all()
@@ -212,12 +226,12 @@ def handle_changes():
             data = [{
                 'id': c.id,
                 'timestamp': c.timestamp.isoformat(),
-                'parameter_type': c.parameter_type,
-                'parameter_name': c.parameter_name,
+                'parameter_id': c.parameter.parameter_id,
+                'parameter_name': c.parameter.parameter_name,
                 'old_value': c.old_value,
                 'new_value': c.new_value,
                 'reason': c.reason,
-                'notes': c.notes
+                'applied_by': c.applied_by
             } for c in changes]
 
             return jsonify({'success': True, 'data': data})
