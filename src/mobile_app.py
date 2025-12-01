@@ -18,6 +18,7 @@ from ab_tester import ABTester
 from optimizer import SmartOptimizer
 from api_client import MyUplinkClient
 from auth import MyUplinkAuth
+from auto_optimizer import AutoOptimizer
 
 app = Flask(__name__,
             template_folder='mobile/templates',
@@ -35,6 +36,19 @@ optimizer = SmartOptimizer(analyzer)
 # Initialize myUplink API client
 auth = MyUplinkAuth()
 api_client = MyUplinkClient(auth)
+
+# Initialize auto optimizer
+def get_auto_optimizer():
+    """Get AutoOptimizer instance"""
+    device = SessionMaker().query(Device).first()
+    if not device:
+        return None
+    return AutoOptimizer(
+        analyzer=analyzer,
+        api_client=api_client,
+        device_id=device.device_id,
+        dry_run=False  # Live mode
+    )
 
 @app.route('/')
 def index():
@@ -664,6 +678,71 @@ def quick_action_optimize_comfort():
                 'message': f'Temperaturen är redan bra ({current_temp:.1f}°C), inga ändringar behövs',
                 'changes': []
             })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========== AUTO OPTIMIZER ==========
+
+@app.route('/api/auto-optimize/analyze', methods=['POST'])
+def auto_optimize_analyze():
+    """Analyze system and suggest automatic optimizations (dry-run)"""
+    try:
+        data = request.get_json() or {}
+        hours = data.get('hours', 72)
+
+        auto_opt = get_auto_optimizer()
+        if not auto_opt:
+            return jsonify({'success': False, 'error': 'No device found'}), 404
+
+        # Run in dry-run mode (suggestions only)
+        auto_opt.dry_run = True
+        result = auto_opt.run_optimization_cycle(
+            hours_back=hours,
+            auto_apply=False
+        )
+
+        return jsonify({'success': True, 'data': result})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/auto-optimize/run', methods=['POST'])
+def auto_optimize_run():
+    """Run automatic optimization and apply changes"""
+    try:
+        data = request.get_json() or {}
+        hours = data.get('hours', 72)
+        max_actions = data.get('max_actions', 1)
+        confirm = data.get('confirm', False)
+
+        if not confirm:
+            return jsonify({
+                'success': False,
+                'error': 'Must confirm with "confirm": true to apply changes'
+            }), 400
+
+        auto_opt = get_auto_optimizer()
+        if not auto_opt:
+            return jsonify({'success': False, 'error': 'No device found'}), 404
+
+        # Check if we can make changes
+        can_change, reason = auto_opt.can_make_change()
+        if not can_change:
+            return jsonify({
+                'success': False,
+                'error': f'Cannot make automatic changes: {reason}'
+            }), 403
+
+        # Run with auto-apply
+        auto_opt.dry_run = False
+        result = auto_opt.run_optimization_cycle(
+            hours_back=hours,
+            auto_apply=True,
+            max_actions=max_actions
+        )
+
+        return jsonify({'success': True, 'data': result})
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
