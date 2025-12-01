@@ -389,7 +389,7 @@ class HeatPumpAnalyzer:
             # If we found matching readings within tolerance
             if return_temp is not None and comp_freq is not None:
                 # Only include readings where compressor is actively heating
-                if comp_freq > self.COMPRESSOR_ACTIVE_THRESHOLD:
+                if comp_freq >= self.COMPRESSOR_ACTIVE_THRESHOLD:
                     delta = supply_temp - return_temp
 
                     # Separate by operating mode based on supply temperature
@@ -492,7 +492,7 @@ class HeatPumpAnalyzer:
             hw_temp = self._find_closest_reading(hot_water_readings, supply_ts, time_tolerance)
 
             # Only include active compressor readings
-            if comp_freq is not None and comp_freq > self.COMPRESSOR_ACTIVE_THRESHOLD:
+            if comp_freq is not None and comp_freq >= self.COMPRESSOR_ACTIVE_THRESHOLD:
                 if return_temp is not None and outdoor_temp is not None:
                     # Classify by supply temperature
                     if supply_temp < self.HOT_WATER_TEMP_THRESHOLD:
@@ -743,7 +743,7 @@ class HeatPumpAnalyzer:
             comp_freq = self._find_closest_reading(compressor_readings, supply_ts, time_tolerance)
 
             if all(v is not None for v in [outdoor_temp, return_temp, comp_freq]):
-                if comp_freq > self.COMPRESSOR_ACTIVE_THRESHOLD:
+                if comp_freq >= self.COMPRESSOR_ACTIVE_THRESHOLD:
                     cop = self._estimate_cop(outdoor_temp, supply_temp, return_temp)
 
                     if supply_temp < self.HOT_WATER_TEMP_THRESHOLD:
