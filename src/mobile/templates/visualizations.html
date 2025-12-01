@@ -187,17 +187,21 @@ function createChart(canvasId, type, config) {
             },
             scales: {
                 x: {
-                    type: 'time',
-                    time: {
-                        displayFormats: {
-                            hour: 'HH:mm',
-                            day: 'MMM d'
-                        }
-                    },
                     ticks: {
                         maxTicksLimit: 6,
                         font: {
                             size: 10
+                        },
+                        callback: function(value, index, ticks) {
+                            // Show simplified time labels
+                            const label = this.getLabelForValue(value);
+                            if (label) {
+                                const date = new Date(label);
+                                const hours = date.getHours().toString().padStart(2, '0');
+                                const mins = date.getMinutes().toString().padStart(2, '0');
+                                return `${hours}:${mins}`;
+                            }
+                            return label;
                         }
                     },
                     grid: {
@@ -294,17 +298,21 @@ function createDualChart(canvasId) {
             },
             scales: {
                 x: {
-                    type: 'time',
-                    time: {
-                        displayFormats: {
-                            hour: 'HH:mm',
-                            day: 'MMM d'
-                        }
-                    },
                     ticks: {
                         maxTicksLimit: 6,
                         font: {
                             size: 10
+                        },
+                        callback: function(value, index, ticks) {
+                            // Show simplified time labels
+                            const label = this.getLabelForValue(value);
+                            if (label) {
+                                const date = new Date(label);
+                                const hours = date.getHours().toString().padStart(2, '0');
+                                const mins = date.getMinutes().toString().padStart(2, '0');
+                                return `${hours}:${mins}`;
+                            }
+                            return label;
                         }
                     },
                     grid: {
