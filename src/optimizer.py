@@ -1,0 +1,338 @@
+"""
+Smart Optimization Engine
+Combines: Performance Score, Cost Tracking, AI Recommendations
+"""
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from analyzer import HeatPumpAnalyzer
+
+
+@dataclass
+class PerformanceScore:
+    """Overall system performance score"""
+    total_score: int  # 0-100
+    cop_score: int
+    delta_t_score: int
+    comfort_score: int
+    efficiency_score: int
+    grade: str  # 'A+', 'A', 'B', 'C', 'D', 'F'
+    emoji: str
+
+
+@dataclass
+class CostAnalysis:
+    """Detailed cost analysis"""
+    daily_cost_sek: float
+    monthly_cost_sek: float
+    yearly_cost_sek: float
+    heating_cost_daily: float
+    hot_water_cost_daily: float
+    cop_avg: float
+    baseline_yearly_cost: float  # If no optimization
+    savings_yearly: float
+
+
+@dataclass
+class OptimizationSuggestion:
+    """AI-generated optimization suggestion"""
+    priority: str  # 'high', 'medium', 'low'
+    title: str
+    description: str
+    parameter_name: str
+    parameter_id: str
+    current_value: float
+    suggested_value: float
+    expected_cop_improvement: float
+    expected_savings_yearly: float
+    confidence: float  # 0-1
+    reasoning: str
+
+
+class SmartOptimizer:
+    """Smart optimization engine"""
+
+    # Electricity price
+    ELECTRICITY_PRICE_SEK_KWH = 2.0
+
+    # Baseline COP (typical unoptimized system)
+    BASELINE_COP = 2.5
+
+    # Compressor power
+    COMPRESSOR_POWER_KW = 1.5
+
+    def __init__(self, analyzer: HeatPumpAnalyzer):
+        self.analyzer = analyzer
+
+    def calculate_performance_score(self, hours_back: int = 72) -> PerformanceScore:
+        """
+        Calculate overall performance score 0-100
+
+        Components:
+        - COP: 40 points
+        - Delta T: 20 points
+        - Comfort (temp stability): 20 points
+        - Efficiency (cycles, runtime): 20 points
+        """
+        metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
+
+        score = 0
+        cop_score = 0
+        delta_t_score = 0
+        comfort_score = 0
+        efficiency_score = 0
+
+        # COP Score (40 points)
+        if metrics.estimated_cop:
+            if metrics.estimated_cop >= 4.5:
+                cop_score = 40
+            elif metrics.estimated_cop >= 4.0:
+                cop_score = 35
+            elif metrics.estimated_cop >= 3.5:
+                cop_score = 30
+            elif metrics.estimated_cop >= 3.0:
+                cop_score = 25
+            elif metrics.estimated_cop >= 2.5:
+                cop_score = 15
+            else:
+                cop_score = 5
+
+        # Delta T Score (20 points) - Optimal 5-7°C
+        if metrics.delta_t_active:
+            if 5.0 <= metrics.delta_t_active <= 7.0:
+                delta_t_score = 20
+            elif 4.0 <= metrics.delta_t_active <= 8.0:
+                delta_t_score = 15
+            elif 3.0 <= metrics.delta_t_active <= 9.0:
+                delta_t_score = 10
+            else:
+                delta_t_score = 5
+
+        # Comfort Score (20 points) - Stable indoor temp around 21°C
+        if metrics.avg_indoor_temp:
+            temp_deviation = abs(metrics.avg_indoor_temp - 21.0)
+            if temp_deviation <= 0.5:
+                comfort_score = 20
+            elif temp_deviation <= 1.0:
+                comfort_score = 15
+            elif temp_deviation <= 1.5:
+                comfort_score = 10
+            else:
+                comfort_score = 5
+
+        # Efficiency Score (20 points) - Low cycles, good runtime
+        if metrics.heating_metrics:
+            cycles = metrics.heating_metrics.num_cycles
+            runtime = metrics.heating_metrics.runtime_hours
+
+            # Fewer cycles is better
+            if cycles <= 10:
+                efficiency_score += 10
+            elif cycles <= 15:
+                efficiency_score += 7
+            elif cycles <= 20:
+                efficiency_score += 5
+            else:
+                efficiency_score += 2
+
+            # Decent runtime is good
+            if runtime and runtime >= 12:
+                efficiency_score += 10
+            elif runtime and runtime >= 8:
+                efficiency_score += 7
+            elif runtime and runtime >= 4:
+                efficiency_score += 5
+
+        total_score = cop_score + delta_t_score + comfort_score + efficiency_score
+
+        # Determine grade
+        if total_score >= 90:
+            grade, emoji = 'A+', '🏆'
+        elif total_score >= 80:
+            grade, emoji = 'A', '⭐'
+        elif total_score >= 70:
+            grade, emoji = 'B', '✨'
+        elif total_score >= 60:
+            grade, emoji = 'C', '👍'
+        elif total_score >= 50:
+            grade, emoji = 'D', '😐'
+        else:
+            grade, emoji = 'F', '⚠️'
+
+        return PerformanceScore(
+            total_score=total_score,
+            cop_score=cop_score,
+            delta_t_score=delta_t_score,
+            comfort_score=comfort_score,
+            efficiency_score=efficiency_score,
+            grade=grade,
+            emoji=emoji
+        )
+
+    def calculate_costs(self, hours_back: int = 72) -> CostAnalysis:
+        """Calculate detailed cost analysis"""
+        metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
+
+        # Calculate actual costs
+        heating_cost_daily = 0
+        hot_water_cost_daily = 0
+
+        if metrics.heating_metrics and metrics.heating_metrics.runtime_hours:
+            hours_per_day = metrics.heating_metrics.runtime_hours / (hours_back / 24)
+            heating_cost_daily = hours_per_day * self.COMPRESSOR_POWER_KW * self.ELECTRICITY_PRICE_SEK_KWH
+
+        if metrics.hot_water_metrics and metrics.hot_water_metrics.runtime_hours:
+            hours_per_day = metrics.hot_water_metrics.runtime_hours / (hours_back / 24)
+            hot_water_cost_daily = hours_per_day * self.COMPRESSOR_POWER_KW * self.ELECTRICITY_PRICE_SEK_KWH
+
+        daily_cost = heating_cost_daily + hot_water_cost_daily
+        monthly_cost = daily_cost * 30
+        yearly_cost = daily_cost * 365
+
+        # Calculate baseline (unoptimized) cost
+        avg_cop = metrics.estimated_cop if metrics.estimated_cop else self.BASELINE_COP
+        baseline_cop = self.BASELINE_COP
+
+        # If current COP is better than baseline, we're saving money
+        if avg_cop > baseline_cop:
+            baseline_yearly = yearly_cost * (avg_cop / baseline_cop)
+            savings_yearly = baseline_yearly - yearly_cost
+        else:
+            baseline_yearly = yearly_cost
+            savings_yearly = 0
+
+        return CostAnalysis(
+            daily_cost_sek=daily_cost,
+            monthly_cost_sek=monthly_cost,
+            yearly_cost_sek=yearly_cost,
+            heating_cost_daily=heating_cost_daily,
+            hot_water_cost_daily=hot_water_cost_daily,
+            cop_avg=avg_cop,
+            baseline_yearly_cost=baseline_yearly,
+            savings_yearly=savings_yearly
+        )
+
+    def generate_suggestions(self, hours_back: int = 72) -> List[OptimizationSuggestion]:
+        """
+        Generate AI-powered optimization suggestions
+
+        Simple rule-based system for now (can be upgraded to ML later)
+        """
+        suggestions = []
+        metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
+
+        # Suggestion 1: COP too low
+        if metrics.estimated_cop and metrics.estimated_cop < 3.0:
+            outdoor_temp = metrics.avg_outdoor_temp
+
+            # If it's not extremely cold, we can improve
+            if outdoor_temp > -10:
+                current_curve = metrics.heating_curve
+                suggested_curve = max(0, current_curve - 1)
+
+                suggestions.append(OptimizationSuggestion(
+                    priority='high',
+                    title='Sänk värmekurvan för bättre COP',
+                    description=f'Din COP är {metrics.estimated_cop:.1f} vilket är lågt. Vid {outdoor_temp:.0f}°C ute kan du sänka värmekurvan.',
+                    parameter_name='Värmekurva',
+                    parameter_id='47007',
+                    current_value=current_curve,
+                    suggested_value=suggested_curve,
+                    expected_cop_improvement=0.3,
+                    expected_savings_yearly=1200,
+                    confidence=0.75,
+                    reasoning=f'Lägre framledningstemp → högre COP. Nuvarande COP {metrics.estimated_cop:.1f} är under målet 3.0.'
+                ))
+
+        # Suggestion 2: Delta T too high (pump speed too low - need more flow)
+        if metrics.delta_t_active and metrics.delta_t_active > 8.0:
+            suggestions.append(OptimizationSuggestion(
+                priority='medium',
+                title='Öka pumphastigheten (för högt Delta T)',
+                description=f'Delta T är {metrics.delta_t_active:.1f}°C vilket är för högt. Öka flödet för bättre värmeöverföring.',
+                parameter_name='Cirkulationspump GP1',
+                parameter_id='43437',
+                current_value=50,  # Will be updated from actual reading
+                suggested_value=60,
+                expected_cop_improvement=0.2,
+                expected_savings_yearly=800,
+                confidence=0.70,
+                reasoning='Högt Delta T (>8°C) betyder för lågt flöde. Mer flöde → bättre värmeöverföring → jämnare drift → bättre COP.'
+            ))
+
+        # Suggestion 3: Delta T too low (pump speed too high - too much flow)
+        elif metrics.delta_t_active and metrics.delta_t_active < 4.0:
+            suggestions.append(OptimizationSuggestion(
+                priority='medium',
+                title='Sänk pumphastigheten (för lågt Delta T)',
+                description=f'Delta T är bara {metrics.delta_t_active:.1f}°C vilket är lågt. Minska flödet för optimal drift.',
+                parameter_name='Cirkulationspump GP1',
+                parameter_id='43437',
+                current_value=70,  # Will be updated from actual reading
+                suggested_value=60,
+                expected_cop_improvement=0.15,
+                expected_savings_yearly=600,
+                confidence=0.65,
+                reasoning='Lågt Delta T (<4°C) betyder för högt flöde. Pumpenergi slösas och kondensorn jobbar ineffektivt. Sänk flöde → bättre COP.'
+            ))
+
+        # Suggestion 4: Many short cycles (possible flow issue)
+        if metrics.heating_metrics and metrics.heating_metrics.num_cycles > 20:
+            suggestions.append(OptimizationSuggestion(
+                priority='high',
+                title='För många cykler - justera flöde eller kurva',
+                description=f'{metrics.heating_metrics.num_cycles} cykler på {hours_back}h är för många. Kan bero på flöde eller värmekurva.',
+                parameter_name='Cirkulationspump GP1 eller Värmekurva',
+                parameter_id='43437',
+                current_value=0,  # Multiple parameters
+                suggested_value=0,
+                expected_cop_improvement=0.3,
+                expected_savings_yearly=1200,
+                confidence=0.60,
+                reasoning='Kort-cykling sliter på kompressor och sänker COP. Justera antingen flöde (pumphastighet) eller sänk värmekurva.'
+            ))
+
+        # Suggestion 5: Indoor temp too high
+        if metrics.avg_indoor_temp > 22.0:
+            current_offset = metrics.curve_offset
+            suggested_offset = current_offset - 1
+
+            suggestions.append(OptimizationSuggestion(
+                priority='medium',
+                title='Sänk kurvjusteringen - för varmt inne',
+                description=f'Det är {metrics.avg_indoor_temp:.1f}°C inne. Sänk offset för att spara energi.',
+                parameter_name='Kurvjustering',
+                parameter_id='47011',
+                current_value=current_offset,
+                suggested_value=suggested_offset,
+                expected_cop_improvement=0.0,
+                expected_savings_yearly=600,
+                confidence=0.80,
+                reasoning='Lägre innetemperatur = lägre framledningstemp = bättre COP + lägre förbrukning.'
+            ))
+
+        # Suggestion 6: Indoor temp too low
+        elif metrics.avg_indoor_temp < 20.0:
+            current_offset = metrics.curve_offset
+            suggested_offset = current_offset + 1
+
+            suggestions.append(OptimizationSuggestion(
+                priority='high',
+                title='Höj kurvjusteringen - för kallt inne',
+                description=f'Det är bara {metrics.avg_indoor_temp:.1f}°C inne. Höj offset för bättre komfort.',
+                parameter_name='Kurvjustering',
+                parameter_id='47011',
+                current_value=current_offset,
+                suggested_value=suggested_offset,
+                expected_cop_improvement=0.0,
+                expected_savings_yearly=0,
+                confidence=0.90,
+                reasoning='Komfort är viktigare än små COP-förbättringar. Målet är 20-22°C.'
+            ))
+
+        # Sort by priority and confidence
+        priority_order = {'high': 0, 'medium': 1, 'low': 2}
+        suggestions.sort(key=lambda s: (priority_order[s.priority], -s.confidence))
+
+        return suggestions[:3]  # Return top 3

@@ -36,23 +36,55 @@
     <h2 class="section-title">💰 Kostnadsanalys</h2>
     <div class="cost-grid">
         <div class="cost-card">
-            <div class="cost-icon">🔥</div>
-            <div class="cost-label">Uppvärmning</div>
-            <div class="cost-value" id="heatingCost">-</div>
-            <div class="cost-detail" id="heatingCostDetail">-</div>
+            <div class="cost-label">Per dag</div>
+            <div class="cost-value" id="dailyCost">-</div>
         </div>
         <div class="cost-card">
-            <div class="cost-icon">💧</div>
-            <div class="cost-label">Varmvatten</div>
-            <div class="cost-value" id="hotWaterCost">-</div>
-            <div class="cost-detail" id="hotWaterCostDetail">-</div>
+            <div class="cost-label">Per månad</div>
+            <div class="cost-value" id="monthlyCost">-</div>
         </div>
         <div class="cost-card total">
-            <div class="cost-icon">💵</div>
-            <div class="cost-label">Total kostnad</div>
-            <div class="cost-value" id="totalCost">-</div>
-            <div class="cost-detail" id="totalCostDetail">-</div>
+            <div class="cost-label">Per år</div>
+            <div class="cost-value" id="yearlyCost">-</div>
         </div>
+    </div>
+    <div class="savings-info" id="savingsInfo" style="margin-top: 1rem; padding: 1rem; background: var(--success-bg); border-radius: 8px; display: none;">
+        <p style="margin: 0; color: var(--success-color); font-weight: 500;">
+            💰 Du sparar <strong id="savingsAmount">-</strong> per år jämfört med osoptimerat system (COP 2.5)!
+        </p>
+    </div>
+</section>
+
+<!-- AI Optimization Suggestions -->
+<section class="section" id="suggestionsSection" style="display: none;">
+    <h2 class="section-title">🤖 AI-rekommendationer</h2>
+    <div id="suggestionsList"></div>
+</section>
+
+<!-- Quick Actions -->
+<section class="section">
+    <h2 class="section-title">⚡ Snabbåtgärder</h2>
+    <div class="quick-actions-grid">
+        <button class="quick-action-btn cold" onclick="adjustTemperature(1)">
+            <div class="qa-icon">🥶</div>
+            <div class="qa-label">Kallt inne</div>
+            <div class="qa-detail">Höj offset +1</div>
+        </button>
+        <button class="quick-action-btn hot" onclick="adjustTemperature(-1)">
+            <div class="qa-icon">🥵</div>
+            <div class="qa-label">Varmt inne</div>
+            <div class="qa-detail">Sänk offset -1</div>
+        </button>
+        <button class="quick-action-btn efficiency" onclick="optimizeForEfficiency()">
+            <div class="qa-icon">⚡</div>
+            <div class="qa-label">Max COP</div>
+            <div class="qa-detail">Optimera effektivitet</div>
+        </button>
+        <button class="quick-action-btn comfort" onclick="optimizeForComfort()">
+            <div class="qa-icon">🏠</div>
+            <div class="qa-label">Max komfort</div>
+            <div class="qa-detail">Stabil temp 21°C</div>
+        </button>
     </div>
 </section>
 
@@ -236,14 +268,39 @@ async function loadDashboard() {
     error.style.display = 'none';
 
     try {
-        const response = await fetch(`/api/metrics?hours=${hours}`);
-        const result = await response.json();
+        // Load all data in parallel
+        const [metricsRes, scoreRes, costRes, suggestionsRes] = await Promise.all([
+            fetch(`/api/metrics?hours=${hours}`),
+            fetch(`/api/performance-score?hours=${hours}`),
+            fetch(`/api/cost-analysis?hours=${hours}`),
+            fetch(`/api/optimization-suggestions?hours=${hours}`)
+        ]);
 
-        if (!result.success) {
-            throw new Error(result.error);
+        const metricsResult = await metricsRes.json();
+        const scoreResult = await scoreRes.json();
+        const costResult = await costRes.json();
+        const suggestionsResult = await suggestionsRes.json();
+
+        if (!metricsResult.success) {
+            throw new Error(metricsResult.error);
         }
 
-        const data = result.data;
+        const data = metricsResult.data;
+
+        // Update Performance Score
+        if (scoreResult.success) {
+            updatePerformanceScore(scoreResult.data);
+        }
+
+        // Update Cost Analysis
+        if (costResult.success) {
+            updateCostAnalysis(costResult.data);
+        }
+
+        // Update Optimization Suggestions (will add this section)
+        if (suggestionsResult.success && suggestionsResult.data.length > 0) {
+            updateSuggestions(suggestionsResult.data);
+        }
 
         // Update main metrics
         document.getElementById('cop').textContent = data.cop ? data.cop.toFixed(2) : 'N/A';
@@ -360,6 +417,101 @@ async function loadDashboard() {
     }
 }
 
+function updatePerformanceScore(data) {
+    const banner = document.getElementById('optimizationBanner');
+    const circle = document.getElementById('optScoreCircle');
+    const value = document.getElementById('optScoreValue');
+    const badge = document.getElementById('optScoreBadge');
+
+    value.textContent = data.total_score;
+    badge.textContent = `${data.grade} ${data.emoji}`;
+
+    // Color based on grade
+    const gradeColors = {
+        'A+': '#4caf50',
+        'A': '#66bb6a',
+        'B': '#9ccc65',
+        'C': '#ffeb3b',
+        'D': '#ff9800',
+        'F': '#f44336'
+    };
+    const color = gradeColors[data.grade] || '#9e9e9e';
+    circle.style.background = `conic-gradient(${color} ${data.total_score * 3.6}deg, #e0e0e0 0deg)`;
+
+    banner.style.display = 'block';
+}
+
+function updateCostAnalysis(data) {
+    const section = document.getElementById('costSection');
+
+    document.getElementById('dailyCost').textContent = `${data.daily_cost_sek.toFixed(0)} kr`;
+    document.getElementById('monthlyCost').textContent = `${data.monthly_cost_sek.toFixed(0)} kr`;
+    document.getElementById('yearlyCost').textContent = `${data.yearly_cost_sek.toFixed(0)} kr`;
+
+    // Show savings if applicable
+    if (data.savings_yearly > 0) {
+        document.getElementById('savingsAmount').textContent = `${data.savings_yearly.toFixed(0)} kr`;
+        document.getElementById('savingsInfo').style.display = 'block';
+    } else {
+        document.getElementById('savingsInfo').style.display = 'none';
+    }
+
+    section.style.display = 'block';
+}
+
+function updateSuggestions(suggestions) {
+    const section = document.getElementById('suggestionsSection');
+    const list = document.getElementById('suggestionsList');
+
+    if (!suggestions || suggestions.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    const priorityColors = {
+        'high': '#f44336',
+        'medium': '#ff9800',
+        'low': '#4caf50'
+    };
+
+    const priorityLabels = {
+        'high': 'HÖG',
+        'medium': 'MEDEL',
+        'low': 'LÅG'
+    };
+
+    list.innerHTML = suggestions.map(s => `
+        <div class="suggestion-card" style="margin-bottom: 1rem; padding: 1rem; border-left: 4px solid ${priorityColors[s.priority]}; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                <h3 style="margin: 0; font-size: 1rem; color: var(--text-primary);">${s.title}</h3>
+                <span style="padding: 0.25rem 0.5rem; background: ${priorityColors[s.priority]}; color: white; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                    ${priorityLabels[s.priority]}
+                </span>
+            </div>
+            <p style="margin: 0.5rem 0; color: var(--text-secondary); font-size: 0.9rem;">${s.description}</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e0e0e0;">
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Förväntad COP-förbättring</div>
+                    <div style="font-weight: 600; color: var(--primary-color);">+${s.expected_cop_improvement.toFixed(2)}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Besparing/år</div>
+                    <div style="font-weight: 600; color: var(--success-color);">${s.expected_savings_yearly.toFixed(0)} kr</div>
+                </div>
+            </div>
+            <div style="margin-top: 0.75rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px;">
+                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.25rem;">💡 Förklaring:</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">${s.reasoning}</div>
+            </div>
+            <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
+                Confidence: ${(s.confidence * 100).toFixed(0)}%
+            </div>
+        </div>
+    `).join('');
+
+    section.style.display = 'block';
+}
+
 function refreshData() {
     const icon = document.getElementById('refreshIcon');
     icon.classList.add('spinning');
@@ -389,5 +541,90 @@ document.addEventListener('visibilitychange', () => {
         loadDashboard();
     }
 });
+
+// Quick Actions
+async function adjustTemperature(delta) {
+    if (!confirm(`Vill du ${delta > 0 ? 'höja' : 'sänka'} kurvjusteringen med ${Math.abs(delta)}?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/quick-action/adjust-offset', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({delta: delta})
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`✅ ${result.message}\nNy kurvjustering: ${result.new_value}`);
+            loadDashboard();
+        } else {
+            alert(`❌ Fel: ${result.error}`);
+        }
+    } catch (err) {
+        alert(`❌ Fel: ${err.message}`);
+    }
+}
+
+async function optimizeForEfficiency() {
+    if (!confirm('Optimera för maximal COP?\n\nDetta kan sänka värmekurvan något för bättre effektivitet.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/quick-action/optimize-efficiency', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            let msg = `✅ ${result.message}`;
+            if (result.changes && result.changes.length > 0) {
+                msg += '\n\nÄndringar:';
+                result.changes.forEach(c => {
+                    msg += `\n• ${c.parameter}: ${c.old_value} → ${c.new_value}`;
+                });
+            }
+            alert(msg);
+            loadDashboard();
+        } else {
+            alert(`❌ ${result.error}`);
+        }
+    } catch (err) {
+        alert(`❌ Fel: ${err.message}`);
+    }
+}
+
+async function optimizeForComfort() {
+    if (!confirm('Optimera för maximal komfort?\n\nDetta justerar offset för att nå 21°C inomhus.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/quick-action/optimize-comfort', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            let msg = `✅ ${result.message}`;
+            if (result.changes && result.changes.length > 0) {
+                msg += '\n\nÄndringar:';
+                result.changes.forEach(c => {
+                    msg += `\n• ${c.parameter}: ${c.old_value} → ${c.new_value}`;
+                });
+            }
+            alert(msg);
+            loadDashboard();
+        } else {
+            alert(`❌ ${result.error}`);
+        }
+    } catch (err) {
+        alert(`❌ Fel: ${err.message}`);
+    }
+}
 </script>
 {% endblock %}

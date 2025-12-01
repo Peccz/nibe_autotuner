@@ -15,6 +15,9 @@ from analyzer import HeatPumpAnalyzer
 from models import ParameterChange, Device, Parameter, ABTestResult, init_db
 from sqlalchemy.orm import sessionmaker
 from ab_tester import ABTester
+from optimizer import SmartOptimizer
+from api_client import MyUplinkClient
+from auth import MyUplinkAuth
 
 app = Flask(__name__,
             template_folder='mobile/templates',
@@ -27,6 +30,11 @@ analyzer = HeatPumpAnalyzer('data/nibe_autotuner.db')
 engine = analyzer.engine
 SessionMaker = sessionmaker(bind=engine)
 ab_tester = ABTester(analyzer)
+optimizer = SmartOptimizer(analyzer)
+
+# Initialize myUplink API client
+auth = MyUplinkAuth()
+api_client = MyUplinkClient(auth)
 
 @app.route('/')
 def index():
@@ -410,6 +418,253 @@ def evaluate_pending_changes():
     try:
         ab_tester.evaluate_all_pending()
         return jsonify({'success': True, 'message': 'Evaluation completed'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/performance-score')
+def get_performance_score():
+    """Get overall performance score"""
+    hours = request.args.get('hours', 72, type=int)
+
+    try:
+        score = optimizer.calculate_performance_score(hours_back=hours)
+
+        data = {
+            'total_score': score.total_score,
+            'cop_score': score.cop_score,
+            'delta_t_score': score.delta_t_score,
+            'comfort_score': score.comfort_score,
+            'efficiency_score': score.efficiency_score,
+            'grade': score.grade,
+            'emoji': score.emoji
+        }
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/cost-analysis')
+def get_cost_analysis():
+    """Get detailed cost analysis"""
+    hours = request.args.get('hours', 72, type=int)
+
+    try:
+        costs = optimizer.calculate_costs(hours_back=hours)
+
+        data = {
+            'daily_cost_sek': costs.daily_cost_sek,
+            'monthly_cost_sek': costs.monthly_cost_sek,
+            'yearly_cost_sek': costs.yearly_cost_sek,
+            'heating_cost_daily': costs.heating_cost_daily,
+            'hot_water_cost_daily': costs.hot_water_cost_daily,
+            'cop_avg': costs.cop_avg,
+            'baseline_yearly_cost': costs.baseline_yearly_cost,
+            'savings_yearly': costs.savings_yearly
+        }
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/optimization-suggestions')
+def get_optimization_suggestions():
+    """Get AI-powered optimization suggestions"""
+    hours = request.args.get('hours', 72, type=int)
+
+    try:
+        suggestions = optimizer.generate_suggestions(hours_back=hours)
+
+        data = [{
+            'priority': s.priority,
+            'title': s.title,
+            'description': s.description,
+            'parameter_name': s.parameter_name,
+            'parameter_id': s.parameter_id,
+            'current_value': s.current_value,
+            'suggested_value': s.suggested_value,
+            'expected_cop_improvement': s.expected_cop_improvement,
+            'expected_savings_yearly': s.expected_savings_yearly,
+            'confidence': s.confidence,
+            'reasoning': s.reasoning
+        } for s in suggestions]
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========== QUICK ACTIONS ==========
+
+def get_device_id():
+    """Helper to get device ID from database"""
+    session = SessionMaker()
+    try:
+        device = session.query(Device).first()
+        return device.device_id if device else None
+    finally:
+        session.close()
+
+def log_parameter_change(device_id: str, parameter_id: str, parameter_name: str, old_value: float, new_value: float, reason: str):
+    """Log a parameter change to database"""
+    session = SessionMaker()
+    try:
+        change = ParameterChange(
+            device_id=device_id,
+            parameter_id=parameter_id,
+            parameter_name=parameter_name,
+            old_value=old_value,
+            new_value=new_value,
+            reason=reason,
+            timestamp=datetime.utcnow()
+        )
+        session.add(change)
+        session.commit()
+    finally:
+        session.close()
+
+@app.route('/api/quick-action/adjust-offset', methods=['POST'])
+def quick_action_adjust_offset():
+    """Quick action: Adjust curve offset by delta"""
+    try:
+        data = request.get_json()
+        delta = data.get('delta', 0)
+
+        if delta == 0:
+            return jsonify({'success': False, 'error': 'Delta cannot be 0'}), 400
+
+        device_id = get_device_id()
+        if not device_id:
+            return jsonify({'success': False, 'error': 'No device found'}), 404
+
+        # Get current offset value (parameter 47011)
+        current_data = api_client.get_point_data(device_id, '47011')
+        current_value = current_data.get('value')
+
+        # Calculate new value (ensure it's an integer)
+        new_value = int(round(current_value + delta))
+
+        # Clamp to valid range (-10 to 10)
+        new_value = max(-10, min(10, new_value))
+
+        # Set new value
+        api_client.set_point_value(device_id, '47011', new_value)
+
+        # Log the change
+        reason = f"Quick Action: {'Höj' if delta > 0 else 'Sänk'} offset ({delta:+d})"
+        log_parameter_change(device_id, '47011', 'Kurvjustering', current_value, new_value, reason)
+
+        return jsonify({
+            'success': True,
+            'message': f'Kurvjustering ändrad från {current_value} till {new_value}',
+            'old_value': current_value,
+            'new_value': new_value
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/quick-action/optimize-efficiency', methods=['POST'])
+def quick_action_optimize_efficiency():
+    """Quick action: Optimize for maximum COP"""
+    try:
+        device_id = get_device_id()
+        if not device_id:
+            return jsonify({'success': False, 'error': 'No device found'}), 404
+
+        changes = []
+        metrics = analyzer.calculate_metrics(hours_back=72)
+
+        # Strategy: Lower heating curve if COP is low and outdoor temp allows
+        if metrics.estimated_cop and metrics.estimated_cop < 3.5 and metrics.avg_outdoor_temp > -5:
+            # Get current heating curve (47007)
+            current_curve_data = api_client.get_point_data(device_id, '47007')
+            current_curve = current_curve_data.get('value')
+
+            # Lower by 0.5 (but ensure integer result)
+            new_curve = int(round(current_curve - 0.5))
+            new_curve = max(0, min(15, new_curve))
+
+            if new_curve != current_curve:
+                api_client.set_point_value(device_id, '47007', new_curve)
+                log_parameter_change(device_id, '47007', 'Värmekurva', current_curve, new_curve,
+                                    'Quick Action: Optimera för COP')
+                changes.append({
+                    'parameter': 'Värmekurva',
+                    'old_value': current_curve,
+                    'new_value': new_curve
+                })
+
+        if changes:
+            return jsonify({
+                'success': True,
+                'message': 'Systemet optimerat för maximal COP',
+                'changes': changes
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': 'Systemet är redan optimalt för COP, inga ändringar behövs',
+                'changes': []
+            })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/quick-action/optimize-comfort', methods=['POST'])
+def quick_action_optimize_comfort():
+    """Quick action: Optimize for comfort (21°C indoor temp)"""
+    try:
+        device_id = get_device_id()
+        if not device_id:
+            return jsonify({'success': False, 'error': 'No device found'}), 404
+
+        changes = []
+        metrics = analyzer.calculate_metrics(hours_back=72)
+
+        # Strategy: Adjust offset to reach 21°C
+        target_temp = 21.0
+        current_temp = metrics.avg_indoor_temp
+
+        if current_temp:
+            temp_diff = target_temp - current_temp
+
+            # If more than 0.5°C off target, adjust offset
+            if abs(temp_diff) > 0.5:
+                # Get current offset (47011)
+                current_offset_data = api_client.get_point_data(device_id, '47011')
+                current_offset = current_offset_data.get('value')
+
+                # Adjust offset (1 step per degree difference, rounded to integer)
+                delta = int(round(temp_diff))
+                delta = max(-2, min(2, delta))  # Limit to +/-2 steps
+                new_offset = int(round(current_offset + delta))
+                new_offset = max(-10, min(10, new_offset))
+
+                if new_offset != current_offset:
+                    api_client.set_point_value(device_id, '47011', new_offset)
+                    log_parameter_change(device_id, '47011', 'Kurvjustering', current_offset, new_offset,
+                                        f'Quick Action: Optimera komfort (mål 21°C, nu {current_temp:.1f}°C)')
+                    changes.append({
+                        'parameter': 'Kurvjustering',
+                        'old_value': current_offset,
+                        'new_value': new_offset
+                    })
+
+        if changes:
+            return jsonify({
+                'success': True,
+                'message': f'Systemet justerat för komfort. Nuvarande temp: {current_temp:.1f}°C, mål: 21°C',
+                'changes': changes
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': f'Temperaturen är redan bra ({current_temp:.1f}°C), inga ändringar behövs',
+                'changes': []
+            })
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
