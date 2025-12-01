@@ -17,27 +17,48 @@ from analyzer import HeatPumpAnalyzer
 class ABTester:
     """Handles A/B testing of parameter changes"""
 
-    # Time windows for comparison
+    # Time windows for comparison (can be overridden in __init__)
     BEFORE_HOURS = 48  # 48 hours before change
     AFTER_HOURS = 48   # 48 hours after change
     MIN_WAIT_HOURS = 48  # Wait at least 48h before evaluating
 
-    # Scoring weights
+    # Scoring weights (can be overridden in __init__)
     WEIGHT_COP = 0.40        # 40% - Most important
     WEIGHT_DELTA_T = 0.20    # 20% - Efficiency indicator
     WEIGHT_COMFORT = 0.20    # 20% - Indoor temp stability
     WEIGHT_CYCLES = 0.10     # 10% - Fewer cycles better
     WEIGHT_COST = 0.10       # 10% - Cost savings
 
-    def __init__(self, analyzer: HeatPumpAnalyzer):
+    # Weather normalization
+    MAX_OUTDOOR_TEMP_DIFF = 3.0  # Max °C difference allowed (invalidates test if exceeded)
+
+    def __init__(self, analyzer: HeatPumpAnalyzer,
+                 before_hours: int = None,
+                 after_hours: int = None,
+                 min_wait_hours: int = None,
+                 max_outdoor_temp_diff: float = None):
         """
         Initialize AB Tester
 
         Args:
             analyzer: HeatPumpAnalyzer instance for metrics calculation
+            before_hours: Override BEFORE_HOURS default (48h)
+            after_hours: Override AFTER_HOURS default (48h)
+            min_wait_hours: Override MIN_WAIT_HOURS default (48h)
+            max_outdoor_temp_diff: Max outdoor temp difference allowed (°C)
         """
         self.analyzer = analyzer
         self.session = analyzer.session
+
+        # Allow runtime override of settings
+        if before_hours is not None:
+            self.BEFORE_HOURS = before_hours
+        if after_hours is not None:
+            self.AFTER_HOURS = after_hours
+        if min_wait_hours is not None:
+            self.MIN_WAIT_HOURS = min_wait_hours
+        if max_outdoor_temp_diff is not None:
+            self.MAX_OUTDOOR_TEMP_DIFF = max_outdoor_temp_diff
 
     def capture_before_metrics(self, change: ParameterChange) -> bool:
         """
@@ -130,6 +151,14 @@ class ABTester:
                 end_time=after_end
             )
 
+            # VALIDATION: Check outdoor temperature difference
+            outdoor_temp_diff = abs(metrics_after.avg_outdoor_temp - metrics_before.avg_outdoor_temp)
+            if outdoor_temp_diff > self.MAX_OUTDOOR_TEMP_DIFF:
+                logger.warning(f"⚠️ Outdoor temp difference too large: {outdoor_temp_diff:.1f}°C (max {self.MAX_OUTDOOR_TEMP_DIFF}°C)")
+                logger.warning(f"   Before: {metrics_before.avg_outdoor_temp:.1f}°C, After: {metrics_after.avg_outdoor_temp:.1f}°C")
+                logger.warning(f"   Test results may be unreliable due to weather changes!")
+                # We continue but flag it in the recommendation
+
             # Calculate changes
             cop_change = self._calc_percent_change(
                 metrics_before.estimated_cop,
@@ -162,7 +191,8 @@ class ABTester:
             recommendation = self._generate_recommendation(
                 success_score,
                 cop_change,
-                indoor_temp_change
+                indoor_temp_change,
+                outdoor_temp_diff
             )
 
             # Create ABTestResult
@@ -302,22 +332,28 @@ class ABTester:
         self,
         success_score: float,
         cop_change: float,
-        indoor_temp_change: float
+        indoor_temp_change: float,
+        outdoor_temp_diff: float = 0
     ) -> str:
         """Generate human-readable recommendation"""
+        # Check if weather invalidates the test
+        weather_warning = ""
+        if outdoor_temp_diff > self.MAX_OUTDOOR_TEMP_DIFF:
+            weather_warning = f" ⚠️ VARNING: Väder ändrades {outdoor_temp_diff:.1f}°C - resultat osäkra!"
+
         if success_score >= 70:
-            return "✅ BEHÅLL - Mycket bra resultat!"
+            return f"✅ BEHÅLL - Mycket bra resultat!{weather_warning}"
         elif success_score >= 55:
-            return "👍 BEHÅLL - Bra förbättring"
+            return f"👍 BEHÅLL - Bra förbättring{weather_warning}"
         elif success_score >= 45:
-            return "🤔 NEUTRAL - Marginell effekt"
+            return f"🤔 NEUTRAL - Marginell effekt{weather_warning}"
         elif success_score >= 30:
             if abs(indoor_temp_change) > 1.0:
-                return "⚠️ JUSTERA - Temperaturen påverkad"
+                return f"⚠️ JUSTERA - Temperaturen påverkad{weather_warning}"
             else:
-                return "⚠️ ÖVERVÄG ÅTERSTÄLLNING - Försämring"
+                return f"⚠️ ÖVERVÄG ÅTERSTÄLLNING - Försämring{weather_warning}"
         else:
-            return "❌ ÅTERSTÄLL - Tydlig försämring"
+            return f"❌ ÅTERSTÄLL - Tydlig försämring{weather_warning}"
 
     def get_pending_evaluations(self) -> list:
         """Get all changes that are ready for evaluation"""
