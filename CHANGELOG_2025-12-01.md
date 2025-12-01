@@ -80,7 +80,24 @@
 - Token: ✅ Giltig med auto-renewal
 - Grafer: ✅ Alla 5 fungerar
 
+## Parameter Changes API Fix
+
+### Problem
+- Changes form kunde inte spara ändringar
+- Fel: "'parameter_type' is an invalid keyword argument for ParameterChange"
+- API använde fel modellschema
+
+### Lösning
+- Uppdaterade mobile_app.py att använda korrekt schema (device_id, parameter_id FKs)
+- Inaktiverade formulär med info-meddelande
+- Historik-visning fungerar fortfarande
+
+### Resultat
+- ✅ Backend API använder korrekt ParameterChange-modell
+- ℹ️ Formulär tillfälligt inaktiverat för uppdatering
+
 ## Commits
+- e8ba14a: Fix parameter changes API to use correct model fields
 - 59f5c43: Remove Chart.js time scale dependency
 - 0a57943: Add offline_access scope to get refresh token
 - 9b3c294: Add token fix script
