@@ -89,7 +89,7 @@ class MyUplinkAuth:
         oauth = OAuth2Session(
             self.client_id,
             redirect_uri=self.redirect_uri,
-            scope=['READSYSTEM', 'WRITESYSTEM']
+            scope=['READSYSTEM', 'WRITESYSTEM', 'offline_access']
         )
         authorization_url, state = oauth.authorization_url(self.auth_url)
         return authorization_url, state
