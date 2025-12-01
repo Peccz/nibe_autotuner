@@ -12,6 +12,7 @@ from models import (
     ParameterReading, Parameter
 )
 from analyzer import HeatPumpAnalyzer
+from sqlalchemy import func
 
 
 class ABTester:
@@ -98,6 +99,106 @@ class ABTester:
             logger.error(f"Error capturing before metrics: {e}")
             return False
 
+    def _calculate_degree_hours(self, start_time: datetime, end_time: datetime,
+                                 base_temp: float = 18.0) -> float:
+        """
+        Calculate degree-hours (heating degree days × 24) for normalization
+
+        Degree-hours = Sum of (base_temp - outdoor_temp) for each hour where outdoor < base
+
+        Args:
+            start_time: Period start
+            end_time: Period end
+            base_temp: Base temperature (°C), default 18°C (Swedish standard)
+
+        Returns:
+            Total degree-hours
+        """
+        device = self.session.query(Device).first()
+        if not device:
+            return 0.0
+
+        # Get outdoor temperature parameter
+        outdoor_param = self.session.query(Parameter).filter_by(
+            parameter_id=self.analyzer.PARAM_OUTDOOR_TEMP
+        ).first()
+
+        if not outdoor_param:
+            return 0.0
+
+        # Get all outdoor temp readings in period
+        readings = self.session.query(ParameterReading).filter(
+            ParameterReading.device_id == device.id,
+            ParameterReading.parameter_id == outdoor_param.id,
+            ParameterReading.timestamp >= start_time,
+            ParameterReading.timestamp <= end_time
+        ).all()
+
+        if not readings:
+            return 0.0
+
+        # Calculate degree-hours
+        # For each hour where temp < base_temp: add (base_temp - temp)
+        degree_hours = 0.0
+        prev_timestamp = None
+
+        for reading in readings:
+            if reading.value < base_temp:
+                # Time delta in hours
+                if prev_timestamp:
+                    hours_elapsed = (reading.timestamp - prev_timestamp).total_seconds() / 3600
+                else:
+                    hours_elapsed = 1.0  # Assume 1 hour for first reading
+
+                # Add degree-hours for this period
+                degree_hours += (base_temp - reading.value) * hours_elapsed
+
+            prev_timestamp = reading.timestamp
+
+        logger.debug(f"Calculated {degree_hours:.1f} degree-hours from {start_time} to {end_time}")
+        return degree_hours
+
+    def _normalize_cop_by_degree_hours(self, cop: float, degree_hours: float,
+                                       reference_degree_hours: float) -> float:
+        """
+        Normalize COP based on heating demand (degree-hours)
+
+        When outdoor temperature is lower, heating demand is higher,
+        which typically lowers COP due to longer runtimes and higher temp lifts.
+
+        This normalization adjusts COP to what it would have been at the
+        reference heating demand level.
+
+        Args:
+            cop: Measured COP
+            degree_hours: Actual degree-hours during measurement
+            reference_degree_hours: Reference degree-hours (typically from before period)
+
+        Returns:
+            Normalized COP
+        """
+        if degree_hours == 0 or reference_degree_hours == 0:
+            return cop
+
+        # Calculate demand ratio
+        demand_ratio = degree_hours / reference_degree_hours
+
+        # COP degradation factor: ~3% per 10% increase in demand (empirical)
+        # This is conservative - actual degradation may vary
+        degradation_factor = 0.003
+
+        # Calculate normalized COP
+        # If demand was higher: COP would have been better with lower demand
+        # If demand was lower: COP would have been worse with higher demand
+        cop_adjustment = cop * (1.0 - demand_ratio) * degradation_factor
+
+        normalized_cop = cop + cop_adjustment
+
+        logger.debug(f"COP normalization: {cop:.2f} → {normalized_cop:.2f} "
+                    f"(demand ratio: {demand_ratio:.2f})")
+
+        return max(1.0, normalized_cop)  # Ensure COP >= 1.0
+
     def can_evaluate_change(self, change: ParameterChange) -> bool:
         """
         Check if enough time has passed to evaluate the change
@@ -159,11 +260,45 @@ class ABTester:
                 logger.warning(f"   Test results may be unreliable due to weather changes!")
                 # We continue but flag it in the recommendation
 
-            # Calculate changes
-            cop_change = self._calc_percent_change(
+            # DEGREE-HOURS NORMALIZATION
+            degree_hours_before = self._calculate_degree_hours(before_start, before_end)
+            degree_hours_after = self._calculate_degree_hours(after_start, after_end)
+
+            logger.info(f"Degree-hours: BEFORE={degree_hours_before:.1f}, AFTER={degree_hours_after:.1f}")
+
+            # Normalize COP values based on heating demand
+            cop_before_normalized = self._normalize_cop_by_degree_hours(
                 metrics_before.estimated_cop,
-                metrics_after.estimated_cop
+                degree_hours_before,
+                degree_hours_before  # Reference is before period
             )
+            cop_after_normalized = self._normalize_cop_by_degree_hours(
+                metrics_after.estimated_cop,
+                degree_hours_after,
+                degree_hours_before  # Normalize to before period demand
+            )
+
+            logger.info(f"COP normalization:")
+            logger.info(f"  BEFORE: {metrics_before.estimated_cop:.2f} → {cop_before_normalized:.2f}")
+            logger.info(f"  AFTER:  {metrics_after.estimated_cop:.2f} → {cop_after_normalized:.2f}")
+
+            # Calculate changes (use normalized COP if significant demand difference)
+            demand_ratio = degree_hours_after / degree_hours_before if degree_hours_before > 0 else 1.0
+            use_normalized = abs(demand_ratio - 1.0) > 0.10  # >10% demand difference
+
+            if use_normalized:
+                logger.info(f"Using normalized COP (demand ratio: {demand_ratio:.2f})")
+                cop_change = self._calc_percent_change(cop_before_normalized, cop_after_normalized)
+                cop_before_for_result = cop_before_normalized
+                cop_after_for_result = cop_after_normalized
+            else:
+                logger.info(f"Using raw COP (demand ratio close to 1.0: {demand_ratio:.2f})")
+                cop_change = self._calc_percent_change(
+                    metrics_before.estimated_cop,
+                    metrics_after.estimated_cop
+                )
+                cop_before_for_result = metrics_before.estimated_cop
+                cop_after_for_result = metrics_after.estimated_cop
 
             delta_t_change = self._calc_percent_change(
                 metrics_before.delta_t_active,
@@ -202,9 +337,9 @@ class ABTester:
                 before_end=before_end,
                 after_start=after_start,
                 after_end=after_end,
-                # COP
-                cop_before=metrics_before.estimated_cop,
-                cop_after=metrics_after.estimated_cop,
+                # COP (use normalized if applicable)
+                cop_before=cop_before_for_result,
+                cop_after=cop_after_for_result,
                 cop_change_percent=cop_change,
                 # Delta T
                 delta_t_before=metrics_before.delta_t_active,
