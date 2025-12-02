@@ -15,7 +15,22 @@
 <div id="aiContent" style="display: none;">
     <div class="page-header">
         <h1>🤖 AI-Agent</h1>
-        <p class="subtitle">Autonom optimering med Claude AI</p>
+        <p class="subtitle">Intelligent rådgivning med Google Gemini AI</p>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 1rem;">
+        <div class="card-body">
+            <h3 style="color: white; margin-top: 0;">💡 Rådgivande System</h3>
+            <p style="margin-bottom: 0.5rem;">
+                AI-agenten analyserar värmepumpens prestanda och ger intelligenta rekommendationer,
+                men gör <strong>inga automatiska ändringar</strong>.
+            </p>
+            <p style="font-size: 0.9rem; margin-bottom: 0;">
+                📱 Justera parametrar manuellt i värmepumpen (Meny 4.1) eller via MyUplink-appen
+                baserat på AI:ns rekommendationer.
+            </p>
+        </div>
     </div>
 
     <!-- Status Card -->
@@ -180,30 +195,39 @@
                 <span class="schedule-icon">🌅</span>
                 <div class="schedule-details">
                     <div class="schedule-time">06:00</div>
-                    <div class="schedule-desc">Morgonoptimering (ventilation & pump)</div>
+                    <div class="schedule-desc">Morgonanalys & rekommendationer</div>
                 </div>
             </div>
             <div class="schedule-item">
                 <span class="schedule-icon">🌙</span>
                 <div class="schedule-details">
                     <div class="schedule-time">19:00</div>
-                    <div class="schedule-desc">Kvällsoptimering (ventilation & pump)</div>
+                    <div class="schedule-desc">Kvällsanalys & rekommendationer</div>
                 </div>
             </div>
 
             <div class="schedule-settings">
                 <p class="info-text">
-                    AI-agenten analyserar systemet två gånger per dag och justerar både ventilation
-                    och pumpinställningar baserat på väder, prestanda och inlärda mönster.
+                    AI-agenten analyserar systemet två gånger per dag och genererar intelligenta
+                    rekommendationer baserat på väder, prestanda och inlärda mönster.
                 </p>
                 <p class="info-text">
-                    <strong>Säkerhetsregler:</strong>
+                    <strong>⚠️ OBS: MyUplink API-begränsningar</strong>
+                </p>
+                <p class="info-text" style="font-size: 0.9rem; color: #666;">
+                    MyUplink API v2 för F730 stödjer inte automatisk justering av värmeparametrar
+                    (värmekurva, offset, pumphastighet). Systemet fungerar därför som ett
+                    <strong>rådgivande system</strong> - AI:n analyserar och rekommenderar,
+                    men du justerar manuellt i värmepumpen eller via MyUplink-appen.
+                </p>
+                <p class="info-text">
+                    <strong>Säkerhetsregler för rekommendationer:</strong>
                 </p>
                 <ul>
-                    <li>Max 1 justering per 48h per parameter</li>
-                    <li>Minst 70% konfidens krävs för justeringar</li>
+                    <li>Minst 70% konfidens krävs för rekommendationer</li>
                     <li>Inomhustemperatur hålls alltid ≥20°C</li>
-                    <li>Minimum ventilation upprätthålls för luftkvalitet</li>
+                    <li>Rekommendationer inkluderar manuella justeringsinstruktioner</li>
+                    <li>Du har full kontroll över alla parameterjusteringar</li>
                 </ul>
             </div>
         </div>

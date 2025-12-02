@@ -1121,7 +1121,7 @@ document.addEventListener('visibilitychange', () => {
 
 // Quick Actions
 async function adjustTemperature(delta) {
-    if (!confirm(`Vill du ${delta > 0 ? 'höja' : 'sänka'} kurvjusteringen med ${Math.abs(delta)}?`)) {
+    if (!confirm(`Få rekommendation att ${delta > 0 ? 'höja' : 'sänka'} offset med ${Math.abs(delta)}?`)) {
         return;
     }
 
@@ -1134,7 +1134,18 @@ async function adjustTemperature(delta) {
         const result = await response.json();
 
         if (result.success) {
-            alert(`✅ ${result.message}\nNy kurvjustering: ${result.new_value}`);
+            let msg = `✅ ${result.message}`;
+            if (result.recommendation) {
+                const r = result.recommendation;
+                msg += `\n\nRekommendation:`;
+                msg += `\n• ${r.parameter}: ${r.current_value} → ${r.recommended_value}`;
+                msg += `\n  ${r.reason}`;
+                msg += `\n  📱 ${r.manual_adjustment}`;
+            }
+            if (result.note) {
+                msg += `\n\n⚠️ ${result.note}`;
+            }
+            alert(msg);
             loadDashboard();
         } else {
             alert(`❌ Fel: ${result.error}`);
@@ -1145,7 +1156,7 @@ async function adjustTemperature(delta) {
 }
 
 async function optimizeForEfficiency() {
-    if (!confirm('Optimera för maximal COP?\n\nDetta kan sänka värmekurvan något för bättre effektivitet.')) {
+    if (!confirm('Få COP-optimeringsrekommendationer?\n\nAI:n analyserar systemet och rekommenderar justeringar för bättre effektivitet.')) {
         return;
     }
 
@@ -1158,11 +1169,16 @@ async function optimizeForEfficiency() {
 
         if (result.success) {
             let msg = `✅ ${result.message}`;
-            if (result.changes && result.changes.length > 0) {
-                msg += '\n\nÄndringar:';
-                result.changes.forEach(c => {
-                    msg += `\n• ${c.parameter}: ${c.old_value} → ${c.new_value}`;
+            if (result.recommendations && result.recommendations.length > 0) {
+                msg += '\n\nRekommendationer:';
+                result.recommendations.forEach(r => {
+                    msg += `\n• ${r.parameter}: ${r.current_value} → ${r.recommended_value}`;
+                    msg += `\n  ${r.reason}`;
+                    msg += `\n  📱 ${r.manual_adjustment}`;
                 });
+                if (result.note) {
+                    msg += `\n\n⚠️ ${result.note}`;
+                }
             }
             alert(msg);
             loadDashboard();
@@ -1175,7 +1191,7 @@ async function optimizeForEfficiency() {
 }
 
 async function optimizeForComfort() {
-    if (!confirm('Optimera för maximal komfort?\n\nDetta justerar offset för att nå 21°C inomhus.')) {
+    if (!confirm('Få komfortrekommendationer?\n\nAI:n analyserar och rekommenderar justeringar för att nå 21°C inomhus.')) {
         return;
     }
 
@@ -1188,11 +1204,16 @@ async function optimizeForComfort() {
 
         if (result.success) {
             let msg = `✅ ${result.message}`;
-            if (result.changes && result.changes.length > 0) {
-                msg += '\n\nÄndringar:';
-                result.changes.forEach(c => {
-                    msg += `\n• ${c.parameter}: ${c.old_value} → ${c.new_value}`;
+            if (result.recommendations && result.recommendations.length > 0) {
+                msg += '\n\nRekommendationer:';
+                result.recommendations.forEach(r => {
+                    msg += `\n• ${r.parameter}: ${r.current_value} → ${r.recommended_value}`;
+                    msg += `\n  ${r.reason}`;
+                    msg += `\n  📱 ${r.manual_adjustment}`;
                 });
+                if (result.note) {
+                    msg += `\n\n⚠️ ${result.note}`;
+                }
             }
             alert(msg);
             loadDashboard();
