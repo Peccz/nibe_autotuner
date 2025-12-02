@@ -270,31 +270,32 @@
 }
 
 .stat-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: white;
     border-radius: 12px;
     padding: 1rem;
-    color: white;
     display: flex;
     align-items: center;
     gap: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border-left: 4px solid var(--primary-color);
 }
 
 .stat-icon {
     font-size: 2rem;
+    opacity: 0.8;
 }
 
 .stat-content .stat-value {
     font-size: 1.8rem;
     font-weight: 700;
     line-height: 1;
-    color: white;
+    color: var(--primary-color);
 }
 
 .stat-content .stat-label {
     font-size: 0.75rem;
-    opacity: 0.9;
     margin-top: 0.25rem;
-    color: white;
+    color: var(--text-secondary);
 }
 
 .schedule-item {
