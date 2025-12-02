@@ -807,24 +807,24 @@ def quick_action_optimize_efficiency():
         changes = []
         metrics = analyzer.calculate_metrics(hours_back=72)
 
-        # Strategy: Lower heating curve if COP is low and outdoor temp allows
-        if metrics.estimated_cop and metrics.estimated_cop < 3.5 and metrics.avg_outdoor_temp > -5:
-            # Get current heating curve (47007)
-            current_curve_data = api_client.get_point_data(device_id, '47007')
-            current_curve = current_curve_data.get('value')
+        # Strategy: Lower room temp setpoint if COP is low and indoor temp allows
+        if metrics.estimated_cop and metrics.estimated_cop < 3.5 and metrics.avg_indoor_temp > 20.5:
+            # Get current room temp setpoint (47011)
+            current_setpoint_data = api_client.get_point_data(device_id, '47011')
+            current_setpoint = current_setpoint_data.get('value')
 
-            # Lower by 0.5 (but ensure integer result)
-            new_curve = int(round(current_curve - 0.5))
-            new_curve = max(0, min(15, new_curve))
+            # Lower by 0.5°C
+            new_setpoint = round(current_setpoint - 0.5, 1)
+            new_setpoint = max(18.0, min(24.0, new_setpoint))
 
-            if new_curve != current_curve:
-                api_client.set_point_value(device_id, '47007', new_curve)
-                log_parameter_change(device_id, '47007', 'Värmekurva', current_curve, new_curve,
+            if new_setpoint != current_setpoint:
+                api_client.set_point_value(device_id, '47011', new_setpoint)
+                log_parameter_change(device_id, '47011', 'Room temp setpoint', current_setpoint, new_setpoint,
                                     'Quick Action: Optimera för COP')
                 changes.append({
-                    'parameter': 'Värmekurva',
-                    'old_value': current_curve,
-                    'new_value': new_curve
+                    'parameter': 'Room temp setpoint',
+                    'old_value': current_setpoint,
+                    'new_value': new_setpoint
                 })
 
         if changes:
