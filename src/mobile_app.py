@@ -63,6 +63,16 @@ def get_metrics():
     try:
         metrics = analyzer.calculate_metrics(hours_back=hours)
 
+        # Calculate yesterday's metrics for trend comparison
+        # Only do this if looking at recent data (<=24 hours)
+        yesterday_metrics = None
+        if hours <= 24:
+            try:
+                # Calculate metrics for 24h period ending 24h ago
+                yesterday_metrics = analyzer.calculate_metrics(hours_back=24, end_offset_hours=24)
+            except Exception as e:
+                logger.warning(f"Could not calculate yesterday metrics: {e}")
+
         # Format metrics for JSON
         data = {
             'cop': float(metrics.estimated_cop) if metrics.estimated_cop else None,
@@ -80,6 +90,12 @@ def get_metrics():
             'period_end': metrics.period_end.isoformat(),
             'timestamp': datetime.now().isoformat()
         }
+
+        # Add yesterday's values for trend indicators
+        if yesterday_metrics:
+            data['cop_yesterday'] = float(yesterday_metrics.estimated_cop) if yesterday_metrics.estimated_cop else None
+            data['degree_minutes_yesterday'] = float(yesterday_metrics.degree_minutes)
+            data['delta_t_active_yesterday'] = float(yesterday_metrics.delta_t_active) if yesterday_metrics.delta_t_active else None
 
         # Add separate heating metrics
         if metrics.heating_metrics:

@@ -284,19 +284,21 @@ class HeatPumpAnalyzer:
 
     def calculate_metrics(
         self,
-        hours_back: int = 24
+        hours_back: int = 24,
+        end_offset_hours: int = 0
     ) -> EfficiencyMetrics:
         """
         Calculate efficiency metrics for the specified time period
 
         Args:
             hours_back: Number of hours to analyze (default 24)
+            end_offset_hours: Hours to offset end time backwards (for historical comparison)
 
         Returns:
             EfficiencyMetrics object with calculated values
         """
         device = self.get_device()
-        end_time = datetime.utcnow()
+        end_time = datetime.utcnow() - timedelta(hours=end_offset_hours)
         start_time = end_time - timedelta(hours=hours_back)
 
         logger.info(f"Calculating metrics from {start_time} to {end_time}")
