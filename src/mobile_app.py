@@ -615,6 +615,39 @@ def gemini_chat():
         if not message:
             return jsonify({'success': False, 'error': 'Message cannot be empty'}), 400
 
+        # Get current system data to provide context
+        try:
+            metrics = analyzer.calculate_metrics(hours_back=24)
+
+            # Build context string with current data
+            context = f"""
+AKTUELL SYSTEMDATA (senaste 24h):
+- COP: {metrics.estimated_cop:.2f if metrics.estimated_cop else 'N/A'}
+- Gradminuter: {metrics.degree_minutes:.1f}
+- Delta T (aktiv): {metrics.delta_t_active:.1f if metrics.delta_t_active else 'N/A'}°C
+- Innetemperatur: {metrics.avg_indoor_temp:.1f if metrics.avg_indoor_temp else 'N/A'}°C
+- Utetemperatur: {metrics.avg_outdoor_temp:.1f if metrics.avg_outdoor_temp else 'N/A'}°C
+- Framledningstemp: {metrics.avg_supply_temp:.1f if metrics.avg_supply_temp else 'N/A'}°C
+- Returtemperatur: {metrics.avg_return_temp:.1f if metrics.avg_return_temp else 'N/A'}°C
+- Kompressorfrekvens: {metrics.avg_compressor_frequency:.0f if metrics.avg_compressor_frequency else 'N/A'} Hz
+- Värmekurva: {metrics.heating_curve if metrics.heating_curve else 'N/A'}
+- Kurvjustering: {metrics.curve_offset if metrics.curve_offset else 'N/A'}
+
+ANVÄNDARENS FRÅGA: {message}
+"""
+            # Prepend context to the first message if this is the start of conversation
+            if len(conversation_history) == 0:
+                message = context
+            else:
+                # For follow-up messages, add context to history
+                conversation_history.insert(0, {
+                    'role': 'system',
+                    'content': context
+                })
+        except Exception as e:
+            logger.warning(f"Could not fetch metrics for chat context: {e}")
+            # Continue without context
+
         # Initialize Gemini agent
         agent = GeminiAgent()
 
