@@ -7,6 +7,11 @@ from flask import Flask, render_template, jsonify, request, send_from_directory
 from datetime import datetime, timedelta
 import sys
 import os
+import logging
+
+# Setup logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
