@@ -17,48 +17,29 @@
     <small>Uppdaterad: <span id="lastUpdate">-</span></small>
 </div>
 
-<!-- Optimization Score Banner -->
-<section class="optimization-banner" id="optimizationBanner" style="display: none;">
-    <div class="opt-score-container">
-        <div class="opt-score-circle" id="optScoreCircle">
-            <div class="opt-score-value" id="optScoreValue">-</div>
-            <div class="opt-score-label">Poäng</div>
+<!-- Hero: Optimization Score Banner -->
+<section class="hero-banner" id="optimizationBanner" style="display: none;">
+    <div class="hero-content">
+        <div class="hero-score">
+            <div class="score-circle-large" id="optScoreCircle">
+                <div class="score-value-large" id="optScoreValue">-</div>
+            </div>
         </div>
-        <div class="opt-score-details">
-            <div class="opt-score-badge" id="optScoreBadge">-</div>
-            <div class="opt-score-subtitle">Systemets övergripande prestanda</div>
+        <div class="hero-details">
+            <div class="hero-grade" id="optScoreBadge">-</div>
+            <div class="hero-subtitle">Systemets övergripande prestanda</div>
+            <div class="hero-explanation" id="scoreExplanation">-</div>
         </div>
     </div>
 </section>
 
-<!-- Cost Analysis -->
-<section class="section" id="costSection" style="display: none;">
-    <h2 class="section-title">💰 Kostnadsanalys</h2>
-    <div class="cost-grid">
-        <div class="cost-card">
-            <div class="cost-label">Per dag</div>
-            <div class="cost-value" id="dailyCost">-</div>
-        </div>
-        <div class="cost-card">
-            <div class="cost-label">Per månad</div>
-            <div class="cost-value" id="monthlyCost">-</div>
-        </div>
-        <div class="cost-card total">
-            <div class="cost-label">Per år</div>
-            <div class="cost-value" id="yearlyCost">-</div>
-        </div>
+<!-- AI Optimization Suggestions - PROMINENT -->
+<section class="ai-suggestions-hero" id="suggestionsSection" style="display: none;">
+    <div class="suggestions-header">
+        <h2 class="section-title-large">🤖 AI-rekommendationer</h2>
+        <span class="suggestions-count" id="suggestionsCount">0</span>
     </div>
-    <div class="savings-info" id="savingsInfo" style="margin-top: 1rem; padding: 1rem; background: var(--success-bg); border-radius: 8px; display: none;">
-        <p style="margin: 0; color: var(--success-color); font-weight: 500;">
-            💰 Du sparar <strong id="savingsAmount">-</strong> per år jämfört med osoptimerat system (COP 2.5)!
-        </p>
-    </div>
-</section>
-
-<!-- AI Optimization Suggestions -->
-<section class="section" id="suggestionsSection" style="display: none;">
-    <h2 class="section-title">🤖 AI-rekommendationer</h2>
-    <div id="suggestionsList"></div>
+    <div id="suggestionsList" class="suggestions-list-hero"></div>
 </section>
 
 <!-- Quick Actions -->
@@ -88,94 +69,437 @@
     </div>
 </section>
 
-<!-- Main metrics -->
+<!-- Main metrics with trends -->
 <section class="metrics-grid">
     <div class="metric-card highlight">
-        <div class="metric-icon">⚡</div>
+        <div class="metric-header">
+            <span class="metric-icon">⚡</span>
+            <span class="metric-trend" id="copTrend"></span>
+        </div>
         <div class="metric-value" id="cop">-</div>
         <div class="metric-label">COP</div>
+        <div class="metric-comparison" id="copComparison"></div>
         <div class="metric-status" id="copStatus"></div>
     </div>
 
     <div class="metric-card">
-        <div class="metric-icon">📐</div>
+        <div class="metric-header">
+            <span class="metric-icon">📐</span>
+            <span class="metric-trend" id="dmTrend"></span>
+        </div>
         <div class="metric-value" id="degreeMinutes">-</div>
         <div class="metric-label">Gradminuter</div>
+        <div class="metric-comparison" id="dmComparison"></div>
         <div class="metric-status" id="dmStatus"></div>
     </div>
 
     <div class="metric-card highlight">
-        <div class="metric-icon">🌡️</div>
+        <div class="metric-header">
+            <span class="metric-icon">🌡️</span>
+            <span class="metric-trend" id="dtTrend"></span>
+        </div>
         <div class="metric-value" id="deltaT">-</div>
         <div class="metric-label">Delta T (Aktiv)</div>
+        <div class="metric-comparison" id="dtComparison"></div>
         <div class="metric-status" id="dtStatus"></div>
     </div>
 
     <div class="metric-card">
-        <div class="metric-icon">⚙️</div>
+        <div class="metric-header">
+            <span class="metric-icon">⚙️</span>
+        </div>
         <div class="metric-value" id="compressor">-</div>
         <div class="metric-label">Kompressor Hz</div>
     </div>
 </section>
 
-<!-- Temperatures -->
+<!-- Climate & Ventilation - INTEGRATED -->
 <section class="section">
-    <h2 class="section-title">🌡️ Temperaturer</h2>
-    <div class="temp-grid">
-        <div class="temp-item">
-            <span class="temp-label">Ute</span>
-            <span class="temp-value" id="outdoorTemp">-</span>
-        </div>
-        <div class="temp-item">
-            <span class="temp-label">Inne</span>
-            <span class="temp-value" id="indoorTemp">-</span>
-        </div>
-        <div class="temp-item">
-            <span class="temp-label">Fram</span>
-            <span class="temp-value" id="supplyTemp">-</span>
-        </div>
-        <div class="temp-item">
-            <span class="temp-label">Retur</span>
-            <span class="temp-value" id="returnTemp">-</span>
+    <h2 class="section-title">🌡️ Klimat & Ventilation</h2>
+
+    <!-- Temperature overview -->
+    <div class="climate-overview">
+        <div class="climate-main">
+            <div class="climate-item highlight">
+                <span class="climate-icon">🏠</span>
+                <div class="climate-data">
+                    <span class="climate-value" id="indoorTemp">-</span>
+                    <span class="climate-label">Inomhus</span>
+                </div>
+            </div>
+            <div class="climate-item">
+                <span class="climate-icon">🌤️</span>
+                <div class="climate-data">
+                    <span class="climate-value" id="outdoorTemp">-</span>
+                    <span class="climate-label">Utomhus</span>
+                </div>
+            </div>
         </div>
     </div>
-</section>
 
-<!-- Ventilation Status -->
-<section class="section" id="ventilationSection" style="display: none;">
-    <h2 class="section-title">💨 Ventilation</h2>
-    <div class="card">
-        <div class="card-header">
+    <!-- Ventilation strategy -->
+    <div class="ventilation-card" id="ventilationCard" style="display: none;">
+        <div class="vent-header">
             <div class="strategy-badge" id="ventStrategyBadge">-</div>
             <span class="ventilation-status" id="ventStatus"></span>
         </div>
-        <div class="card-body">
-            <div class="vent-metrics-grid">
-                <div class="vent-metric">
-                    <div class="vent-metric-label">Frånluftstemp</div>
-                    <div class="vent-metric-value" id="exhaustTemp">-</div>
+        <div class="vent-metrics-compact">
+            <span>💨 <strong id="fanSpeed">-</strong></span>
+            <span>🌡️ <strong id="exhaustTemp">-</strong></span>
+            <span>💧 <strong id="rhDrop">-</strong> RH-drop</span>
+        </div>
+        <div class="ventilation-reasoning-compact" id="ventReasoning">
+            <!-- Reasoning will be inserted here -->
+        </div>
+    </div>
+
+    <!-- System temps (collapsible details) -->
+    <details class="temp-details">
+        <summary>Visa systemtemperaturer</summary>
+        <div class="temp-grid">
+            <div class="temp-item">
+                <span class="temp-label">Fram</span>
+                <span class="temp-value" id="supplyTemp">-</span>
+            </div>
+            <div class="temp-item">
+                <span class="temp-label">Retur</span>
+                <span class="temp-value" id="returnTemp">-</span>
+            </div>
+        </div>
+    </details>
+</section>
+
+<!-- System Overview - SIMPLIFIED -->
+<section class="section">
+    <h2 class="section-title">📊 Systemöversikt</h2>
+    <div class="system-summary">
+        <div class="system-card heating" id="heatingSummaryCard">
+            <div class="system-header">
+                <span class="system-icon">🔥</span>
+                <span class="system-title">Uppvärmning</span>
+            </div>
+            <div class="system-metrics">
+                <div class="metric-primary">
+                    COP: <strong id="heatingCOPSummary">-</strong>
+                    <span class="metric-badge" id="heatingCOPBadgeSummary"></span>
                 </div>
-                <div class="vent-metric">
-                    <div class="vent-metric-label">Fläkthastighet</div>
-                    <div class="vent-metric-value" id="fanSpeed">-</div>
-                </div>
-                <div class="vent-metric">
-                    <div class="vent-metric-label">Temp-lyft</div>
-                    <div class="vent-metric-value" id="tempLift">-</div>
-                </div>
-                <div class="vent-metric">
-                    <div class="vent-metric-label">RF-drop (est)</div>
-                    <div class="vent-metric-value" id="rhDrop">-</div>
+                <div class="metric-secondary">
+                    <span id="heatingRuntimeSummary">-</span> · <span id="heatingCyclesSummary">-</span> cykler
                 </div>
             </div>
-            <div class="ventilation-reasoning" id="ventReasoning" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; font-size: 0.9rem; color: #666;">
-                <!-- Reasoning will be inserted here -->
+        </div>
+
+        <div class="system-card hotwater" id="hotWaterSummaryCard">
+            <div class="system-header">
+                <span class="system-icon">💧</span>
+                <span class="system-title">Varmvatten</span>
             </div>
+            <div class="system-metrics">
+                <div class="metric-primary">
+                    COP: <strong id="hotWaterCOPSummary">-</strong>
+                    <span class="metric-badge" id="hotWaterCOPBadgeSummary"></span>
+                </div>
+                <div class="metric-secondary">
+                    <span id="hotWaterRuntimeSummary">-</span> · <span id="hotWaterCyclesSummary">-</span> cykler
+                </div>
+            </div>
+        </div>
+    </div>
+    <a href="/analysis" class="link-more">Se detaljerad analys →</a>
+</section>
+
+<!-- Cost Analysis -->
+<section class="section" id="costSection" style="display: none;">
+    <h2 class="section-title">💰 Kostnadsanalys</h2>
+    <div class="cost-grid">
+        <div class="cost-card">
+            <div class="cost-label">Per dag</div>
+            <div class="cost-value" id="dailyCost">-</div>
+        </div>
+        <div class="cost-card">
+            <div class="cost-label">Per månad</div>
+            <div class="cost-value" id="monthlyCost">-</div>
+        </div>
+        <div class="cost-card total">
+            <div class="cost-label">Per år</div>
+            <div class="cost-value" id="yearlyCost">-</div>
+        </div>
+    </div>
+    <div class="savings-info" id="savingsInfo" style="margin-top: 1rem; padding: 1rem; background: var(--success-bg); border-radius: 8px; display: none;">
+        <p style="margin: 0; color: var(--success-color); font-weight: 500;">
+            💰 Du sparar <strong id="savingsAmount">-</strong> per år jämfört med osoptimerat system (COP 2.5)!
+        </p>
+    </div>
+</section>
+
+<!-- System Settings -->
+<section class="section">
+    <h2 class="section-title">⚙️ Systeminställningar</h2>
+    <div class="settings-grid">
+        <div class="setting-item">
+            <span class="setting-label">Värmekurva</span>
+            <span class="setting-value" id="heatingCurve">-</span>
+        </div>
+        <div class="setting-item">
+            <span class="setting-label">Kurvjustering</span>
+            <span class="setting-value" id="curveOffset">-</span>
         </div>
     </div>
 </section>
 
+<!-- Time period selector -->
+<section class="section">
+    <label for="timePeriod" class="form-label">Analysperiod:</label>
+    <select id="timePeriod" class="form-select" onchange="loadDashboard()">
+        <option value="1">Senaste timmen</option>
+        <option value="6">Senaste 6 timmarna</option>
+        <option value="24">Senaste 24 timmarna</option>
+        <option value="72" selected>Senaste 3 dagarna</option>
+        <option value="168">Senaste veckan</option>
+    </select>
+</section>
+
 <style>
+/* Hero Banner - IMPROVED */
+.hero-banner {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #1e4a6f 100%);
+    color: white;
+    padding: 2rem 1rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.hero-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.score-circle-large {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.score-value-large {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    line-height: 1;
+}
+
+.hero-details {
+    flex: 1;
+}
+
+.hero-grade {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.hero-subtitle {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    margin-bottom: 0.5rem;
+}
+
+.hero-explanation {
+    font-size: 0.85rem;
+    opacity: 0.85;
+    font-style: italic;
+}
+
+/* AI Suggestions - PROMINENT */
+.ai-suggestions-hero {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    color: white;
+}
+
+.suggestions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.section-title-large {
+    font-size: 1.3rem;
+    margin: 0;
+    color: white;
+}
+
+.suggestions-count {
+    background: rgba(255,255,255,0.3);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.suggestions-list-hero .suggestion-card {
+    background: white;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.suggestion-card:last-child {
+    margin-bottom: 0;
+}
+
+.suggestion-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.suggestion-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    flex: 1;
+    margin: 0;
+}
+
+.suggestion-priority {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-left: 0.5rem;
+}
+
+.suggestion-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.btn-apply {
+    flex: 1;
+    background: var(--success-color);
+    color: white;
+    border: none;
+    padding: 0.75rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.btn-apply:hover {
+    background: #45a049;
+}
+
+.btn-dismiss {
+    background: #e0e0e0;
+    color: var(--text-primary);
+    border: none;
+    padding: 0.75rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.btn-dismiss:hover {
+    background: #d0d0d0;
+}
+
+/* Metric cards with trends */
+.metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+.metric-trend {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.metric-comparison {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+/* Climate & Ventilation - INTEGRATED */
+.climate-overview {
+    margin-bottom: 1rem;
+}
+
+.climate-main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.climate-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.climate-item.highlight {
+    border: 2px solid var(--primary-color);
+}
+
+.climate-icon {
+    font-size: 2rem;
+}
+
+.climate-data {
+    display: flex;
+    flex-direction: column;
+}
+
+.climate-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    line-height: 1;
+}
+
+.climate-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.ventilation-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.vent-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
 .strategy-badge {
     display: inline-block;
     padding: 0.5rem 1rem;
@@ -209,141 +533,155 @@
     color: #666;
 }
 
-.vent-metrics-grid {
+.vent-metrics-compact {
+    display: flex;
+    justify-content: space-around;
+    margin: 0.75rem 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.ventilation-reasoning-compact {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.temp-details {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.temp-details summary {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    user-select: none;
+    list-style: none;
+}
+
+.temp-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.temp-details summary::before {
+    content: "▶ ";
+    display: inline-block;
+    transition: transform 0.2s;
+}
+
+.temp-details[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.temp-details[open] summary {
+    margin-bottom: 0.75rem;
+}
+
+.temp-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-    margin-top: 1rem;
+    gap: 0.75rem;
 }
 
-.vent-metric {
-    text-align: center;
+.temp-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 4px;
 }
 
-.vent-metric-label {
-    font-size: 0.75rem;
-    color: #666;
-    margin-bottom: 0.25rem;
+.temp-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
 }
 
-.vent-metric-value {
-    font-size: 1.5rem;
-    font-weight: 700;
+.temp-value {
+    font-size: 1.1rem;
+    font-weight: 600;
     color: var(--primary-color);
 }
+
+/* System Summary - SIMPLIFIED */
+.system-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.system-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.system-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.system-icon {
+    font-size: 1.5rem;
+}
+
+.system-title {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.system-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.metric-primary {
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.metric-primary strong {
+    color: var(--primary-color);
+    font-size: 1.3rem;
+}
+
+.metric-badge {
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    color: white;
+    font-weight: 600;
+}
+
+.metric-secondary {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.link-more {
+    display: inline-block;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.link-more:hover {
+    text-decoration: underline;
+}
 </style>
-
-<!-- Delta T Breakdown -->
-<section class="section">
-    <h2 class="section-title">📊 Delta T Analys</h2>
-    <div class="delta-grid">
-        <div class="delta-item">
-            <div class="delta-label">Uppvärmning (Aktiv)</div>
-            <div class="delta-value" id="deltaTActive">-</div>
-            <div class="delta-status" id="deltaTActiveStatus"></div>
-        </div>
-        <div class="delta-item">
-            <div class="delta-label">Varmvatten</div>
-            <div class="delta-value" id="deltaTHotWater">-</div>
-        </div>
-    </div>
-</section>
-
-<!-- Separate Metrics: Heating vs Hot Water -->
-<section class="section">
-    <h2 class="section-title">🔥 Uppvärmning vs 💧 Varmvatten</h2>
-
-    <div class="comparison-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-        <!-- Heating Column -->
-        <div class="comparison-column">
-            <h3 style="color: var(--primary-color); text-align: center; margin-bottom: 0.5rem;">🔥 Uppvärmning</h3>
-            <div class="metric-card" id="heatingCard">
-                <div class="metric-row">
-                    <span class="metric-small-label">COP:</span>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                        <span class="metric-small-value" id="heatingCOP">-</span>
-                        <span class="performance-badge" id="heatingCOPBadge"></span>
-                    </div>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-small-label">Delta T:</span>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                        <span class="metric-small-value" id="heatingDeltaT">-</span>
-                        <span class="performance-badge" id="heatingDeltaTBadge"></span>
-                    </div>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-small-label">Runtime:</span>
-                    <span class="metric-small-value" id="heatingRuntime">-</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-small-label">Cykler:</span>
-                    <span class="metric-small-value" id="heatingCycles">-</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Hot Water Column -->
-        <div class="comparison-column">
-            <h3 style="color: #ff5722; text-align: center; margin-bottom: 0.5rem;">💧 Varmvatten</h3>
-            <div class="metric-card" id="hotWaterCard">
-                <div class="metric-row">
-                    <span class="metric-small-label">COP:</span>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                        <span class="metric-small-value" id="hotWaterCOP">-</span>
-                        <span class="performance-badge" id="hotWaterCOPBadge"></span>
-                    </div>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-small-label">Delta T:</span>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                        <span class="metric-small-value" id="hotWaterDeltaT">-</span>
-                        <span class="performance-badge" id="hotWaterDeltaTBadge"></span>
-                    </div>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-small-label">VV Temp:</span>
-                    <span class="metric-small-value" id="hotWaterTemp">-</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-small-label">Runtime:</span>
-                    <span class="metric-small-value" id="hotWaterRuntime">-</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-small-label">Cykler:</span>
-                    <span class="metric-small-value" id="hotWaterCycles">-</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- System Settings -->
-<section class="section">
-    <h2 class="section-title">⚙️ Systeminställningar</h2>
-    <div class="settings-grid">
-        <div class="setting-item">
-            <span class="setting-label">Värmekurva</span>
-            <span class="setting-value" id="heatingCurve">-</span>
-        </div>
-        <div class="setting-item">
-            <span class="setting-label">Kurvjustering</span>
-            <span class="setting-value" id="curveOffset">-</span>
-        </div>
-    </div>
-</section>
-
-<!-- Time period selector -->
-<section class="section">
-    <label for="timePeriod" class="form-label">Analysperiod:</label>
-    <select id="timePeriod" class="form-select" onchange="loadDashboard()">
-        <option value="1">Senaste timmen</option>
-        <option value="6">Senaste 6 timmarna</option>
-        <option value="24">Senaste 24 timmarna</option>
-        <option value="72" selected>Senaste 3 dagarna</option>
-        <option value="168">Senaste veckan</option>
-    </select>
-</section>
 
 {% endblock %}
 
@@ -391,7 +729,7 @@ async function loadDashboard() {
             updateCostAnalysis(costResult.data);
         }
 
-        // Update Optimization Suggestions (will add this section)
+        // Update Optimization Suggestions
         if (suggestionsResult.success && suggestionsResult.data.length > 0) {
             updateSuggestions(suggestionsResult.data);
         }
@@ -401,22 +739,10 @@ async function loadDashboard() {
             updateVentilation(ventResult.data);
         }
 
-        // Update main metrics
-        document.getElementById('cop').textContent = data.cop ? data.cop.toFixed(2) : 'N/A';
-        document.getElementById('copStatus').textContent = data.cop && data.cop >= 3.0 ? '✅ Utmärkt' : '⚠️';
-
-        document.getElementById('degreeMinutes').textContent = data.degree_minutes.toFixed(0);
-        const dmOk = data.degree_minutes >= -300 && data.degree_minutes <= -100;
-        document.getElementById('dmStatus').textContent = dmOk ? '✅' : '⚠️';
-
-        if (data.delta_t_active) {
-            document.getElementById('deltaT').textContent = data.delta_t_active.toFixed(1) + '°C';
-            const dtOk = data.delta_t_active >= 3 && data.delta_t_active <= 8;
-            document.getElementById('dtStatus').textContent = dtOk ? '✅ Optimalt' : '⚠️ Justera';
-        } else {
-            document.getElementById('deltaT').textContent = 'N/A';
-            document.getElementById('dtStatus').textContent = '';
-        }
+        // Update main metrics with trends
+        updateMetricWithTrend('cop', data.cop, data.cop_yesterday, '✅ Utmärkt', '⚠️', 3.0);
+        updateMetricWithTrend('degreeMinutes', data.degree_minutes, data.degree_minutes_yesterday, '✅', '⚠️', null, -300, -100);
+        updateMetricWithTrend('deltaT', data.delta_t_active, data.delta_t_active_yesterday, '✅ Optimalt', '⚠️ Justera', null, 3, 8);
 
         document.getElementById('compressor').textContent = data.avg_compressor_freq.toFixed(0) + ' Hz';
 
@@ -426,82 +752,12 @@ async function loadDashboard() {
         document.getElementById('supplyTemp').textContent = data.avg_supply_temp.toFixed(1) + '°C';
         document.getElementById('returnTemp').textContent = data.avg_return_temp.toFixed(1) + '°C';
 
-        // Update Delta T breakdown
-        if (data.delta_t_active) {
-            document.getElementById('deltaTActive').textContent = data.delta_t_active.toFixed(1) + '°C';
-            const dtOk = data.delta_t_active >= 3 && data.delta_t_active <= 8;
-            document.getElementById('deltaTActiveStatus').textContent = dtOk ? '✅ 3-8°C optimal' : '⚠️ Bör vara 3-8°C';
-        } else {
-            document.getElementById('deltaTActive').textContent = 'N/A';
-            document.getElementById('deltaTActiveStatus').textContent = 'Ingen aktiv uppvärmning';
-        }
-
-        if (data.delta_t_hot_water) {
-            document.getElementById('deltaTHotWater').textContent = data.delta_t_hot_water.toFixed(1) + '°C';
-        } else {
-            document.getElementById('deltaTHotWater').textContent = 'N/A';
-        }
+        // Update system summary
+        updateSystemSummary(data);
 
         // Update settings
         document.getElementById('heatingCurve').textContent = data.heating_curve.toFixed(1);
         document.getElementById('curveOffset').textContent = data.curve_offset.toFixed(1);
-
-        // Update separate heating metrics
-        const heatingCard = document.getElementById('heatingCard');
-        if (data.heating) {
-            heatingCard.style.display = 'block';
-            document.getElementById('heatingCOP').textContent = data.heating.cop ? data.heating.cop.toFixed(2) : 'N/A';
-            document.getElementById('heatingDeltaT').textContent = data.heating.delta_t ? data.heating.delta_t.toFixed(1) + '°C' : 'N/A';
-            document.getElementById('heatingRuntime').textContent = data.heating.runtime_hours ? data.heating.runtime_hours.toFixed(1) + 'h' : 'N/A';
-            document.getElementById('heatingCycles').textContent = data.heating.num_cycles || '0';
-
-            // Set COP badge
-            const copBadge = document.getElementById('heatingCOPBadge');
-            if (data.heating.cop_rating) {
-                copBadge.textContent = data.heating.cop_rating.badge;
-                copBadge.style.backgroundColor = data.heating.cop_rating.color;
-                copBadge.style.display = 'inline-block';
-            }
-
-            // Set Delta T badge
-            const deltaTBadge = document.getElementById('heatingDeltaTBadge');
-            if (data.heating.delta_t_rating) {
-                deltaTBadge.textContent = data.heating.delta_t_rating.badge;
-                deltaTBadge.style.backgroundColor = data.heating.delta_t_rating.color;
-                deltaTBadge.style.display = 'inline-block';
-            }
-        } else {
-            heatingCard.style.display = 'none';
-        }
-
-        // Update separate hot water metrics
-        const hotWaterCard = document.getElementById('hotWaterCard');
-        if (data.hot_water) {
-            hotWaterCard.style.display = 'block';
-            document.getElementById('hotWaterCOP').textContent = data.hot_water.cop ? data.hot_water.cop.toFixed(2) : 'N/A';
-            document.getElementById('hotWaterDeltaT').textContent = data.hot_water.delta_t ? data.hot_water.delta_t.toFixed(1) + '°C' : 'N/A';
-            document.getElementById('hotWaterTemp').textContent = data.hot_water.avg_hot_water_temp ? data.hot_water.avg_hot_water_temp.toFixed(1) + '°C' : 'N/A';
-            document.getElementById('hotWaterRuntime').textContent = data.hot_water.runtime_hours ? data.hot_water.runtime_hours.toFixed(1) + 'h' : 'N/A';
-            document.getElementById('hotWaterCycles').textContent = data.hot_water.num_cycles || '0';
-
-            // Set COP badge
-            const copBadge = document.getElementById('hotWaterCOPBadge');
-            if (data.hot_water.cop_rating) {
-                copBadge.textContent = data.hot_water.cop_rating.badge;
-                copBadge.style.backgroundColor = data.hot_water.cop_rating.color;
-                copBadge.style.display = 'inline-block';
-            }
-
-            // Set Delta T badge
-            const deltaTBadge = document.getElementById('hotWaterDeltaTBadge');
-            if (data.hot_water.delta_t_rating) {
-                deltaTBadge.textContent = data.hot_water.delta_t_rating.badge;
-                deltaTBadge.style.backgroundColor = data.hot_water.delta_t_rating.color;
-                deltaTBadge.style.display = 'inline-block';
-            }
-        } else {
-            hotWaterCard.style.display = 'none';
-        }
 
         // Update timestamp
         const timestamp = new Date(data.timestamp);
@@ -516,14 +772,118 @@ async function loadDashboard() {
     }
 }
 
+function updateMetricWithTrend(metricId, currentValue, yesterdayValue, goodStatus, badStatus, goodThreshold = null, rangeMin = null, rangeMax = null) {
+    const valueElem = document.getElementById(metricId);
+    const trendElem = document.getElementById(metricId + 'Trend');
+    const comparisonElem = document.getElementById(metricId + 'Comparison');
+    const statusElem = document.getElementById(metricId + 'Status');
+
+    if (metricId === 'deltaT') {
+        if (currentValue) {
+            valueElem.textContent = currentValue.toFixed(1) + '°C';
+
+            if (rangeMin !== null && rangeMax !== null) {
+                const isOk = currentValue >= rangeMin && currentValue <= rangeMax;
+                statusElem.textContent = isOk ? goodStatus : badStatus;
+            }
+        } else {
+            valueElem.textContent = 'N/A';
+            statusElem.textContent = '';
+            trendElem.innerHTML = '';
+            comparisonElem.textContent = '';
+            return;
+        }
+    } else if (currentValue !== null && currentValue !== undefined) {
+        const decimals = metricId === 'cop' ? 2 : 0;
+        valueElem.textContent = currentValue.toFixed(decimals);
+
+        // Status check
+        if (goodThreshold !== null) {
+            const isGood = currentValue >= goodThreshold;
+            statusElem.textContent = isGood ? goodStatus : badStatus;
+        } else if (rangeMin !== null && rangeMax !== null) {
+            const isOk = currentValue >= rangeMin && currentValue <= rangeMax;
+            statusElem.textContent = isOk ? goodStatus : badStatus;
+        }
+    } else {
+        valueElem.textContent = 'N/A';
+        statusElem.textContent = '';
+    }
+
+    // Trend and comparison
+    if (yesterdayValue !== null && yesterdayValue !== undefined && currentValue !== null && currentValue !== undefined) {
+        const change = currentValue - yesterdayValue;
+        const trendIcon = change >= 0 ? '↗' : '↘';
+        const trendColor = change >= 0 ? 'var(--success-color)' : 'var(--error-color)';
+
+        trendElem.innerHTML = `<span style="color: ${trendColor}">${trendIcon}</span>`;
+
+        const decimals = metricId === 'cop' ? 2 : 0;
+        comparisonElem.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(decimals)} vs igår`;
+    } else {
+        trendElem.innerHTML = '';
+        comparisonElem.textContent = '';
+    }
+}
+
+function updateSystemSummary(data) {
+    // Heating summary
+    const heatingCard = document.getElementById('heatingSummaryCard');
+    if (data.heating) {
+        heatingCard.style.display = 'block';
+        document.getElementById('heatingCOPSummary').textContent = data.heating.cop ? data.heating.cop.toFixed(2) : 'N/A';
+        document.getElementById('heatingRuntimeSummary').textContent = data.heating.runtime_hours ? data.heating.runtime_hours.toFixed(1) + 'h' : 'N/A';
+        document.getElementById('heatingCyclesSummary').textContent = data.heating.num_cycles || '0';
+
+        const copBadge = document.getElementById('heatingCOPBadgeSummary');
+        if (data.heating.cop_rating) {
+            copBadge.textContent = data.heating.cop_rating.badge;
+            copBadge.style.backgroundColor = data.heating.cop_rating.color;
+            copBadge.style.display = 'inline-block';
+        }
+    } else {
+        heatingCard.style.display = 'none';
+    }
+
+    // Hot water summary
+    const hotWaterCard = document.getElementById('hotWaterSummaryCard');
+    if (data.hot_water) {
+        hotWaterCard.style.display = 'block';
+        document.getElementById('hotWaterCOPSummary').textContent = data.hot_water.cop ? data.hot_water.cop.toFixed(2) : 'N/A';
+        document.getElementById('hotWaterRuntimeSummary').textContent = data.hot_water.runtime_hours ? data.hot_water.runtime_hours.toFixed(1) + 'h' : 'N/A';
+        document.getElementById('hotWaterCyclesSummary').textContent = data.hot_water.num_cycles || '0';
+
+        const copBadge = document.getElementById('hotWaterCOPBadgeSummary');
+        if (data.hot_water.cop_rating) {
+            copBadge.textContent = data.hot_water.cop_rating.badge;
+            copBadge.style.backgroundColor = data.hot_water.cop_rating.color;
+            copBadge.style.display = 'inline-block';
+        }
+    } else {
+        hotWaterCard.style.display = 'none';
+    }
+}
+
 function updatePerformanceScore(data) {
     const banner = document.getElementById('optimizationBanner');
     const circle = document.getElementById('optScoreCircle');
     const value = document.getElementById('optScoreValue');
     const badge = document.getElementById('optScoreBadge');
+    const explanation = document.getElementById('scoreExplanation');
 
     value.textContent = data.total_score;
     badge.textContent = `${data.grade} ${data.emoji}`;
+
+    // Explanations based on grade
+    const explanations = {
+        'A+': 'Exceptionell prestanda! Systemet arbetar optimalt.',
+        'A': 'Utmärkt prestanda. Fortsätt så här.',
+        'B': 'Bra prestanda med potential för förbättringar.',
+        'C': 'Acceptabel prestanda men bör optimeras.',
+        'D': 'Prestandan bör förbättras. Se AI-rekommendationer.',
+        'F': 'Systemet behöver uppmärksamhet. Kontrollera inställningar.'
+    };
+    explanation.textContent = explanations[data.grade] || '';
 
     // Color based on grade
     const gradeColors = {
@@ -561,11 +921,14 @@ function updateCostAnalysis(data) {
 function updateSuggestions(suggestions) {
     const section = document.getElementById('suggestionsSection');
     const list = document.getElementById('suggestionsList');
+    const count = document.getElementById('suggestionsCount');
 
     if (!suggestions || suggestions.length === 0) {
         section.style.display = 'none';
         return;
     }
+
+    count.textContent = suggestions.length;
 
     const priorityColors = {
         'high': '#f44336',
@@ -580,30 +943,30 @@ function updateSuggestions(suggestions) {
     };
 
     list.innerHTML = suggestions.map(s => `
-        <div class="suggestion-card" style="margin-bottom: 1rem; padding: 1rem; border-left: 4px solid ${priorityColors[s.priority]}; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-                <h3 style="margin: 0; font-size: 1rem; color: var(--text-primary);">${s.title}</h3>
-                <span style="padding: 0.25rem 0.5rem; background: ${priorityColors[s.priority]}; color: white; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+        <div class="suggestion-card">
+            <div class="suggestion-card-header">
+                <h3 class="suggestion-title">${s.title}</h3>
+                <span class="suggestion-priority" style="background: ${priorityColors[s.priority]}; color: white;">
                     ${priorityLabels[s.priority]}
                 </span>
             </div>
-            <p style="margin: 0.5rem 0; color: var(--text-secondary); font-size: 0.9rem;">${s.description}</p>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e0e0e0;">
-                <div>
-                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Förväntad COP-förbättring</div>
-                    <div style="font-weight: 600; color: var(--primary-color);">+${s.expected_cop_improvement.toFixed(2)}</div>
+            <p style="margin: 0.5rem 0; font-size: 0.9rem; color: var(--text-secondary);">${s.description}</p>
+            <div style="display: flex; gap: 1rem; margin: 0.75rem 0; padding: 0.75rem; background: #f8f9fa; border-radius: 4px;">
+                <div style="flex: 1;">
+                    <div style="font-size: 0.75rem; color: var(--text-secondary);">COP-förbättring</div>
+                    <div style="font-weight: 700; color: var(--success-color); font-size: 1.2rem;">+${s.expected_cop_improvement.toFixed(2)}</div>
                 </div>
-                <div>
+                <div style="flex: 1;">
                     <div style="font-size: 0.75rem; color: var(--text-secondary);">Besparing/år</div>
-                    <div style="font-weight: 600; color: var(--success-color);">${s.expected_savings_yearly.toFixed(0)} kr</div>
+                    <div style="font-weight: 700; color: var(--success-color); font-size: 1.2rem;">${s.expected_savings_yearly.toFixed(0)} kr</div>
                 </div>
             </div>
-            <div style="margin-top: 0.75rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px;">
-                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.25rem;">💡 Förklaring:</div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary);">${s.reasoning}</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                <strong>💡 Resonemang:</strong> ${s.reasoning}
             </div>
-            <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
-                Confidence: ${(s.confidence * 100).toFixed(0)}%
+            <div class="suggestion-actions">
+                <button class="btn-apply" onclick="applySuggestion('${s.id || ''}')">✓ Tillämpa</button>
+                <button class="btn-dismiss" onclick="dismissSuggestion('${s.id || ''}')">✕ Avfärda</button>
             </div>
         </div>
     `).join('');
@@ -612,15 +975,14 @@ function updateSuggestions(suggestions) {
 }
 
 function updateVentilation(data) {
-    const section = document.getElementById('ventilationSection');
+    const card = document.getElementById('ventilationCard');
 
     if (!data) {
-        section.style.display = 'none';
+        card.style.display = 'none';
         return;
     }
 
-    // Show section
-    section.style.display = 'block';
+    card.style.display = 'block';
 
     // Update strategy badge
     const strategyBadge = document.getElementById('ventStrategyBadge');
@@ -634,21 +996,36 @@ function updateVentilation(data) {
     // Update metrics
     document.getElementById('exhaustTemp').textContent = data.exhaust_temp ? data.exhaust_temp.toFixed(1) + '°C' : 'N/A';
     document.getElementById('fanSpeed').textContent = data.fan_speed_pct ? data.fan_speed_pct + '%' : 'N/A';
-    document.getElementById('tempLift').textContent = data.temp_lift ? data.temp_lift.toFixed(1) + '°C' : 'N/A';
     document.getElementById('rhDrop').textContent = data.estimated_rh_drop_pct ? data.estimated_rh_drop_pct.toFixed(0) + '%' : 'N/A';
 
     // Update reasoning
     const reasoning = document.getElementById('ventReasoning');
-    reasoning.innerHTML = `<strong>Strategi:</strong> ${data.reasoning}`;
+    reasoning.textContent = data.reasoning || '';
+}
+
+function applySuggestion(suggestionId) {
+    alert('Apply suggestion functionality coming soon!\nSuggestion ID: ' + suggestionId);
+    // TODO: Implement API call to apply suggestion
+}
+
+function dismissSuggestion(suggestionId) {
+    if (!confirm('Är du säker på att du vill avfärda denna rekommendation?')) {
+        return;
+    }
+    alert('Dismiss suggestion functionality coming soon!\nSuggestion ID: ' + suggestionId);
+    // TODO: Implement API call to dismiss suggestion
 }
 
 function refreshData() {
     const icon = document.getElementById('refreshIcon');
-    icon.classList.add('spinning');
-
-    loadDashboard().finally(() => {
-        setTimeout(() => icon.classList.remove('spinning'), 500);
-    });
+    if (icon) {
+        icon.classList.add('spinning');
+        loadDashboard().finally(() => {
+            setTimeout(() => icon.classList.remove('spinning'), 500);
+        });
+    } else {
+        loadDashboard();
+    }
 }
 
 // Auto-refresh every 5 minutes

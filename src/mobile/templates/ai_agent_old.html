@@ -1,0 +1,618 @@
+{% extends "base.html" %}
+
+{% block title %}AI-Agent - Nibe Autotuner{% endblock %}
+
+{% block content %}
+<!-- Loading indicator -->
+<div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Laddar AI-data...</p>
+</div>
+
+<!-- Error message -->
+<div id="error" class="error" style="display: none;"></div>
+
+<div id="aiContent" style="display: none;">
+    <div class="page-header">
+        <h1>🤖 AI-Agent</h1>
+        <p class="subtitle">Autonom optimering med Claude AI</p>
+    </div>
+
+    <!-- Status Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2>Status</h2>
+            <span class="badge" id="statusBadge">-</span>
+        </div>
+        <div class="card-body">
+            <div class="stat-row">
+                <span class="stat-label">Senaste körning:</span>
+                <span class="stat-value" id="lastRun">-</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Nästa körning:</span>
+                <span class="stat-value" id="nextRun">-</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Antal analyser:</span>
+                <span class="stat-value" id="totalAnalyses">-</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Antal justeringar:</span>
+                <span class="stat-value" id="totalAdjustments">-</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Kostnad denna månad:</span>
+                <span class="stat-value" id="monthlyCost">-</span>
+            </div>
+        </div>
+    </div>
+
+<!-- Senaste Beslut -->
+{% if latest_decision %}
+<div class="card">
+    <div class="card-header">
+        <h2>Senaste Beslut</h2>
+        <span class="timestamp">{{ latest_decision.timestamp }}</span>
+    </div>
+    <div class="card-body">
+        <div class="decision-header">
+            <span class="decision-action {% if latest_decision.action == 'adjust' %}action-adjust{% elif latest_decision.action == 'hold' %}action-hold{% else %}action-investigate{% endif %}">
+                {% if latest_decision.action == 'adjust' %}
+                    ⚙️ Justering
+                {% elif latest_decision.action == 'hold' %}
+                    ✋ Håll
+                {% else %}
+                    🔍 Undersök
+                {% endif %}
+            </span>
+            <span class="confidence-badge">{{ (latest_decision.confidence * 100)|round(0)|int }}% konfidens</span>
+        </div>
+
+        {% if latest_decision.action == 'adjust' %}
+        <div class="adjustment-details">
+            <div class="stat-row">
+                <span class="stat-label">Parameter:</span>
+                <span class="stat-value">{{ latest_decision.parameter_name }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Ändring:</span>
+                <span class="stat-value">{{ latest_decision.old_value }} → {{ latest_decision.new_value }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="reasoning-box">
+            <h3>Resonemang:</h3>
+            <p>{{ latest_decision.reasoning }}</p>
+        </div>
+
+        <div class="impact-box">
+            <h3>Förväntad påverkan:</h3>
+            <p>{{ latest_decision.expected_impact }}</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Planerade Tester -->
+{% if planned_tests %}
+<div class="card">
+    <div class="card-header">
+        <h2>Planerade Tester</h2>
+        <span class="badge badge-info">{{ planned_tests|length }} st</span>
+    </div>
+    <div class="card-body">
+        {% for test in planned_tests %}
+        <div class="test-item">
+            <div class="test-header">
+                <span class="test-name">{{ test.parameter_name }}</span>
+                <span class="test-priority priority-{{ test.priority }}">{{ test.priority }}</span>
+            </div>
+            <div class="test-details">
+                <p><strong>Hypotes:</strong> {{ test.hypothesis }}</p>
+                <p><strong>Planerad:</strong> {{ test.scheduled_date }}</p>
+                <p><strong>Förväntad förbättring:</strong> {{ test.expected_improvement }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Pågående Tester -->
+{% if active_tests %}
+<div class="card">
+    <div class="card-header">
+        <h2>Pågående Tester</h2>
+        <span class="badge badge-warning">{{ active_tests|length }} aktiva</span>
+    </div>
+    <div class="card-body">
+        {% for test in active_tests %}
+        <div class="test-item active-test">
+            <div class="test-header">
+                <span class="test-name">{{ test.parameter_name }}</span>
+                <span class="test-status">🔄 Pågår</span>
+            </div>
+            <div class="test-details">
+                <div class="stat-row">
+                    <span class="stat-label">Startad:</span>
+                    <span class="stat-value">{{ test.started_date }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Slutar:</span>
+                    <span class="stat-value">{{ test.end_date }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Ändring:</span>
+                    <span class="stat-value">{{ test.old_value }} → {{ test.new_value }}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ test.progress }}%"></div>
+                </div>
+                <p class="progress-text">{{ test.progress }}% genomfört ({{ test.hours_remaining }}h kvar)</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Genomförda Tester -->
+{% if completed_tests %}
+<div class="card">
+    <div class="card-header">
+        <h2>Genomförda Tester</h2>
+        <span class="badge badge-secondary">{{ completed_tests|length }} st</span>
+    </div>
+    <div class="card-body">
+        {% for test in completed_tests %}
+        <div class="test-item completed-test">
+            <div class="test-header">
+                <span class="test-name">{{ test.parameter_name }}</span>
+                <span class="test-result {% if test.success %}result-success{% else %}result-failure{% endif %}">
+                    {% if test.success %}✅ Lyckades{% else %}❌ Misslyckades{% endif %}
+                </span>
+                <span class="confidence-badge">{{ test.confidence }}% konfidens</span>
+            </div>
+            <div class="test-details">
+                <div class="stat-row">
+                    <span class="stat-label">Genomförd:</span>
+                    <span class="stat-value">{{ test.completed_date }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Ändring:</span>
+                    <span class="stat-value">{{ test.old_value }} → {{ test.new_value }}</span>
+                </div>
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <span class="metric-label">COP före:</span>
+                        <span class="metric-value">{{ test.cop_before|round(2) }}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">COP efter:</span>
+                        <span class="metric-value">{{ test.cop_after|round(2) }}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Förändring:</span>
+                        <span class="metric-value {% if test.cop_change > 0 %}positive{% else %}negative{% endif %}">
+                            {{ test.cop_change|round(1) }}%
+                        </span>
+                    </div>
+                </div>
+                <div class="result-box">
+                    <p><strong>Resultat:</strong> {{ test.result_summary }}</p>
+                    {% if test.recommendation %}
+                    <p><strong>Rekommendation:</strong> {{ test.recommendation }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Inlärningsstatistik -->
+<div class="card">
+    <div class="card-header">
+        <h2>Inlärningsstatistik</h2>
+    </div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📈</div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ learning_stats.success_rate|round(0)|int }}%</div>
+                    <div class="stat-label">Lyckandegrad</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">💰</div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ learning_stats.avg_cop_improvement|round(1) }}%</div>
+                    <div class="stat-label">Genomsnittlig COP-förbättring</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🎯</div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ learning_stats.avg_confidence|round(0)|int }}%</div>
+                    <div class="stat-label">Genomsnittlig konfidens</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🔄</div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ learning_stats.total_tests }}</div>
+                    <div class="stat-label">Totalt antal tester</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bästa upptäckter -->
+        {% if learning_stats.best_findings %}
+        <div class="findings-section">
+            <h3>🏆 Bästa upptäckter</h3>
+            {% for finding in learning_stats.best_findings %}
+            <div class="finding-item">
+                <div class="finding-header">
+                    <span class="finding-parameter">{{ finding.parameter_name }}</span>
+                    <span class="finding-improvement">+{{ finding.improvement|round(1) }}% COP</span>
+                </div>
+                <p class="finding-description">{{ finding.description }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Schemaläggning -->
+<div class="card">
+    <div class="card-header">
+        <h2>Automatisering</h2>
+    </div>
+    <div class="card-body">
+        <div class="schedule-info">
+            <h3>Optimeringsschema</h3>
+            <div class="schedule-item">
+                <span class="schedule-icon">🌅</span>
+                <div class="schedule-details">
+                    <div class="schedule-time">06:00</div>
+                    <div class="schedule-desc">Morgonoptimering (ventilation & pump)</div>
+                </div>
+            </div>
+            <div class="schedule-item">
+                <span class="schedule-icon">🌙</span>
+                <div class="schedule-details">
+                    <div class="schedule-time">19:00</div>
+                    <div class="schedule-desc">Kvällsoptimering (ventilation & pump)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="schedule-settings">
+            <p class="info-text">
+                AI-agenten analyserar systemet två gånger per dag och justerar både ventilation
+                och pumpinställningar baserat på väder, prestanda och inlärda mönster.
+            </p>
+            <p class="info-text">
+                <strong>Säkerhetsregler:</strong>
+                <ul>
+                    <li>Max 1 justering per 48h per parameter</li>
+                    <li>Minst 70% konfidens krävs för justeringar</li>
+                    <li>Inomhustemperatur hålls alltid ≥20°C</li>
+                    <li>Minimum ventilation upprätthålls för luftkvalitet</li>
+                </ul>
+            </p>
+        </div>
+    </div>
+</div>
+
+<style>
+/* AI Agent specific styles */
+.decision-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.decision-action {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.action-adjust {
+    background: #4CAF50;
+    color: white;
+}
+
+.action-hold {
+    background: #FF9800;
+    color: white;
+}
+
+.action-investigate {
+    background: #2196F3;
+    color: white;
+}
+
+.confidence-badge {
+    background: #6c757d;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+}
+
+.reasoning-box, .impact-box, .result-box {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.reasoning-box h3, .impact-box h3 {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin: 0 0 0.5rem 0;
+}
+
+.test-item {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.test-item:last-child {
+    margin-bottom: 0;
+}
+
+.active-test {
+    border-color: #FF9800;
+    background: #FFF3E0;
+}
+
+.completed-test {
+    opacity: 0.9;
+}
+
+.test-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.test-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.test-priority {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.priority-high {
+    background: #f44336;
+    color: white;
+}
+
+.priority-medium {
+    background: #FF9800;
+    color: white;
+}
+
+.priority-low {
+    background: #4CAF50;
+    color: white;
+}
+
+.test-status {
+    font-weight: 600;
+    color: #FF9800;
+}
+
+.test-result {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.result-success {
+    background: #4CAF50;
+    color: white;
+}
+
+.result-failure {
+    background: #f44336;
+    color: white;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0.5rem 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4CAF50, #8BC34A);
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.metric {
+    text-align: center;
+}
+
+.metric-label {
+    display: block;
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+}
+
+.metric-value {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.metric-value.positive {
+    color: #4CAF50;
+}
+
+.metric-value.negative {
+    color: #f44336;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    padding: 1rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.stat-icon {
+    font-size: 2rem;
+}
+
+.stat-content .stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1;
+    color: white;
+}
+
+.stat-content .stat-label {
+    font-size: 0.75rem;
+    opacity: 0.9;
+    margin-top: 0.25rem;
+    color: white;
+}
+
+.findings-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e0e0e0;
+}
+
+.findings-section h3 {
+    margin-bottom: 1rem;
+}
+
+.finding-item {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+}
+
+.finding-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.finding-parameter {
+    font-weight: 600;
+}
+
+.finding-improvement {
+    color: #4CAF50;
+    font-weight: 700;
+}
+
+.finding-description {
+    font-size: 0.9rem;
+    color: #666;
+    margin: 0;
+}
+
+.schedule-info h3 {
+    margin-bottom: 1rem;
+}
+
+.schedule-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+}
+
+.schedule-icon {
+    font-size: 2rem;
+}
+
+.schedule-time {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2d5f8e;
+}
+
+.schedule-desc {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.schedule-settings {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e0e0e0;
+}
+
+.info-text {
+    font-size: 0.9rem;
+    color: #666;
+    line-height: 1.6;
+}
+
+.info-text ul {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.info-text li {
+    margin: 0.25rem 0;
+}
+</style>
+{% endblock %}
