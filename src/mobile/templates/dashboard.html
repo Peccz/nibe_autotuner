@@ -778,19 +778,25 @@ function updateMetricWithTrend(metricId, currentValue, yesterdayValue, goodStatu
     const comparisonElem = document.getElementById(metricId + 'Comparison');
     const statusElem = document.getElementById(metricId + 'Status');
 
+    // Safety check - if elements don't exist, exit gracefully
+    if (!valueElem) {
+        console.warn(`Element with id '${metricId}' not found`);
+        return;
+    }
+
     if (metricId === 'deltaT') {
         if (currentValue) {
             valueElem.textContent = currentValue.toFixed(1) + '°C';
 
-            if (rangeMin !== null && rangeMax !== null) {
+            if (statusElem && rangeMin !== null && rangeMax !== null) {
                 const isOk = currentValue >= rangeMin && currentValue <= rangeMax;
                 statusElem.textContent = isOk ? goodStatus : badStatus;
             }
         } else {
             valueElem.textContent = 'N/A';
-            statusElem.textContent = '';
-            trendElem.innerHTML = '';
-            comparisonElem.textContent = '';
+            if (statusElem) statusElem.textContent = '';
+            if (trendElem) trendElem.innerHTML = '';
+            if (comparisonElem) comparisonElem.textContent = '';
             return;
         }
     } else if (currentValue !== null && currentValue !== undefined) {
@@ -798,16 +804,18 @@ function updateMetricWithTrend(metricId, currentValue, yesterdayValue, goodStatu
         valueElem.textContent = currentValue.toFixed(decimals);
 
         // Status check
-        if (goodThreshold !== null) {
-            const isGood = currentValue >= goodThreshold;
-            statusElem.textContent = isGood ? goodStatus : badStatus;
-        } else if (rangeMin !== null && rangeMax !== null) {
-            const isOk = currentValue >= rangeMin && currentValue <= rangeMax;
-            statusElem.textContent = isOk ? goodStatus : badStatus;
+        if (statusElem) {
+            if (goodThreshold !== null) {
+                const isGood = currentValue >= goodThreshold;
+                statusElem.textContent = isGood ? goodStatus : badStatus;
+            } else if (rangeMin !== null && rangeMax !== null) {
+                const isOk = currentValue >= rangeMin && currentValue <= rangeMax;
+                statusElem.textContent = isOk ? goodStatus : badStatus;
+            }
         }
     } else {
         valueElem.textContent = 'N/A';
-        statusElem.textContent = '';
+        if (statusElem) statusElem.textContent = '';
     }
 
     // Trend and comparison
@@ -816,13 +824,17 @@ function updateMetricWithTrend(metricId, currentValue, yesterdayValue, goodStatu
         const trendIcon = change >= 0 ? '↗' : '↘';
         const trendColor = change >= 0 ? 'var(--success-color)' : 'var(--error-color)';
 
-        trendElem.innerHTML = `<span style="color: ${trendColor}">${trendIcon}</span>`;
+        if (trendElem) {
+            trendElem.innerHTML = `<span style="color: ${trendColor}">${trendIcon}</span>`;
+        }
 
-        const decimals = metricId === 'cop' ? 2 : 0;
-        comparisonElem.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(decimals)} vs igår`;
+        if (comparisonElem) {
+            const decimals = metricId === 'cop' ? 2 : 0;
+            comparisonElem.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(decimals)} vs igår`;
+        }
     } else {
-        trendElem.innerHTML = '';
-        comparisonElem.textContent = '';
+        if (trendElem) trendElem.innerHTML = '';
+        if (comparisonElem) comparisonElem.textContent = '';
     }
 }
 
