@@ -184,6 +184,16 @@ class VentilationOptimizer:
             abs(current_settings.min_diff_outdoor_exhaust - recommended.min_diff_outdoor_exhaust) > 1.0
         )
 
+        # Determine strategy name
+        if metrics.avg_outdoor_temp > 10.0:
+            strategy_name = "WARM"
+        elif metrics.avg_outdoor_temp > 0.0:
+            strategy_name = "MILD"
+        elif metrics.avg_outdoor_temp > -10.0:
+            strategy_name = "COLD"
+        else:
+            strategy_name = "EXTREME_COLD"
+
         return {
             'outdoor_temp': metrics.avg_outdoor_temp,
             'indoor_temp': metrics.avg_indoor_temp,
@@ -193,6 +203,7 @@ class VentilationOptimizer:
             'estimated_rh_drop_pct': estimated_rh_drop,
             'current_settings': current_settings,
             'recommended_settings': recommended,
+            'recommended_strategy': strategy_name,
             'needs_adjustment': needs_adjustment,
             'reasoning': self._get_reasoning(metrics.avg_outdoor_temp, current_settings, recommended)
         }
@@ -246,6 +257,9 @@ class VentilationOptimizer:
             return {
                 'changed': False,
                 'reason': 'Already optimal',
+                'strategy_name': analysis['recommended_strategy'],
+                'outdoor_temp': analysis['outdoor_temp'],
+                'changes': [],
                 'analysis': analysis
             }
 

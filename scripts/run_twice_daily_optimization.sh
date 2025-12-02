@@ -171,7 +171,8 @@ try:
     )
 
     # Run optimizer
-    actions = optimizer.optimize(max_actions=1)
+    result = optimizer.run_optimization_cycle(hours_back=12, auto_apply=True, max_actions=1)
+    actions = result.get('actions', [])
 
     if actions:
         print(f'✓ Applied {len(actions)} optimization(s):')
