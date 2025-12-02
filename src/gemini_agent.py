@@ -293,11 +293,32 @@ Undvik:
                 generation_config={'temperature': 0.7, 'max_output_tokens': 1024}
             )
 
-            return response.text.strip()
+            # Check if response was blocked or empty
+            if not response.candidates:
+                logger.warning("Gemini response blocked or empty")
+                return "Ursäkta, jag kunde inte generera ett svar. Kan du omformulera din fråga?"
+
+            # Try to get text, handle missing parts
+            try:
+                return response.text.strip()
+            except ValueError:
+                # Response has no valid parts
+                logger.warning("Response has no valid text parts")
+                if response.candidates and response.candidates[0].finish_reason:
+                    reason = response.candidates[0].finish_reason
+                    if reason == 1:  # STOP
+                        return "Svaret blev för långt. Kan du ställa en mer specifik fråga?"
+                    elif reason == 2:  # MAX_TOKENS
+                        return "Svaret blev för långt. Kan du ställa en mer specifik fråga?"
+                    elif reason == 3:  # SAFETY
+                        return "Frågan kunde inte besvaras på grund av säkerhetsskäl. Försök omformulera den."
+                    elif reason == 4:  # RECITATION
+                        return "Svaret innehöll upphovsrättsskyddat material. Kan du fråga på ett annat sätt?"
+                return "Kunde inte generera ett svar. Försök omformulera din fråga."
 
         except Exception as e:
             logger.error(f"Chat failed: {e}")
-            return f"Ursäkta, jag kunde inte svara på den frågan. Fel: {str(e)}"
+            return f"Ursäkta, jag kunde inte svara på den frågan. Prova att omformulera eller ställ en annan fråga."
 
 
 # Convenience function for quick analysis
