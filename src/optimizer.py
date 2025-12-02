@@ -5,8 +5,10 @@ Combines: Performance Score, Cost Tracking, AI Recommendations
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dataclasses import dataclass
+import os
 
 from analyzer import HeatPumpAnalyzer
+from gemini_agent import GeminiAgent, GeminiRecommendation
 
 
 @dataclass
@@ -51,7 +53,7 @@ class OptimizationSuggestion:
 
 
 class SmartOptimizer:
-    """Smart optimization engine"""
+    """Smart optimization engine with Gemini AI"""
 
     # Electricity price
     ELECTRICITY_PRICE_SEK_KWH = 2.0
@@ -62,8 +64,18 @@ class SmartOptimizer:
     # Compressor power
     COMPRESSOR_POWER_KW = 1.5
 
-    def __init__(self, analyzer: HeatPumpAnalyzer):
+    def __init__(self, analyzer: HeatPumpAnalyzer, use_ai: bool = True):
         self.analyzer = analyzer
+        self.use_ai = use_ai
+
+        # Initialize Gemini if API key is available
+        self.gemini_agent = None
+        if use_ai and os.getenv('GOOGLE_API_KEY'):
+            try:
+                self.gemini_agent = GeminiAgent()
+            except Exception as e:
+                print(f"Warning: Could not initialize Gemini agent: {e}")
+                self.use_ai = False
 
     def calculate_performance_score(self, hours_back: int = 72) -> PerformanceScore:
         """
@@ -217,8 +229,110 @@ class SmartOptimizer:
         """
         Generate AI-powered optimization suggestions
 
-        Simple rule-based system for now (can be upgraded to ML later)
+        Uses Gemini AI if available, otherwise falls back to rule-based system
         """
+        # Try Gemini AI first
+        if self.use_ai and self.gemini_agent:
+            try:
+                return self._generate_ai_suggestions(hours_back)
+            except Exception as e:
+                print(f"AI suggestions failed, falling back to rules: {e}")
+
+        # Fallback to rule-based suggestions
+        return self._generate_rule_based_suggestions(hours_back)
+
+    def _generate_ai_suggestions(self, hours_back: int = 72) -> List[OptimizationSuggestion]:
+        """Generate suggestions using Gemini AI"""
+        from database import SessionLocal, ParameterChange
+
+        metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
+
+        # Get yesterday's metrics for trend analysis
+        yesterday_metrics = None
+        if hours_back <= 24:
+            try:
+                yesterday_metrics = self.analyzer.calculate_metrics(
+                    hours_back=24,
+                    end_offset_hours=24
+                )
+            except:
+                pass
+
+        # Build metrics dict for Gemini
+        metrics_dict = {
+            'cop': float(metrics.estimated_cop) if metrics.estimated_cop else None,
+            'degree_minutes': float(metrics.degree_minutes),
+            'delta_t_active': float(metrics.delta_t_active) if metrics.delta_t_active else None,
+            'avg_compressor_frequency': float(metrics.avg_compressor_frequency) if metrics.avg_compressor_frequency else None,
+            'runtime_hours': float(metrics.heating_metrics.runtime_hours) if metrics.heating_metrics else None,
+            'total_energy_in': float(metrics.total_energy_in) if metrics.total_energy_in else None,
+            'total_energy_out': float(metrics.total_energy_out) if metrics.total_energy_out else None,
+            'room_temp': float(metrics.avg_indoor_temp) if metrics.avg_indoor_temp else None,
+            'outdoor_temp': float(metrics.avg_outdoor_temp) if metrics.avg_outdoor_temp else None,
+            'supply_temp': float(metrics.avg_supply_temp) if metrics.avg_supply_temp else None,
+            'return_temp': float(metrics.avg_return_temp) if metrics.avg_return_temp else None,
+        }
+
+        # Add yesterday's metrics if available
+        if yesterday_metrics:
+            metrics_dict['cop_yesterday'] = float(yesterday_metrics.estimated_cop) if yesterday_metrics.estimated_cop else None
+            metrics_dict['degree_minutes_yesterday'] = float(yesterday_metrics.degree_minutes)
+            metrics_dict['delta_t_active_yesterday'] = float(yesterday_metrics.delta_t_active) if yesterday_metrics.delta_t_active else None
+
+        # Get recent parameter changes for context
+        recent_changes = []
+        try:
+            db = SessionLocal()
+            changes = db.query(ParameterChange).order_by(
+                ParameterChange.timestamp.desc()
+            ).limit(10).all()
+
+            recent_changes = [{
+                'timestamp': c.timestamp.isoformat(),
+                'parameter_name': c.parameter_name,
+                'old_value': c.old_value,
+                'new_value': c.new_value,
+                'reason': c.reason
+            } for c in changes]
+
+            db.close()
+        except:
+            pass
+
+        # Get current parameter values
+        current_parameters = {
+            '47011': metrics.curve_offset if metrics.curve_offset else 0,
+            '47007': metrics.heating_curve if metrics.heating_curve else 0,
+        }
+
+        # Call Gemini
+        result = self.gemini_agent.analyze_and_recommend(
+            metrics=metrics_dict,
+            recent_changes=recent_changes,
+            current_parameters=current_parameters
+        )
+
+        # Convert Gemini recommendations to OptimizationSuggestion format
+        suggestions = []
+        for rec in result.get('recommendations', []):
+            suggestions.append(OptimizationSuggestion(
+                priority=rec.get('priority', 'medium'),
+                title=rec.get('parameter_name', 'Optimization'),
+                description=rec.get('reasoning', ''),
+                parameter_name=rec.get('parameter_name', ''),
+                parameter_id=rec.get('parameter_id', ''),
+                current_value=float(rec.get('current_value', 0)),
+                suggested_value=float(rec.get('suggested_value', 0)),
+                expected_cop_improvement=0.2,  # Gemini doesn't provide this yet
+                expected_savings_yearly=800,  # Estimate
+                confidence=float(rec.get('confidence', 0.7)),
+                reasoning=rec.get('reasoning', '')
+            ))
+
+        return suggestions[:3]  # Return top 3
+
+    def _generate_rule_based_suggestions(self, hours_back: int = 72) -> List[OptimizationSuggestion]:
+        """Generate suggestions using rule-based system (fallback)"""
         suggestions = []
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
 

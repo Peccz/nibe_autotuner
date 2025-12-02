@@ -595,6 +595,131 @@ def dismiss_suggestion():
         logger.error(f"Error dismissing suggestion: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ========== GEMINI AI CHAT ==========
+
+@app.route('/api/gemini/chat', methods=['POST'])
+def gemini_chat():
+    """Chat with Gemini AI agent about heat pump performance"""
+    try:
+        from gemini_agent import GeminiAgent
+
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        conversation_history = data.get('history', [])
+
+        if not message:
+            return jsonify({'success': False, 'error': 'Message cannot be empty'}), 400
+
+        # Initialize Gemini agent
+        agent = GeminiAgent()
+
+        # Get response
+        response = agent.chat(message, conversation_history)
+
+        return jsonify({
+            'success': True,
+            'response': response
+        })
+
+    except ValueError as e:
+        logger.error(f"Gemini not configured: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'AI-funktionen är inte aktiverad. Kontakta administratören.'
+        }), 503
+
+    except Exception as e:
+        logger.error(f"Gemini chat error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/gemini/analyze', methods=['POST'])
+def gemini_analyze():
+    """Get AI analysis and recommendations from Gemini"""
+    try:
+        from gemini_agent import GeminiAgent
+
+        data = request.get_json()
+        hours = data.get('hours', 24)
+
+        # Get current metrics
+        metrics = analyzer.calculate_metrics(hours_back=hours)
+
+        # Get yesterday's metrics for comparison
+        yesterday_metrics = None
+        if hours <= 24:
+            try:
+                yesterday_metrics = analyzer.calculate_metrics(
+                    hours_back=24,
+                    end_offset_hours=24
+                )
+            except:
+                pass
+
+        # Build metrics dict
+        metrics_dict = {
+            'cop': float(metrics.estimated_cop) if metrics.estimated_cop else None,
+            'degree_minutes': float(metrics.degree_minutes),
+            'delta_t_active': float(metrics.delta_t_active) if metrics.delta_t_active else None,
+            'avg_compressor_frequency': float(metrics.avg_compressor_frequency) if metrics.avg_compressor_frequency else None,
+            'runtime_hours': float(metrics.heating_metrics.runtime_hours) if metrics.heating_metrics else None,
+            'room_temp': float(metrics.avg_indoor_temp) if metrics.avg_indoor_temp else None,
+            'outdoor_temp': float(metrics.avg_outdoor_temp) if metrics.avg_outdoor_temp else None,
+            'supply_temp': float(metrics.avg_supply_temp) if metrics.avg_supply_temp else None,
+            'return_temp': float(metrics.avg_return_temp) if metrics.avg_return_temp else None,
+        }
+
+        if yesterday_metrics:
+            metrics_dict['cop_yesterday'] = float(yesterday_metrics.estimated_cop) if yesterday_metrics.estimated_cop else None
+            metrics_dict['degree_minutes_yesterday'] = float(yesterday_metrics.degree_minutes)
+
+        # Get recent changes
+        session = SessionMaker()
+        recent_changes = []
+        try:
+            changes = session.query(ParameterChange).order_by(
+                ParameterChange.timestamp.desc()
+            ).limit(5).all()
+            recent_changes = [{
+                'timestamp': c.timestamp.isoformat(),
+                'parameter_name': c.parameter_name,
+                'old_value': c.old_value,
+                'new_value': c.new_value,
+                'reason': c.reason
+            } for c in changes]
+        finally:
+            session.close()
+
+        # Get current parameters
+        current_parameters = {
+            '47011': metrics.curve_offset if metrics.curve_offset else 0,
+            '47007': metrics.heating_curve if metrics.heating_curve else 0,
+        }
+
+        # Initialize Gemini and analyze
+        agent = GeminiAgent()
+        result = agent.analyze_and_recommend(
+            metrics=metrics_dict,
+            recent_changes=recent_changes,
+            current_parameters=current_parameters
+        )
+
+        return jsonify({
+            'success': True,
+            'data': result
+        })
+
+    except ValueError as e:
+        logger.error(f"Gemini not configured: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'AI-funktionen är inte aktiverad. Lägg till GOOGLE_API_KEY i .env'
+        }), 503
+
+    except Exception as e:
+        logger.error(f"Gemini analyze error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ========== QUICK ACTIONS ==========
 
 def get_device_id():

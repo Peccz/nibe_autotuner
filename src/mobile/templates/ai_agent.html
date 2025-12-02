@@ -208,6 +208,35 @@
             </div>
         </div>
     </div>
+
+    <!-- Gemini AI Chat -->
+    <div class="card">
+        <div class="card-header">
+            <h2>💬 Fråga AI-agenten</h2>
+        </div>
+        <div class="card-body">
+            <div id="chatMessages" class="chat-messages">
+                <div class="chat-message ai-message">
+                    <div class="message-content">
+                        <strong>Gemini AI</strong>
+                        <p>Hej! Jag är din AI-assistent. Fråga mig om värmepumpens prestanda, energibesparingar eller optimeringstips!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input-container">
+                <input type="text" id="chatInput" class="chat-input" placeholder="Skriv din fråga här...">
+                <button id="sendChatBtn" class="btn-send" onclick="sendChatMessage()">Skicka</button>
+            </div>
+
+            <div class="quick-questions">
+                <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Snabbfrågor:</p>
+                <button class="quick-question-btn" onclick="askQuickQuestion('Hur kan jag förbättra COP?')">Hur kan jag förbättra COP?</button>
+                <button class="quick-question-btn" onclick="askQuickQuestion('Varför är gradminuterna höga?')">Varför är gradminuterna höga?</button>
+                <button class="quick-question-btn" onclick="askQuickQuestion('Vad betyder Delta T?')">Vad betyder Delta T?</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -363,6 +392,117 @@
     background: #4CAF50;
     color: white;
 }
+
+/* Chat Styles */
+.chat-messages {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.chat-message {
+    margin-bottom: 1rem;
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.user-message .message-content {
+    background: var(--primary-color);
+    color: white;
+    padding: 0.75rem 1rem;
+    border-radius: 12px 12px 4px 12px;
+    margin-left: auto;
+    max-width: 80%;
+    text-align: right;
+}
+
+.ai-message .message-content {
+    background: white;
+    color: #333;
+    padding: 0.75rem 1rem;
+    border-radius: 12px 12px 12px 4px;
+    max-width: 80%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.ai-message .message-content strong {
+    color: var(--primary-color);
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.chat-input-container {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.chat-input {
+    flex: 1;
+    padding: 0.75rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+
+.chat-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.btn-send {
+    padding: 0.75rem 1.5rem;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-send:hover {
+    background: #5a67d8;
+}
+
+.btn-send:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.quick-questions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.quick-question-btn {
+    padding: 0.5rem 1rem;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.quick-question-btn:hover {
+    background: #f8f9fa;
+    border-color: var(--primary-color);
+}
+
+.typing-indicator {
+    padding: 0.5rem;
+    color: #666;
+    font-style: italic;
+}
 </style>
 
 <script>
@@ -484,5 +624,119 @@ async function loadAIData() {
 
 // Load on page load
 document.addEventListener('DOMContentLoaded', loadAIData);
+
+// ========== GEMINI CHAT FUNCTIONS ==========
+
+let conversationHistory = [];
+
+async function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+
+    if (!message) return;
+
+    // Add user message to chat
+    addMessageToChat('user', message);
+
+    // Clear input and disable button
+    input.value = '';
+    const sendBtn = document.getElementById('sendChatBtn');
+    sendBtn.disabled = true;
+    sendBtn.textContent = '...';
+
+    // Show typing indicator
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'typing-indicator';
+    typingDiv.id = 'typingIndicator';
+    typingDiv.textContent = 'AI tänker...';
+    document.getElementById('chatMessages').appendChild(typingDiv);
+    scrollChatToBottom();
+
+    try {
+        const response = await fetch('/api/gemini/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: message,
+                history: conversationHistory
+            })
+        });
+
+        const data = await response.json();
+
+        // Remove typing indicator
+        document.getElementById('typingIndicator')?.remove();
+
+        if (data.success) {
+            addMessageToChat('ai', data.response);
+
+            // Update conversation history
+            conversationHistory.push({ role: 'user', content: message });
+            conversationHistory.push({ role: 'assistant', content: data.response });
+
+            // Keep only last 10 messages
+            if (conversationHistory.length > 10) {
+                conversationHistory = conversationHistory.slice(-10);
+            }
+        } else {
+            addMessageToChat('ai', '❌ ' + (data.error || 'Ett fel uppstod'));
+        }
+
+    } catch (error) {
+        document.getElementById('typingIndicator')?.remove();
+        addMessageToChat('ai', '❌ Kunde inte kontakta AI-agenten: ' + error.message);
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Skicka';
+    }
+}
+
+function addMessageToChat(role, content) {
+    const messagesDiv = document.getElementById('chatMessages');
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${role}-message`;
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+
+    if (role === 'ai') {
+        const strong = document.createElement('strong');
+        strong.textContent = 'Gemini AI';
+        contentDiv.appendChild(strong);
+    }
+
+    const p = document.createElement('p');
+    p.textContent = content;
+    p.style.margin = '0';
+    contentDiv.appendChild(p);
+
+    messageDiv.appendChild(contentDiv);
+    messagesDiv.appendChild(messageDiv);
+
+    scrollChatToBottom();
+}
+
+function scrollChatToBottom() {
+    const messagesDiv = document.getElementById('chatMessages');
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function askQuickQuestion(question) {
+    document.getElementById('chatInput').value = question;
+    sendChatMessage();
+}
+
+// Enable sending message with Enter key
+document.addEventListener('DOMContentLoaded', function() {
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+    }
+});
 </script>
 {% endblock %}
