@@ -654,6 +654,8 @@ async function sendChatMessage() {
 
     try {
         // If this is the first message, fetch system data first
+        let historyToSend = conversationHistory;
+
         if (conversationHistory.length === 0) {
             try {
                 const metricsRes = await fetch('/api/metrics?hours=24');
@@ -695,10 +697,20 @@ OPTIMERINGSMÅL:
 
 Analysera denna data och svara på användarens fråga med konkreta, actionerbara råd.`;
 
-                    conversationHistory.push({ role: 'system', content: systemPrompt });
+                    historyToSend = [{ role: 'system', content: systemPrompt }];
                 }
             } catch (e) {
                 console.warn('Could not fetch metrics:', e);
+            }
+        } else {
+            // For follow-up messages, keep system prompt but limit conversation history
+            // Keep first message (system prompt) + last 8 messages (4 exchanges)
+            const systemMsg = conversationHistory.find(m => m.role === 'system');
+            const userMessages = conversationHistory.filter(m => m.role !== 'system');
+
+            if (systemMsg && userMessages.length > 8) {
+                // Keep system prompt + last 8 user/assistant messages
+                historyToSend = [systemMsg, ...userMessages.slice(-8)];
             }
         }
 
@@ -707,7 +719,7 @@ Analysera denna data och svara på användarens fråga med konkreta, actionerbar
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: message,
-                history: conversationHistory
+                history: historyToSend
             })
         });
 
@@ -723,9 +735,14 @@ Analysera denna data och svara på användarens fråga med konkreta, actionerbar
             conversationHistory.push({ role: 'user', content: message });
             conversationHistory.push({ role: 'assistant', content: data.response });
 
-            // Keep only last 10 messages
-            if (conversationHistory.length > 10) {
-                conversationHistory = conversationHistory.slice(-10);
+            // Keep system prompt + last 10 user/assistant messages (5 exchanges)
+            const systemMsg = conversationHistory.find(m => m.role === 'system');
+            const userMessages = conversationHistory.filter(m => m.role !== 'system');
+
+            if (userMessages.length > 10) {
+                conversationHistory = systemMsg
+                    ? [systemMsg, ...userMessages.slice(-10)]
+                    : userMessages.slice(-10);
             }
         } else {
             addMessageToChat('ai', '❌ ' + (data.error || 'Ett fel uppstod'));
