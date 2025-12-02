@@ -262,8 +262,23 @@ Ge en tydlig, icke-teknisk förklaring på svenska."""
             AI response
         """
         try:
+            # Use a simpler chat-focused prompt instead of the JSON system prompt
+            chat_prompt = """Du är en vänlig expert på värmepumpsoptimering, specifikt Nibe F730 exhaust air heat pump.
+
+Svara ALLTID på svenska med naturligt språk (INTE JSON).
+Ge kortfattade, praktiska råd baserat på användarens data.
+Om användaren frågar om prestanda eller optimering, analysera den tillhandahållna datan och ge konkreta rekommendationer.
+
+Exempel på bra svar:
+"Din COP på 2.8 är lite låg för detta väder. Jag rekommenderar att sänka värmekurvan med 1 steg eftersom det är relativt milt ute."
+
+Undvik:
+- JSON-format
+- Att be om data som redan tillhandahållits
+- Långa tekniska utläggningar"""
+
             # Build conversation context
-            messages = [self.system_prompt]
+            messages = [chat_prompt]
 
             if conversation_history:
                 for msg in conversation_history[-10:]:  # Last 10 messages
