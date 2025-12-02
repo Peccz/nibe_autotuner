@@ -43,7 +43,7 @@ class GeminiAgent:
         genai.configure(api_key=self.api_key)
 
         # Use Gemini 2.5 Flash - fast, cost-effective, powerful
-        self.model = genai.GenerativeModel('gemini-2.5-flash-002')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
 
         # System prompt for heat pump optimization
         self.system_prompt = """Du är en expert på värmepumpsoptimering, specifikt Nibe F730 exhaust air heat pump.
