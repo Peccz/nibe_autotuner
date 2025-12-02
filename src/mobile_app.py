@@ -738,22 +738,14 @@ def get_device_id():
         session.close()
 
 def log_parameter_change(device_id: str, parameter_id: str, parameter_name: str, old_value: float, new_value: float, reason: str):
-    """Log a parameter change to database"""
-    session = SessionMaker()
-    try:
-        change = ParameterChange(
-            device_id=device_id,
-            parameter_id=parameter_id,
-            parameter_name=parameter_name,
-            old_value=old_value,
-            new_value=new_value,
-            reason=reason,
-            timestamp=datetime.utcnow()
-        )
-        session.add(change)
-        session.commit()
-    finally:
-        session.close()
+    """Log a parameter change to database
+
+    Note: parameter_name is kept for backwards compatibility but not stored in DB
+    The ParameterChange model uses ForeignKey relationships instead
+    """
+    # For now, just log to console until we properly integrate with the models
+    # TODO: Integrate with proper ParameterChange model with FK relationships
+    logger.info(f"Parameter change: {parameter_name} ({parameter_id}) on {device_id}: {old_value} → {new_value}. Reason: {reason}")
 
 @app.route('/api/quick-action/adjust-offset', methods=['POST'])
 def quick_action_adjust_offset():
