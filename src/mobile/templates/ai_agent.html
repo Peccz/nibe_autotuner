@@ -682,14 +682,14 @@ Varmvatten: Via värmepump
 Styrning: MyUplink API via nibe_autotuner
 AI-system: Autonomt lärande med A/B-tester
 
-TILLGÄNGLIGA PARAMETRAR:
+TILLGÄNGLIGA PARAMETRAR (verifierade för Nibe F730):
 - 47011: Room temp setpoint (14-30°C) - Måltemperatur rumssensor
-- 47041: Room sensor factor (0-10) - Rumssensorns påverkan
-- 47015: Room temp setpoint S4 (5-30°C) - Extra värmebehov
-- 47007: Offset S4 (-10 till +10°C) - Kurvförskjutning
-- 47020: Min supply temp (-10 till +30°C) - Lägsta framledningstemp
-- 47019: Max supply temp (20-70°C) - Högsta framledningstemp
-- 43437: Cirkulationspump GP1 (%) - Pumphastighet
+- 47041: Room sensor factor (0-10) - Rumssensorns påverkan på reglering
+- 47015: Room temp setpoint S4 (5-30°C) - Extra värmebehov för S4-läge
+- 47020: Min supply temp (-10 till +30°C) - Lägsta tillåtna framledningstemp
+- 47019: Max supply temp (20-70°C) - Högsta tillåtna framledningstemp
+
+OBS: Vissa vanliga parametrar (som 47007 Offset S4, 43437 Pumphastighet) kan vara read-only eller ej tillgängliga via API. Rekommendera endast parametrar du vet finns.
 
 AKTUELL PRESTANDA (senaste 24h):
 COP: ${m.cop ? m.cop.toFixed(2) : 'N/A'}
