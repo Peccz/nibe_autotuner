@@ -491,6 +491,7 @@ def get_optimization_suggestions():
         suggestions = optimizer.generate_suggestions(hours_back=hours)
 
         data = [{
+            'id': f"{s.parameter_id}_{s.suggested_value}",  # Unique ID for each suggestion
             'priority': s.priority,
             'title': s.title,
             'description': s.description,
@@ -507,6 +508,75 @@ def get_optimization_suggestions():
         return jsonify({'success': True, 'data': data})
 
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/optimization-suggestions/apply', methods=['POST'])
+def apply_suggestion():
+    """Apply an AI-powered optimization suggestion"""
+    try:
+        data = request.get_json()
+        parameter_id = data.get('parameter_id')
+        parameter_name = data.get('parameter_name')
+        current_value = data.get('current_value')
+        new_value = data.get('suggested_value')
+        reasoning = data.get('reasoning', 'AI suggestion applied')
+
+        if not all([parameter_id, parameter_name, new_value is not None]):
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+        device_id = get_device_id()
+        if not device_id:
+            return jsonify({'success': False, 'error': 'Device not found'}), 404
+
+        # Apply the change via API
+        api_client.set_point_value(device_id, parameter_id, new_value)
+
+        # Log the change
+        log_parameter_change(
+            device_id=device_id,
+            parameter_id=parameter_id,
+            parameter_name=parameter_name,
+            old_value=current_value,
+            new_value=new_value,
+            reason=f"AI Recommendation: {reasoning[:100]}"
+        )
+
+        logger.info(f"Applied AI suggestion: {parameter_name} {current_value} → {new_value}")
+
+        return jsonify({
+            'success': True,
+            'message': f'{parameter_name} har ändrats från {current_value} till {new_value}',
+            'parameter_name': parameter_name,
+            'old_value': current_value,
+            'new_value': new_value
+        })
+
+    except Exception as e:
+        logger.error(f"Error applying suggestion: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/optimization-suggestions/dismiss', methods=['POST'])
+def dismiss_suggestion():
+    """Dismiss an AI-powered optimization suggestion"""
+    try:
+        data = request.get_json()
+        suggestion_id = data.get('id')
+        reason = data.get('reason', 'User dismissed')
+
+        if not suggestion_id:
+            return jsonify({'success': False, 'error': 'Missing suggestion ID'}), 400
+
+        # For now, just log the dismissal
+        # In the future, we could store this in a database to learn user preferences
+        logger.info(f"Suggestion dismissed: {suggestion_id}, reason: {reason}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Rekommendation avfärdad'
+        })
+
+    except Exception as e:
+        logger.error(f"Error dismissing suggestion: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== QUICK ACTIONS ==========
