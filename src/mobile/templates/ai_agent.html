@@ -661,7 +661,24 @@ async function sendChatMessage() {
 
                 if (metricsData.success) {
                     const m = metricsData.data;
-                    const systemPrompt = `SYSTEMDATA (senaste 24h):
+                    const systemPrompt = `SYSTEMKONFIGURATION:
+Värmepump: Nibe F730 - Frånluftsvärmepump
+Hus: Villa, ~140 m²
+Värmesystem: Golvvärme med shuntgrupp
+Varmvatten: Via värmepump
+Styrning: MyUplink API via nibe_autotuner
+AI-system: Autonomt lärande med A/B-tester
+
+TILLGÄNGLIGA PARAMETRAR:
+- 47011: Room temp setpoint (14-30°C) - Måltemperatur rumssensor
+- 47041: Room sensor factor (0-10) - Rumssensorns påverkan
+- 47015: Room temp setpoint S4 (5-30°C) - Extra värmebehov
+- 47007: Offset S4 (-10 till +10°C) - Kurvförskjutning
+- 47020: Min supply temp (-10 till +30°C) - Lägsta framledningstemp
+- 47019: Max supply temp (20-70°C) - Högsta framledningstemp
+- 43437: Cirkulationspump GP1 (%) - Pumphastighet
+
+AKTUELL PRESTANDA (senaste 24h):
 COP: ${m.cop ? m.cop.toFixed(2) : 'N/A'}
 Gradminuter: ${m.degree_minutes ? m.degree_minutes.toFixed(1) : 'N/A'}
 Delta T: ${m.delta_t_active ? m.delta_t_active.toFixed(1) : 'N/A'}°C
@@ -670,7 +687,13 @@ Ute: ${m.outdoor_temp ? m.outdoor_temp.toFixed(1) : 'N/A'}°C
 Framledning: ${m.supply_temp ? m.supply_temp.toFixed(1) : 'N/A'}°C
 Retur: ${m.return_temp ? m.return_temp.toFixed(1) : 'N/A'}°C
 
-Analysera denna data och svara på användarens fråga.`;
+OPTIMERINGSMÅL:
+1. Maximera COP (mål: >3.0)
+2. Minimera gradminuter (mål: <100)
+3. Håll komfort (20-22°C inne)
+4. Optimera Delta T (optimalt: 5-7°C)
+
+Analysera denna data och svara på användarens fråga med konkreta, actionerbara råd.`;
 
                     conversationHistory.push({ role: 'system', content: systemPrompt });
                 }
