@@ -290,7 +290,7 @@ Undvik:
 
             response = self.model.generate_content(
                 '\n\n'.join(messages),
-                generation_config={'temperature': 0.7, 'max_output_tokens': 1024}
+                generation_config={'temperature': 0.7, 'max_output_tokens': 2048}
             )
 
             # Check if response was blocked or empty
