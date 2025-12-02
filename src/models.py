@@ -251,6 +251,57 @@ class RecommendationResult(Base):
         return f"<Result(rec={self.recommendation_id}, metric={self.metric_name}, change={self.change_percent}%)>"
 
 
+class PlannedTest(Base):
+    """AI-proposed tests waiting to be executed"""
+    __tablename__ = 'planned_tests'
+
+    id = Column(Integer, primary_key=True)
+    parameter_id = Column(Integer, ForeignKey('parameters.id'), nullable=False)
+    current_value = Column(Float)
+    proposed_value = Column(Float)
+    hypothesis = Column(String(500))  # Why we think this will help
+    expected_improvement = Column(String(200))  # Expected benefit
+    priority = Column(String(20))  # 'high', 'medium', 'low'
+    confidence = Column(Float)  # 0.0-1.0
+    reasoning = Column(String(1000))  # AI reasoning
+    status = Column(String(20), default='pending')  # 'pending', 'active', 'completed', 'cancelled'
+    proposed_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    result_id = Column(Integer, ForeignKey('ab_test_results.id'))
+
+    # Relationships
+    parameter = relationship('Parameter')
+    result = relationship('ABTestResult', foreign_keys=[result_id])
+
+    def __repr__(self):
+        return f"<PlannedTest(id={self.id}, param={self.parameter.parameter_name if self.parameter else 'unknown'}, priority={self.priority}, status={self.status})>"
+
+
+class AIDecisionLog(Base):
+    """Log of all AI agent decisions"""
+    __tablename__ = 'ai_decision_log'
+
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    action = Column(String(20))  # 'adjust', 'hold', 'investigate'
+    parameter_id = Column(Integer, ForeignKey('parameters.id'))
+    current_value = Column(Float)
+    suggested_value = Column(Float)
+    reasoning = Column(String(2000))
+    confidence = Column(Float)
+    expected_impact = Column(String(500))
+    applied = Column(Boolean, default=False)  # Whether change was actually applied
+    parameter_change_id = Column(Integer, ForeignKey('parameter_changes.id'))
+
+    # Relationships
+    parameter = relationship('Parameter')
+    parameter_change = relationship('ParameterChange', foreign_keys=[parameter_change_id])
+
+    def __repr__(self):
+        return f"<AIDecision(id={self.id}, action={self.action}, applied={self.applied})>"
+
+
 # Database initialization
 def init_db(database_url='sqlite:///./data/nibe_autotuner.db'):
     """Initialize the database"""

@@ -32,3 +32,6 @@ loguru>=0.7.0
 pyyaml>=6.0
 matplotlib>=3.8.0
 streamlit>=1.28.0
+
+# AI/ML (optional - for autonomous AI agent)
+anthropic>=0.18.0

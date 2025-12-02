@@ -747,6 +747,252 @@ def auto_optimize_run():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# AI Agent Routes
+@app.route('/ai-agent')
+def ai_agent():
+    """AI Agent page"""
+    return render_template('ai_agent.html')
+
+@app.route('/api/ai-agent/status')
+def get_ai_agent_status():
+    """Get AI agent status"""
+    session = SessionMaker()
+    try:
+        from models import AIDecisionLog
+        import os
+
+        # Count total analyses and adjustments
+        total_analyses = session.query(AIDecisionLog).count()
+        total_adjustments = session.query(AIDecisionLog).filter_by(applied=True).count()
+
+        # Get last run
+        last_decision = session.query(AIDecisionLog).order_by(
+            AIDecisionLog.timestamp.desc()
+        ).first()
+
+        # Estimate monthly cost (assuming 60 analyses/month at ~0.10 kr each)
+        monthly_cost_sek = total_analyses * 0.10 / max(1, total_analyses / 60)
+
+        status = {
+            'enabled': os.getenv('ANTHROPIC_API_KEY') is not None,
+            'last_run': last_decision.timestamp.isoformat() if last_decision else None,
+            'next_run': 'Se CRON schema',  # Could be calculated from crontab
+            'total_analyses': total_analyses,
+            'total_adjustments': total_adjustments,
+            'monthly_cost_sek': monthly_cost_sek
+        }
+
+        return jsonify({'success': True, 'data': status})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        session.close()
+
+@app.route('/api/ai-agent/latest-decision')
+def get_latest_ai_decision():
+    """Get latest AI decision"""
+    session = SessionMaker()
+    try:
+        from models import AIDecisionLog, Parameter
+
+        decision_log = session.query(AIDecisionLog).order_by(
+            AIDecisionLog.timestamp.desc()
+        ).first()
+
+        if not decision_log:
+            return jsonify({'success': True, 'data': None})
+
+        decision = {
+            'timestamp': decision_log.timestamp.isoformat(),
+            'action': decision_log.action,
+            'parameter_name': decision_log.parameter.parameter_name if decision_log.parameter else None,
+            'old_value': decision_log.current_value,
+            'new_value': decision_log.suggested_value,
+            'reasoning': decision_log.reasoning,
+            'confidence': decision_log.confidence,
+            'expected_impact': decision_log.expected_impact,
+            'applied': decision_log.applied
+        }
+
+        return jsonify({'success': True, 'data': decision})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        session.close()
+
+@app.route('/api/ai-agent/planned-tests')
+def get_planned_tests():
+    """Get planned tests"""
+    session = SessionMaker()
+    try:
+        from models import PlannedTest
+
+        tests = session.query(PlannedTest).filter_by(status='pending').order_by(
+            PlannedTest.priority.desc(),
+            PlannedTest.confidence.desc()
+        ).all()
+
+        data = []
+        for test in tests:
+            data.append({
+                'id': test.id,
+                'parameter_name': test.parameter.parameter_name if test.parameter else 'Unknown',
+                'current_value': test.current_value,
+                'proposed_value': test.proposed_value,
+                'hypothesis': test.hypothesis,
+                'expected_improvement': test.expected_improvement,
+                'priority': test.priority,
+                'confidence': test.confidence * 100,
+                'reasoning': test.reasoning,
+                'scheduled_date': test.proposed_at.isoformat()
+            })
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        session.close()
+
+@app.route('/api/ai-agent/active-tests')
+def get_active_tests():
+    """Get active tests"""
+    session = SessionMaker()
+    try:
+        from models import PlannedTest
+
+        tests = session.query(PlannedTest).filter_by(status='active').all()
+
+        data = []
+        for test in tests:
+            if test.started_at:
+                elapsed = (datetime.utcnow() - test.started_at).total_seconds() / 3600
+                progress = min(100, (elapsed / 48) * 100)  # 48h test period
+                hours_remaining = max(0, 48 - elapsed)
+            else:
+                progress = 0
+                hours_remaining = 48
+
+            data.append({
+                'id': test.id,
+                'parameter_name': test.parameter.parameter_name if test.parameter else 'Unknown',
+                'old_value': test.current_value,
+                'new_value': test.proposed_value,
+                'started_date': test.started_at.isoformat() if test.started_at else None,
+                'end_date': (test.started_at + timedelta(hours=48)).isoformat() if test.started_at else None,
+                'progress': int(progress),
+                'hours_remaining': int(hours_remaining)
+            })
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        session.close()
+
+@app.route('/api/ai-agent/completed-tests')
+def get_completed_tests():
+    """Get completed tests with results"""
+    session = SessionMaker()
+    try:
+        from models import PlannedTest, ABTestResult
+
+        limit = request.args.get('limit', 10, type=int)
+
+        tests = session.query(PlannedTest).filter_by(status='completed').join(
+            ABTestResult, PlannedTest.result_id == ABTestResult.id, isouter=True
+        ).order_by(PlannedTest.completed_at.desc()).limit(limit).all()
+
+        data = []
+        for test in tests:
+            result = test.result if test.result else None
+
+            data.append({
+                'id': test.id,
+                'parameter_name': test.parameter.parameter_name if test.parameter else 'Unknown',
+                'old_value': test.current_value,
+                'new_value': test.proposed_value,
+                'completed_date': test.completed_at.isoformat() if test.completed_at else None,
+                'success': result.success_score > 70 if result else False,
+                'confidence': int(test.confidence * 100),
+                'cop_before': result.cop_before if result else None,
+                'cop_after': result.cop_after if result else None,
+                'cop_change': result.cop_change_percent if result else None,
+                'result_summary': test.hypothesis,
+                'recommendation': result.recommendation if result else None
+            })
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        session.close()
+
+@app.route('/api/ai-agent/learning-stats')
+def get_learning_stats():
+    """Get learning statistics"""
+    session = SessionMaker()
+    try:
+        from models import PlannedTest, ABTestResult
+
+        # Get all completed tests with results
+        completed_tests = session.query(PlannedTest).filter_by(status='completed').join(
+            ABTestResult, PlannedTest.result_id == ABTestResult.id
+        ).all()
+
+        if not completed_tests:
+            return jsonify({'success': True, 'data': {
+                'success_rate': 0,
+                'avg_cop_improvement': 0,
+                'avg_confidence': 0,
+                'total_tests': 0,
+                'best_findings': []
+            }})
+
+        # Calculate statistics
+        successes = sum(1 for t in completed_tests if t.result.success_score > 70)
+        success_rate = (successes / len(completed_tests)) * 100
+
+        cop_improvements = [t.result.cop_change_percent for t in completed_tests if t.result.cop_change_percent]
+        avg_cop_improvement = sum(cop_improvements) / len(cop_improvements) if cop_improvements else 0
+
+        confidences = [t.confidence * 100 for t in completed_tests]
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+
+        # Best findings (top 3 by COP improvement)
+        best_tests = sorted(
+            [t for t in completed_tests if t.result.cop_change_percent and t.result.cop_change_percent > 0],
+            key=lambda t: t.result.cop_change_percent,
+            reverse=True
+        )[:3]
+
+        best_findings = []
+        for test in best_tests:
+            best_findings.append({
+                'parameter_name': test.parameter.parameter_name if test.parameter else 'Unknown',
+                'improvement': test.result.cop_change_percent,
+                'description': test.hypothesis
+            })
+
+        stats = {
+            'success_rate': success_rate,
+            'avg_cop_improvement': avg_cop_improvement,
+            'avg_confidence': avg_confidence,
+            'total_tests': len(completed_tests),
+            'best_findings': best_findings
+        }
+
+        return jsonify({'success': True, 'data': stats})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        session.close()
+
 @app.route('/manifest.json')
 def manifest():
     """PWA manifest"""
