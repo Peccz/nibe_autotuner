@@ -15,20 +15,20 @@
 <div id="aiContent" style="display: none;">
     <div class="page-header">
         <h1>🤖 AI-Agent</h1>
-        <p class="subtitle">Intelligent rådgivning med Google Gemini AI</p>
+        <p class="subtitle">Autonom optimering med Google Gemini AI + Premium Manage</p>
     </div>
 
     <!-- Info Banner -->
-    <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 1rem;">
+    <div class="card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; margin-bottom: 1rem;">
         <div class="card-body">
-            <h3 style="color: white; margin-top: 0;">💡 Rådgivande System</h3>
+            <h3 style="color: white; margin-top: 0;">✨ Premium Manage Aktiverat</h3>
             <p style="margin-bottom: 0.5rem;">
-                AI-agenten analyserar värmepumpens prestanda och ger intelligenta rekommendationer,
-                men gör <strong>inga automatiska ändringar</strong>.
+                AI-agenten kan nu göra <strong>automatiska justeringar</strong> av värmepumpens parametrar
+                baserat på prestanda-analys och inlärda mönster.
             </p>
             <p style="font-size: 0.9rem; margin-bottom: 0;">
-                📱 Justera parametrar manuellt i värmepumpen (Meny 4.1) eller via MyUplink-appen
-                baserat på AI:ns rekommendationer.
+                🎯 Systemet följer strikta säkerhetsregler och loggar alla ändringar.
+                Du kan alltid ångra justeringar manuellt i värmepumpen eller MyUplink-appen.
             </p>
         </div>
     </div>
@@ -195,39 +195,39 @@
                 <span class="schedule-icon">🌅</span>
                 <div class="schedule-details">
                     <div class="schedule-time">06:00</div>
-                    <div class="schedule-desc">Morgonanalys & rekommendationer</div>
+                    <div class="schedule-desc">Morgonoptimering (automatisk justering)</div>
                 </div>
             </div>
             <div class="schedule-item">
                 <span class="schedule-icon">🌙</span>
                 <div class="schedule-details">
                     <div class="schedule-time">19:00</div>
-                    <div class="schedule-desc">Kvällsanalys & rekommendationer</div>
+                    <div class="schedule-desc">Kvällsoptimering (automatisk justering)</div>
                 </div>
             </div>
 
             <div class="schedule-settings">
                 <p class="info-text">
-                    AI-agenten analyserar systemet två gånger per dag och genererar intelligenta
-                    rekommendationer baserat på väder, prestanda och inlärda mönster.
+                    AI-agenten analyserar systemet två gånger per dag och kan göra automatiska
+                    justeringar av offset och andra parametrar baserat på väder, prestanda och inlärda mönster.
                 </p>
                 <p class="info-text">
-                    <strong>⚠️ OBS: MyUplink API-begränsningar</strong>
+                    <strong>✨ Premium Manage API</strong>
                 </p>
                 <p class="info-text" style="font-size: 0.9rem; color: #666;">
-                    MyUplink API v2 för F730 stödjer inte automatisk justering av värmeparametrar
-                    (värmekurva, offset, pumphastighet). Systemet fungerar därför som ett
-                    <strong>rådgivande system</strong> - AI:n analyserar och rekommenderar,
-                    men du justerar manuellt i värmepumpen eller via MyUplink-appen.
+                    Med Premium Manage-prenumerationen kan AI:n göra automatiska justeringar
+                    via PATCH /v2/devices/{id}/points endpoint. Alla ändringar loggas i databasen
+                    och kan ses under "Historik" eller i parameterändringsl loggen.
                 </p>
                 <p class="info-text">
-                    <strong>Säkerhetsregler för rekommendationer:</strong>
+                    <strong>Säkerhetsregler för automatiska justeringar:</strong>
                 </p>
                 <ul>
-                    <li>Minst 70% konfidens krävs för rekommendationer</li>
+                    <li>Max 1 justering per 48h per parameter</li>
+                    <li>Minst 70% konfidens krävs för justeringar</li>
                     <li>Inomhustemperatur hålls alltid ≥20°C</li>
-                    <li>Rekommendationer inkluderar manuella justeringsinstruktioner</li>
-                    <li>Du har full kontroll över alla parameterjusteringar</li>
+                    <li>Endast små stegvisa ändringar (max ±2 per gång)</li>
+                    <li>Alla ändringar loggas och kan ångras</li>
                 </ul>
             </div>
         </div>

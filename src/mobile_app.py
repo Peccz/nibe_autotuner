@@ -757,11 +757,7 @@ def log_parameter_change(device_id: str, parameter_id: str, parameter_name: str,
 
 @app.route('/api/quick-action/adjust-offset', methods=['POST'])
 def quick_action_adjust_offset():
-    """Quick action: Get offset adjustment recommendation
-
-    Note: MyUplink API v2 for F730 does not support writing to heating parameters.
-    This endpoint now returns recommendations instead of making changes.
-    """
+    """Quick action: Adjust curve offset by delta (Premium Manage required)"""
     try:
         data = request.get_json()
         delta = data.get('delta', 0)
@@ -777,25 +773,24 @@ def quick_action_adjust_offset():
         current_data = api_client.get_point_data(device_id, '47011')
         current_value = current_data.get('value')
 
-        # Calculate recommended new value
+        # Calculate new value (ensure it's an integer)
         new_value = int(round(current_value + delta))
 
         # Clamp to valid range (-10 to 10)
         new_value = max(-10, min(10, new_value))
 
-        reason = f"{'Höj' if delta > 0 else 'Sänk'} offset ({delta:+d})"
+        # Set new value using Premium Manage API
+        api_client.set_point_value(device_id, '47011', new_value)
+
+        # Log the change
+        reason = f"Quick Action: {'Höj' if delta > 0 else 'Sänk'} offset ({delta:+d})"
+        log_parameter_change(device_id, '47011', 'Kurvjustering', current_value, new_value, reason)
 
         return jsonify({
             'success': True,
-            'message': f'Rekommendation: Ändra offset från {current_value} till {new_value}',
-            'recommendation': {
-                'parameter': 'Offset (47011)',
-                'current_value': current_value,
-                'recommended_value': new_value,
-                'reason': reason,
-                'manual_adjustment': 'Justera manuellt i värmepumpen: Meny 4.1.1'
-            },
-            'note': 'MyUplink API stödjer inte automatisk justering. Justera manuellt i värmepumpen eller via MyUplink-appen.'
+            'message': f'Kurvjustering ändrad från {current_value} till {new_value}',
+            'old_value': current_value,
+            'new_value': new_value
         })
 
     except Exception as e:
@@ -803,50 +798,46 @@ def quick_action_adjust_offset():
 
 @app.route('/api/quick-action/optimize-efficiency', methods=['POST'])
 def quick_action_optimize_efficiency():
-    """Quick action: Get optimization recommendations for COP
-
-    Note: MyUplink API v2 for F730 does not support writing to heating parameters.
-    This endpoint now returns recommendations instead of making changes.
-    """
+    """Quick action: Optimize for maximum COP (Premium Manage required)"""
     try:
         device_id = get_device_id()
         if not device_id:
             return jsonify({'success': False, 'error': 'No device found'}), 404
 
-        recommendations = []
+        changes = []
         metrics = analyzer.calculate_metrics(hours_back=72)
 
-        # Strategy: Recommend lower room temp setpoint if COP is low and indoor temp allows
+        # Strategy: Lower room temp setpoint if COP is low and indoor temp allows
         if metrics.estimated_cop and metrics.estimated_cop < 3.5 and metrics.avg_indoor_temp > 20.5:
             # Get current room temp setpoint (47011)
             current_setpoint_data = api_client.get_point_data(device_id, '47011')
             current_setpoint = current_setpoint_data.get('value')
 
-            # Recommend lowering by 0.5°C
+            # Lower by 0.5°C
             new_setpoint = round(current_setpoint - 0.5, 1)
             new_setpoint = max(18.0, min(24.0, new_setpoint))
 
             if new_setpoint != current_setpoint:
-                recommendations.append({
-                    'parameter': 'Offset (47011)',
-                    'current_value': current_setpoint,
-                    'recommended_value': new_setpoint,
-                    'reason': f'Sänk offset för att förbättra COP (nuvarande: {metrics.estimated_cop:.2f})',
-                    'manual_adjustment': 'Justera manuellt i värmepumpen: Meny 4.1.1'
+                api_client.set_point_value(device_id, '47011', new_setpoint)
+                log_parameter_change(device_id, '47011', 'Room temp setpoint', current_setpoint, new_setpoint,
+                                    'Quick Action: Optimera för COP')
+                changes.append({
+                    'parameter': 'Room temp setpoint',
+                    'old_value': current_setpoint,
+                    'new_value': new_setpoint
                 })
 
-        if recommendations:
+        if changes:
             return jsonify({
                 'success': True,
-                'message': 'Rekommendationer för COP-optimering',
-                'recommendations': recommendations,
-                'note': 'MyUplink API stödjer inte automatisk justering av dessa parametrar. Justera manuellt i värmepumpen eller via MyUplink-appen.'
+                'message': 'Systemet optimerat för maximal COP',
+                'changes': changes
             })
         else:
             return jsonify({
                 'success': True,
-                'message': 'Systemet är redan optimalt för COP, inga justeringar rekommenderas',
-                'recommendations': []
+                'message': 'Systemet är redan optimalt för COP, inga ändringar behövs',
+                'changes': []
             })
 
     except Exception as e:
@@ -854,58 +845,55 @@ def quick_action_optimize_efficiency():
 
 @app.route('/api/quick-action/optimize-comfort', methods=['POST'])
 def quick_action_optimize_comfort():
-    """Quick action: Get comfort optimization recommendations
-
-    Note: MyUplink API v2 for F730 does not support writing to heating parameters.
-    This endpoint now returns recommendations instead of making changes.
-    """
+    """Quick action: Optimize for comfort (21°C indoor temp, Premium Manage required)"""
     try:
         device_id = get_device_id()
         if not device_id:
             return jsonify({'success': False, 'error': 'No device found'}), 404
 
-        recommendations = []
+        changes = []
         metrics = analyzer.calculate_metrics(hours_back=72)
 
-        # Strategy: Recommend offset adjustment to reach 21°C
+        # Strategy: Adjust offset to reach 21°C
         target_temp = 21.0
         current_temp = metrics.avg_indoor_temp
 
         if current_temp:
             temp_diff = target_temp - current_temp
 
-            # If more than 0.5°C off target, recommend offset adjustment
+            # If more than 0.5°C off target, adjust offset
             if abs(temp_diff) > 0.5:
                 # Get current offset (47011)
                 current_offset_data = api_client.get_point_data(device_id, '47011')
                 current_offset = current_offset_data.get('value')
 
-                # Calculate recommended offset (1 step per degree difference, rounded to integer)
+                # Adjust offset (1 step per degree difference, rounded to integer)
                 delta = int(round(temp_diff))
                 delta = max(-2, min(2, delta))  # Limit to +/-2 steps
                 new_offset = int(round(current_offset + delta))
                 new_offset = max(-10, min(10, new_offset))
 
                 if new_offset != current_offset:
-                    recommendations.append({
-                        'parameter': 'Offset (47011)',
-                        'current_value': current_offset,
-                        'recommended_value': new_offset,
-                        'reason': f'Justera offset för att nå måltemperatur 21°C (nu {current_temp:.1f}°C)',
-                        'manual_adjustment': 'Justera manuellt i värmepumpen: Meny 4.1.1'
+                    api_client.set_point_value(device_id, '47011', new_offset)
+                    log_parameter_change(device_id, '47011', 'Kurvjustering', current_offset, new_offset,
+                                        f'Quick Action: Optimera komfort (mål 21°C, nu {current_temp:.1f}°C)')
+                    changes.append({
+                        'parameter': 'Kurvjustering',
+                        'old_value': current_offset,
+                        'new_value': new_offset
                     })
 
-        if recommendations:
+        if changes:
             return jsonify({
                 'success': True,
-                'message': f'Rekommendation för komfort. Nuvarande temp: {current_temp:.1f}°C, mål: 21°C',
-                'recommendations': recommendations
+                'message': f'Systemet justerat för komfort. Nuvarande temp: {current_temp:.1f}°C, mål: 21°C',
+                'changes': changes
             })
         else:
             return jsonify({
                 'success': True,
-                'message': f'Temperaturen är redan bra ({current_temp:.1f}°C), inga justeringar rekommenderas',
-                'recommendations': []
+                'message': f'Temperaturen är redan bra ({current_temp:.1f}°C), inga ändringar behövs',
+                'changes': []
             })
 
     except Exception as e:

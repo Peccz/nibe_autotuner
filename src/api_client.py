@@ -169,7 +169,7 @@ class MyUplinkClient:
 
     def set_point_value(self, device_id: str, point_id: str, value: float) -> Dict:
         """
-        Set a data point value (requires WRITESYSTEM permission)
+        Set a data point value (requires WRITESYSTEM permission and Premium Manage subscription)
 
         Args:
             device_id: Device ID
@@ -177,13 +177,16 @@ class MyUplinkClient:
             value: New value to set
 
         Returns:
-            Response dictionary
+            Response dictionary like {"47011": "modified"}
         """
         logger.info(f"Setting point {point_id} on device {device_id} to {value}...")
-        payload = {'value': value}
+
+        # Premium Manage uses PATCH /v2/devices/{device_id}/points with format {parameter_id: value}
+        payload = {point_id: value}
+
         return self._make_request(
             'PATCH',
-            f'/v2/devices/{device_id}/points/{point_id}',
+            f'/v2/devices/{device_id}/points',
             json=payload
         )
 
