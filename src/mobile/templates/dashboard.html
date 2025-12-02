@@ -141,6 +141,98 @@
     </div>
 </section>
 
+<!-- Ventilation Status -->
+<section class="section" id="ventilationSection" style="display: none;">
+    <h2 class="section-title">💨 Ventilation</h2>
+    <div class="card">
+        <div class="card-header">
+            <div class="strategy-badge" id="ventStrategyBadge">-</div>
+            <span class="ventilation-status" id="ventStatus"></span>
+        </div>
+        <div class="card-body">
+            <div class="vent-metrics-grid">
+                <div class="vent-metric">
+                    <div class="vent-metric-label">Frånluftstemp</div>
+                    <div class="vent-metric-value" id="exhaustTemp">-</div>
+                </div>
+                <div class="vent-metric">
+                    <div class="vent-metric-label">Fläkthastighet</div>
+                    <div class="vent-metric-value" id="fanSpeed">-</div>
+                </div>
+                <div class="vent-metric">
+                    <div class="vent-metric-label">Temp-lyft</div>
+                    <div class="vent-metric-value" id="tempLift">-</div>
+                </div>
+                <div class="vent-metric">
+                    <div class="vent-metric-label">RF-drop (est)</div>
+                    <div class="vent-metric-value" id="rhDrop">-</div>
+                </div>
+            </div>
+            <div class="ventilation-reasoning" id="ventReasoning" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; font-size: 0.9rem; color: #666;">
+                <!-- Reasoning will be inserted here -->
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+.strategy-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.strategy-badge.warm {
+    background: #ff9800;
+    color: white;
+}
+
+.strategy-badge.mild {
+    background: #4CAF50;
+    color: white;
+}
+
+.strategy-badge.cold {
+    background: #2196F3;
+    color: white;
+}
+
+.strategy-badge.extreme_cold {
+    background: #9C27B0;
+    color: white;
+}
+
+.ventilation-status {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.vent-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.vent-metric {
+    text-align: center;
+}
+
+.vent-metric-label {
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 0.25rem;
+}
+
+.vent-metric-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+</style>
+
 <!-- Delta T Breakdown -->
 <section class="section">
     <h2 class="section-title">📊 Delta T Analys</h2>
@@ -269,17 +361,19 @@ async function loadDashboard() {
 
     try {
         // Load all data in parallel
-        const [metricsRes, scoreRes, costRes, suggestionsRes] = await Promise.all([
+        const [metricsRes, scoreRes, costRes, suggestionsRes, ventRes] = await Promise.all([
             fetch(`/api/metrics?hours=${hours}`),
             fetch(`/api/performance-score?hours=${hours}`),
             fetch(`/api/cost-analysis?hours=${hours}`),
-            fetch(`/api/optimization-suggestions?hours=${hours}`)
+            fetch(`/api/optimization-suggestions?hours=${hours}`),
+            fetch(`/api/ventilation/status`)
         ]);
 
         const metricsResult = await metricsRes.json();
         const scoreResult = await scoreRes.json();
         const costResult = await costRes.json();
         const suggestionsResult = await suggestionsRes.json();
+        const ventResult = await ventRes.json();
 
         if (!metricsResult.success) {
             throw new Error(metricsResult.error);
@@ -300,6 +394,11 @@ async function loadDashboard() {
         // Update Optimization Suggestions (will add this section)
         if (suggestionsResult.success && suggestionsResult.data.length > 0) {
             updateSuggestions(suggestionsResult.data);
+        }
+
+        // Update Ventilation Status
+        if (ventResult.success) {
+            updateVentilation(ventResult.data);
         }
 
         // Update main metrics
@@ -510,6 +609,37 @@ function updateSuggestions(suggestions) {
     `).join('');
 
     section.style.display = 'block';
+}
+
+function updateVentilation(data) {
+    const section = document.getElementById('ventilationSection');
+
+    if (!data) {
+        section.style.display = 'none';
+        return;
+    }
+
+    // Show section
+    section.style.display = 'block';
+
+    // Update strategy badge
+    const strategyBadge = document.getElementById('ventStrategyBadge');
+    strategyBadge.textContent = data.current_strategy;
+    strategyBadge.className = 'strategy-badge ' + data.current_strategy.toLowerCase();
+
+    // Update status
+    const status = document.getElementById('ventStatus');
+    status.textContent = data.needs_adjustment ? '⚠️ Justering rekommenderas' : '✅ Optimalt';
+
+    // Update metrics
+    document.getElementById('exhaustTemp').textContent = data.exhaust_temp ? data.exhaust_temp.toFixed(1) + '°C' : 'N/A';
+    document.getElementById('fanSpeed').textContent = data.fan_speed_pct ? data.fan_speed_pct + '%' : 'N/A';
+    document.getElementById('tempLift').textContent = data.temp_lift ? data.temp_lift.toFixed(1) + '°C' : 'N/A';
+    document.getElementById('rhDrop').textContent = data.estimated_rh_drop_pct ? data.estimated_rh_drop_pct.toFixed(0) + '%' : 'N/A';
+
+    // Update reasoning
+    const reasoning = document.getElementById('ventReasoning');
+    reasoning.innerHTML = `<strong>Strategi:</strong> ${data.reasoning}`;
 }
 
 function refreshData() {

@@ -747,6 +747,61 @@ def auto_optimize_run():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# Ventilation Routes
+@app.route('/api/ventilation/status')
+def get_ventilation_status():
+    """Get current ventilation status and strategy"""
+    session = SessionMaker()
+    try:
+        from ventilation_optimizer import VentilationOptimizer
+
+        device = session.query(Device).first()
+        if not device:
+            return jsonify({'success': False, 'error': 'No device found'}), 404
+
+        # Create ventilation optimizer
+        vent_optimizer = VentilationOptimizer(
+            api_client=api_client,
+            analyzer=analyzer,
+            device_id=device.device_id
+        )
+
+        # Get current status
+        analysis = vent_optimizer.analyze_current_status()
+
+        # Format response
+        current = analysis['current_settings']
+        recommended = analysis['recommended_settings']
+
+        data = {
+            'outdoor_temp': analysis['outdoor_temp'],
+            'indoor_temp': analysis['indoor_temp'],
+            'exhaust_temp': analysis['exhaust_temp'],
+            'fan_speed_pct': analysis['fan_speed_pct'],
+            'current_strategy': analysis['recommended_strategy'],
+            'needs_adjustment': analysis['needs_adjustment'],
+            'reasoning': analysis['reasoning'],
+            'current_settings': {
+                'increased_ventilation': current.increased_ventilation,
+                'start_temp_exhaust': current.start_temp_exhaust,
+                'min_diff_outdoor_exhaust': current.min_diff_outdoor_exhaust
+            },
+            'recommended_settings': {
+                'increased_ventilation': recommended.increased_ventilation,
+                'start_temp_exhaust': recommended.start_temp_exhaust,
+                'min_diff_outdoor_exhaust': recommended.min_diff_outdoor_exhaust
+            },
+            'estimated_rh_drop_pct': analysis['estimated_rh_drop_pct'],
+            'temp_lift': analysis['temp_lift']
+        }
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        session.close()
+
 # AI Agent Routes
 @app.route('/ai-agent')
 def ai_agent():
