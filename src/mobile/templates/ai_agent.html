@@ -653,6 +653,32 @@ async function sendChatMessage() {
     scrollChatToBottom();
 
     try {
+        // If this is the first message, fetch system data first
+        if (conversationHistory.length === 0) {
+            try {
+                const metricsRes = await fetch('/api/metrics?hours=24');
+                const metricsData = await metricsRes.json();
+
+                if (metricsData.success) {
+                    const m = metricsData.data;
+                    const systemPrompt = `SYSTEMDATA (senaste 24h):
+COP: ${m.cop ? m.cop.toFixed(2) : 'N/A'}
+Gradminuter: ${m.degree_minutes ? m.degree_minutes.toFixed(1) : 'N/A'}
+Delta T: ${m.delta_t_active ? m.delta_t_active.toFixed(1) : 'N/A'}°C
+Inne: ${m.room_temp ? m.room_temp.toFixed(1) : 'N/A'}°C
+Ute: ${m.outdoor_temp ? m.outdoor_temp.toFixed(1) : 'N/A'}°C
+Framledning: ${m.supply_temp ? m.supply_temp.toFixed(1) : 'N/A'}°C
+Retur: ${m.return_temp ? m.return_temp.toFixed(1) : 'N/A'}°C
+
+Analysera denna data och svara på användarens fråga.`;
+
+                    conversationHistory.push({ role: 'system', content: systemPrompt });
+                }
+            } catch (e) {
+                console.warn('Could not fetch metrics:', e);
+            }
+        }
+
         const response = await fetch('/api/gemini/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
