@@ -665,8 +665,14 @@ async function sendChatMessage() {
                     const m = metricsData.data;
                     const systemPrompt = `SYSTEMKONFIGURATION:
 Värmepump: Nibe F730 - Frånluftsvärmepump
-Hus: Villa, ~140 m²
-Värmesystem: Golvvärme med shuntgrupp
+Hus: 3 våningar, 160 m²
+  - Bottenvåning: Golvvärme i platta med shuntgrupp
+  - Våning 2 & 3: Radiatorer
+Värmesystem:
+  - Golvvärme: Shunt, flöde och pumphastighet justerbart
+  - Alla termostater: Helt öppna (ingen zonreglering)
+  - Golvvärme-slingor: Termostater alltid öppna
+  - Radiatorer: Termostater alltid öppna
 Varmvatten: Via värmepump
 Styrning: MyUplink API via nibe_autotuner
 AI-system: Autonomt lärande med A/B-tester
