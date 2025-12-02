@@ -1046,12 +1046,12 @@ def get_ai_agent_status():
         monthly_cost_sek = total_analyses * 0.10 / max(1, total_analyses / 60)
 
         status = {
-            'enabled': os.getenv('ANTHROPIC_API_KEY') is not None,
+            'enabled': os.getenv('GOOGLE_API_KEY') is not None,
             'last_run': last_decision.timestamp.isoformat() if last_decision else None,
-            'next_run': 'Se CRON schema',  # Could be calculated from crontab
+            'next_run': 'Schemalagd via auto_optimizer cron',
             'total_analyses': total_analyses,
             'total_adjustments': total_adjustments,
-            'monthly_cost_sek': monthly_cost_sek
+            'monthly_cost_sek': round(monthly_cost_sek, 2) if total_analyses > 0 else 0
         }
 
         return jsonify({'success': True, 'data': status})
