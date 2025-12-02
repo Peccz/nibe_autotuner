@@ -696,10 +696,10 @@ def gemini_analyze():
         finally:
             session.close()
 
-        # Get current parameters
+        # Get current parameters (only use verified API-accessible parameters)
         current_parameters = {
             '47011': metrics.curve_offset if metrics.curve_offset else 0,
-            '47007': metrics.heating_curve if metrics.heating_curve else 0,
+            # Note: 47007 removed - not accessible via API on F730
         }
 
         # Initialize Gemini and analyze

@@ -299,10 +299,10 @@ class SmartOptimizer:
         except:
             pass
 
-        # Get current parameter values
+        # Get current parameter values (only API-accessible parameters)
         current_parameters = {
             '47011': metrics.curve_offset if metrics.curve_offset else 0,
-            '47007': metrics.heating_curve if metrics.heating_curve else 0,
+            # Note: 47007 removed - not accessible via API on F730
         }
 
         # Call Gemini
@@ -336,75 +336,45 @@ class SmartOptimizer:
         suggestions = []
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
 
-        # Suggestion 1: COP too low
+        # Suggestion 1: COP too low - adjust room temp setpoint
         if metrics.estimated_cop and metrics.estimated_cop < 3.0:
             outdoor_temp = metrics.avg_outdoor_temp
 
-            # If it's not extremely cold, we can improve
-            if outdoor_temp > -10:
-                current_curve = metrics.heating_curve
-                suggested_curve = max(0, current_curve - 1)
+            # If it's not extremely cold, we can improve by lowering target temp
+            if outdoor_temp > -10 and metrics.avg_indoor_temp > 20.5:
+                current_setpoint = metrics.curve_offset if metrics.curve_offset else 21.0
+                suggested_setpoint = current_setpoint - 0.5
 
                 suggestions.append(OptimizationSuggestion(
                     priority='high',
-                    title='Sänk värmekurvan för bättre COP',
-                    description=f'Din COP är {metrics.estimated_cop:.1f} vilket är lågt. Vid {outdoor_temp:.0f}°C ute kan du sänka värmekurvan.',
-                    parameter_name='Värmekurva',
-                    parameter_id='47007',
-                    current_value=current_curve,
-                    suggested_value=suggested_curve,
+                    title='Sänk måltemperaturen för bättre COP',
+                    description=f'Din COP är {metrics.estimated_cop:.1f} vilket är lågt. Vid {outdoor_temp:.0f}°C ute och {metrics.avg_indoor_temp:.1f}°C inne kan du sänka måltemperaturen.',
+                    parameter_name='Room temp setpoint',
+                    parameter_id='47011',
+                    current_value=current_setpoint,
+                    suggested_value=suggested_setpoint,
                     expected_cop_improvement=0.3,
                     expected_savings_yearly=1200,
                     confidence=0.75,
-                    reasoning=f'Lägre framledningstemp → högre COP. Nuvarande COP {metrics.estimated_cop:.1f} är under målet 3.0.'
+                    reasoning=f'Lägre måltemperatur → lägre framledningstemp → högre COP. Nuvarande COP {metrics.estimated_cop:.1f} är under målet 3.0.'
                 ))
 
-        # Suggestion 2: Delta T too high (pump speed too low - need more flow)
-        if metrics.delta_t_active and metrics.delta_t_active > 8.0:
-            suggestions.append(OptimizationSuggestion(
-                priority='medium',
-                title='Öka pumphastigheten (för högt Delta T)',
-                description=f'Delta T är {metrics.delta_t_active:.1f}°C vilket är för högt. Öka flödet för bättre värmeöverföring.',
-                parameter_name='Cirkulationspump GP1',
-                parameter_id='43437',
-                current_value=50,  # Will be updated from actual reading
-                suggested_value=60,
-                expected_cop_improvement=0.2,
-                expected_savings_yearly=800,
-                confidence=0.70,
-                reasoning='Högt Delta T (>8°C) betyder för lågt flöde. Mer flöde → bättre värmeöverföring → jämnare drift → bättre COP.'
-            ))
+        # Note: Pump speed suggestions removed - parameter 43437 not accessible via API
 
-        # Suggestion 3: Delta T too low (pump speed too high - too much flow)
-        elif metrics.delta_t_active and metrics.delta_t_active < 4.0:
-            suggestions.append(OptimizationSuggestion(
-                priority='medium',
-                title='Sänk pumphastigheten (för lågt Delta T)',
-                description=f'Delta T är bara {metrics.delta_t_active:.1f}°C vilket är lågt. Minska flödet för optimal drift.',
-                parameter_name='Cirkulationspump GP1',
-                parameter_id='43437',
-                current_value=70,  # Will be updated from actual reading
-                suggested_value=60,
-                expected_cop_improvement=0.15,
-                expected_savings_yearly=600,
-                confidence=0.65,
-                reasoning='Lågt Delta T (<4°C) betyder för högt flöde. Pumpenergi slösas och kondensorn jobbar ineffektivt. Sänk flöde → bättre COP.'
-            ))
-
-        # Suggestion 4: Many short cycles (possible flow issue)
+        # Suggestion 2: Many short cycles - suggest manual check
         if metrics.heating_metrics and metrics.heating_metrics.num_cycles > 20:
             suggestions.append(OptimizationSuggestion(
                 priority='high',
-                title='För många cykler - justera flöde eller kurva',
-                description=f'{metrics.heating_metrics.num_cycles} cykler på {hours_back}h är för många. Kan bero på flöde eller värmekurva.',
-                parameter_name='Cirkulationspump GP1 eller Värmekurva',
-                parameter_id='43437',
-                current_value=0,  # Multiple parameters
-                suggested_value=0,
+                title='För många cykler - kontrollera inställningar',
+                description=f'{metrics.heating_metrics.num_cycles} cykler på {hours_back}h är för många. Detta måste justeras manuellt i värmepumpen.',
+                parameter_name='Manuell justering krävs',
+                parameter_id='0',  # No direct API parameter
+                current_value=metrics.heating_metrics.num_cycles,
+                suggested_value=15,
                 expected_cop_improvement=0.3,
                 expected_savings_yearly=1200,
                 confidence=0.60,
-                reasoning='Kort-cykling sliter på kompressor och sänker COP. Justera antingen flöde (pumphastighet) eller sänk värmekurva.'
+                reasoning='Kort-cykling sliter på kompressor och sänker COP. Kontrollera pumphastighet och värmekurva manuellt i värmepumpen.'
             ))
 
         # Suggestion 5: Indoor temp too high
