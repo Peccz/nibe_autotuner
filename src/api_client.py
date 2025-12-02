@@ -156,7 +156,16 @@ class MyUplinkClient:
             Data point dictionary with current value
         """
         logger.info(f"Fetching data for point {point_id} on device {device_id}...")
-        return self._make_request('GET', f'/v2/devices/{device_id}/points/{point_id}')
+
+        # MyUplink API v2 doesn't support individual point GET, so fetch all and filter
+        all_points = self.get_device_points(device_id)
+        matching_points = [p for p in all_points if str(p.get('parameterId')) == str(point_id)]
+
+        if not matching_points:
+            logger.error(f"Point {point_id} not found in device points")
+            raise ValueError(f"Point {point_id} not found")
+
+        return matching_points[0]
 
     def set_point_value(self, device_id: str, point_id: str, value: float) -> Dict:
         """
