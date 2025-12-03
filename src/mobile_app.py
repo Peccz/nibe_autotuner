@@ -743,9 +743,51 @@ def log_parameter_change(device_id: str, parameter_id: str, parameter_name: str,
     Note: parameter_name is kept for backwards compatibility but not stored in DB
     The ParameterChange model uses ForeignKey relationships instead
     """
-    # For now, just log to console until we properly integrate with the models
-    # TODO: Integrate with proper ParameterChange model with FK relationships
     logger.info(f"Parameter change: {parameter_name} ({parameter_id}) on {device_id}: {old_value} → {new_value}. Reason: {reason}")
+
+    # Save to database for A/B testing
+    session = SessionMaker()
+    try:
+        # Get device from database
+        device = session.query(Device).filter_by(device_id=device_id).first()
+        if not device:
+            logger.warning(f"Device {device_id} not found in database, cannot log change")
+            return
+
+        # Get parameter from database
+        parameter = session.query(Parameter).filter_by(parameter_id=parameter_id).first()
+        if not parameter:
+            logger.warning(f"Parameter {parameter_id} not found in database, cannot log change")
+            return
+
+        # Create parameter change record
+        change = ParameterChange(
+            device_id=device.id,
+            parameter_id=parameter.id,
+            timestamp=datetime.utcnow(),
+            old_value=float(old_value),
+            new_value=float(new_value),
+            reason=reason,
+            applied_by='user'
+        )
+        session.add(change)
+        session.commit()
+
+        logger.info(f"✅ Parameter change logged to database: ID={change.id}")
+
+        # Trigger A/B test capture of "before" metrics
+        try:
+            ab_tester_instance = ab_tester  # Use existing ABTester instance
+            ab_tester_instance.capture_before_metrics(change)
+            logger.info(f"✅ A/B test 'before' metrics captured for change ID={change.id}")
+        except Exception as e:
+            logger.error(f"Failed to capture before metrics: {e}")
+
+    except Exception as e:
+        logger.error(f"Failed to log parameter change to database: {e}")
+        session.rollback()
+    finally:
+        session.close()
 
 @app.route('/api/quick-action/adjust-offset', methods=['POST'])
 def quick_action_adjust_offset():
