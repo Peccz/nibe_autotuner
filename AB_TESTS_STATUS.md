@@ -1,6 +1,6 @@
 # A/B Test Status - Komplett Översikt
 
-**Uppdaterad:** 2025-12-03
+**Uppdaterad:** 2025-12-03 19:00 CET
 **System:** Nibe F730 Autotuner med Premium Manage
 
 ---
@@ -11,8 +11,8 @@
 |--------|-------|-------------|
 | ✅ **GENOMFÖRDA** | 3 | Manuella tester genomförda av användaren |
 | 🔄 **PÅGÅENDE** | 0 | Inga aktiva tester just nu |
-| 📋 **PLANERADE** | 0 | Inga planerade tester i databasen |
-| 🏗️ **SYSTEMSTATUS** | Redo | Infrastruktur implementerad men ej aktiverad |
+| 📋 **PLANERADE** | 1 | AI-genererat testförslag i databasen |
+| 🏗️ **SYSTEMSTATUS** | ✅ **AKTIVERAT** | Infrastruktur fullt aktiverad och körande! |
 
 ---
 
@@ -98,9 +98,35 @@ För att starta ett test:
 
 ## 📋 PLANERADE TESTER
 
-**Inga planerade tester i databasen.**
+✅ **1 AI-genererat testförslag i databasen!**
 
-### Föreslagen testplan:
+### Test #1: Värmekurva-optimering (AI-genererat)
+**Typ:** AI Test Proposer (regel-baserad)
+**Genererad:** 2025-12-03 18:59 CET
+**Status:** 📋 PLANERAD (väntar på användargodkännande)
+
+#### Test-detaljer:
+- **Parameter:** Heating Curve (47007)
+- **Nuvarande värde:** 7.0
+- **Föreslagen ändring:** 6.0
+- **Hypotes:** "Reducing heating curve will improve efficiency"
+- **Förväntat resultat:** +0.15 COP (~5%), saves ~80 kr/month
+- **Prioritet:** MEDIUM
+- **Konfidens:** 70%
+
+#### AI-resonemang:
+Systemets COP (2.98) ligger under förväntat värde (3.19) för nuvarande utomhustemp (3.9°C). Genom att sänka värmekurvan från 7.0 till 6.0 kan effektiviteten förbättras samtidigt som komfort bibehålls i det milda vädret.
+
+#### Hur aktivera testet:
+1. Öppna http://192.168.86.34:8502/ai-agent
+2. Scrolla till "📋 Planerade tester"
+3. Granska testförslaget
+4. Klicka "Start Test" när du är redo
+5. Systemet kommer automatiskt logga och utvärdera testet efter 48h
+
+---
+
+### Tidigare förslag (för referens):
 
 #### Test A: Offset-optimering för effektivitet
 - **Hypotes:** Sänka offset med 1 steg för att förbättra COP utan att påverka komfort
@@ -108,7 +134,7 @@ För att starta ett test:
 - **Förväntat resultat:** +0.1-0.15 COP, bibehållen innetemperatur ≥20.5°C
 - **Prioritet:** Hög
 - **Konfidens:** 75%
-- **Status:** PLANERAD (ej startad)
+- **Status:** Manuell - ej implementerat än
 
 #### Test B: Ventilationsoptimering
 - **Hypotes:** Testa normal ventilation istället för ökad för att förbättra COP via varmare frånluft
@@ -116,16 +142,7 @@ För att starta ett test:
 - **Förväntat resultat:** +0.2 COP (~7%), varmare frånluft
 - **Prioritet:** Medel
 - **Konfidens:** 70%
-- **Status:** PLANERAD (ej startad)
-
-#### Test C: Värmekurva-justering
-- **Hypotes:** Sänka värmekurvan för mildare väder
-- **Parameter:** Heating Curve (47007): 7.0 → 6.5
-- **Förväntat resultat:** +0.1 COP, bibehållen komfort
-- **Prioritet:** Låg
-- **Konfidens:** 60%
-- **Status:** PLANERAD (ej startad)
-- **Anmärkning:** Vänta med detta tills väder >5°C
+- **Status:** Manuell - ej implementerat än
 
 ---
 
@@ -220,72 +237,81 @@ api_client.set_point_value(device_id, '47011', new_value)
 
 ---
 
-## 🔧 VAD BEHÖVER GÖRAS FÖR ATT AKTIVERA A/B-TESTNING
+## ✅ AKTIVERING KLAR! (2025-12-03 19:00 CET)
 
-### Steg 1: Aktivera loggning av ändringar ✅ GJORT
+Alla tre steg är nu implementerade och aktiverade på RPi!
 
-**Fil:** `src/mobile_app.py`
+### Steg 1: Databas-loggning ✅ AKTIVERAD
 
-I varje Quick Action-funktion, lägg till efter `set_point_value()`:
+**Fil:** `src/mobile_app.py` rad 740-791
 
+**Implementerat:**
 ```python
-# Log parameter change to database
-try:
-    session = SessionMaker()
+def log_parameter_change(...):
+    # Sparar till parameter_changes tabellen
+    change = ParameterChange(...)
+    session.add(change)
+    session.commit()
 
-    # Get device and parameter from database
-    device = session.query(Device).filter_by(device_id=device_id).first()
-    parameter = session.query(Parameter).filter_by(parameter_id='47011').first()
-
-    if device and parameter:
-        change = ParameterChange(
-            device_id=device.id,
-            parameter_id=parameter.id,
-            timestamp=datetime.utcnow(),
-            old_value=current_value,
-            new_value=new_value,
-            reason=f"Quick action: adjust offset by {delta}",
-            applied_by='user'
-        )
-        session.add(change)
-        session.commit()
-
-        logger.info(f"Logged parameter change: {change.id}")
-
-    session.close()
-except Exception as e:
-    logger.error(f"Failed to log parameter change: {e}")
+    # Triggar automatisk "before metrics" capture för A/B-testning
+    ab_tester.capture_before_metrics(change)
 ```
 
-**Status:** ❌ INTE IMPLEMENTERAT
+**Status:** ✅ Aktiverad och deployad till RPi
+**Commit:** `6c01a94` - "Enable A/B testing: database logging, cron jobs, and deployment automation"
 
 ---
 
-### Steg 2: Aktivera automatisk evaluering
+### Steg 2: Automatisk A/B-evaluering ✅ AKTIVERAD
 
-**Fil:** Crontab på RPi
+**Fil:** `scripts/evaluate_ab_tests.sh`
+**Crontab:** Installerad på RPi
 
-Lägg till:
 ```bash
 # Evaluera A/B-tester varje dag kl 06:00
-0 6 * * * cd /home/peccz/nibe_autotuner && ./venv/bin/python -c "from ab_tester import ABTester; from analyzer import HeatPumpAnalyzer; ab = ABTester(HeatPumpAnalyzer('data/nibe_autotuner.db')); ab.evaluate_all_pending()" >> /var/log/ab-testing.log 2>&1
+0 6 * * * /home/peccz/nibe_autotuner/scripts/evaluate_ab_tests.sh >> /var/log/ab-testing.log 2>&1
 ```
 
-**Status:** ❌ INTE IMPLEMENTERAT
+**Funktionalitet:**
+- Körs automatiskt dagligen kl 06:00
+- Utvärderar alla ändringar som väntat ≥48h
+- Beräknar success score 0-100
+- Genererar rekommendationer (BEHÅLL/JUSTERA/ÅTERSTÄLL)
+- Loggar resultat till `/var/log/ab-testing.log`
+
+**Status:** ✅ Aktiverad och testad (körde manuellt 18:59, fungerar perfekt)
+**Test-resultat:** "✅ A/B test evaluation completed successfully - No pending changes"
 
 ---
 
-### Steg 3: Aktivera AI Test Proposer (Valfritt)
+### Steg 3: AI Test Proposer ✅ AKTIVERAD
 
-**Fil:** Crontab på RPi
+**Fil:** `scripts/propose_tests.sh`
+**Crontab:** Installerad på RPi
 
-Lägg till:
 ```bash
 # Föreslå nya tester varje måndag kl 07:00
-0 7 * * 1 cd /home/peccz/nibe_autotuner && PYTHONPATH=./src ./venv/bin/python src/test_proposer.py >> /var/log/test-proposer.log 2>&1
+0 7 * * 1 /home/peccz/nibe_autotuner/scripts/propose_tests.sh >> /var/log/test-proposer.log 2>&1
 ```
 
-**Status:** ❌ INTE IMPLEMENTERAT
+**Funktionalitet:**
+- Körs automatiskt varje måndag kl 07:00
+- Analyserar senaste 24h systemdata
+- Genererar testförslag med AI (eller regel-baserat fallback)
+- Lagrar förslag i `planned_tests` tabellen
+- Visas i AI Agent-gränssnittet för användargodkännande
+
+**Status:** ✅ Aktiverad och testad (körde manuellt 18:59, genererade 1 test!)
+**Test-resultat:**
+```
+✅ Generated 1 test proposal:
+1. [MEDIUM] heating_curve: 7.0 → 6.0
+   Hypothesis: Reducing heating curve will improve efficiency
+   Expected: +0.15 COP (~5%), saves ~80 kr/month
+   Confidence: 70%
+```
+
+**Database:** Testförslag ID=1 finns i `planned_tests` tabellen
 
 ---
 
@@ -388,53 +414,72 @@ A: Ja, ändra `BEFORE_HOURS` och `AFTER_HOURS` i `src/ab_tester.py`. Se `AB_TEST
 A: Systemet flaggar tester där utomhustemp ändrats >3°C med varning. Resultatet visas ändå men markeras som osäkert.
 
 **Q: Hur ser jag planerade tester?**
-A: Öppna `/ai-agent` → scrolla ner till "📋 Planerade tester". (Just nu tom eftersom test_proposer inte körts)
+A: Öppna http://192.168.86.34:8502/ai-agent → scrolla ner till "📋 Planerade tester". ✅ Testförslag finns där nu!
 
 ---
 
 ## 📊 STATISTIK
 
-### Databas-innehåll:
+### Databas-innehåll (2025-12-03 19:00):
 
 ```sql
 SELECT COUNT(*) FROM parameter_changes;
--- Resultat: 0
+-- Resultat: 0 (kommer fyllas när användare gör ändringar via Dashboard)
 
 SELECT COUNT(*) FROM ab_test_results;
--- Resultat: 0
+-- Resultat: 0 (kommer fyllas 48h efter parameterändringar)
 
 SELECT COUNT(*) FROM planned_tests;
--- Resultat: 0
+-- Resultat: 1 ✅ (AI-genererat testförslag finns!)
 
 SELECT COUNT(*) FROM ai_decision_log;
--- Resultat: 0
+-- Resultat: 0 (kommer fyllas när AI-agent gör automatiska beslut)
 ```
 
-**Sammanfattning:** Infrastrukturen är 100% implementerad men 0% använd.
+**Sammanfattning:** Infrastrukturen är 100% implementerad och **AKTIVERAD**!
+- ✅ Cron-jobb schemalagda och körande
+- ✅ Databas-loggning aktiverad i Quick Actions
+- ✅ 1 testförslag redan genererat och väntar på godkännande
+- 🎯 Redo för första riktiga A/B-testet!
 
 ---
 
 ## ✅ SLUTSATS
 
-**A/B-testsystemet är:**
+**A/B-testsystemet är FULLT AKTIVERAT! 🎉**
+
+**Implementerat och aktiverat:**
 - ✅ Fullt implementerat i kod
 - ✅ Databas skapad och redo
-- ✅ Frontend skapad och tillgänglig
+- ✅ Frontend skapad och tillgänglig (http://192.168.86.34:8502/ab-testing)
 - ✅ API-endpoints funktionella
 - ✅ Dokumentation komplett
+- ✅ **Databas-loggning aktiverad** (mobile_app.py:740-791)
+- ✅ **Automatisk evaluering schemalagd** (cron 06:00 dagligen)
+- ✅ **AI-driven testförslag aktivt** (cron 07:00 måndagar)
+- ✅ **1 testförslag redan genererat och väntar!**
 
-**MEN:**
-- ❌ Inte kopplat till Quick Actions
-- ❌ Ingen automatisk evaluering schemalagd
-- ❌ Ingen AI-driven testförslag aktiv
-- ❌ Inga tester genomförda med full pipeline
+**Deployment:**
+- ✅ Kod pushad till GitHub
+- ✅ RPi uppdaterad (commit 6c01a94)
+- ✅ Cron-jobb installerade och verifierade
+- ✅ Mobile service restartat och körande
+- ✅ Manuella tester av båda cron-skript: Fungerande!
 
-**För att aktivera:** Implementera Steg 1-3 i "VAD BEHÖVER GÖRAS" ovan.
+**Nästa steg för användaren:**
+1. **Testa systemet:** Gå till Dashboard → Klicka "Höj temp" eller "Sänk temp"
+2. **Verifiera loggning:** Ändringen ska sparas i databasen automatiskt
+3. **Vänta 48h:** Efter 48h kommer A/B-evaluering köras automatiskt kl 06:00
+4. **Se resultat:** Öppna http://192.168.86.34:8502/ab-testing för att se testresultat
+5. **Granska AI-förslag:** Besök http://192.168.86.34:8502/ai-agent för att se planerade tester
 
-**Status:** 🟡 **Redo att aktiveras** (kräver mindre ändringar i mobile_app.py + cron-jobb)
+**Status:** 🟢 **FULLT AKTIVERAT OCH KÖRANDE**
 
 ---
 
-**Senast uppdaterad:** 2025-12-03
+**Deployment genomförd:** 2025-12-03 19:00 CET
+**Commit:** `6c01a94` - "Enable A/B testing: database logging, cron jobs, and deployment automation"
 **Författare:** Claude Code
 **Relaterade filer:** `AB_TEST_CONFIG.md`, `DEPLOY_AB_TESTING.md`, `PREMIUM_MANAGE_SETUP.md`
+
+**Deployment-skript:** `scripts/deploy_ab_testing.sh` (för framtida uppdateringar)
