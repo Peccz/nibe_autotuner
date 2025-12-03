@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}Interaktiv Analys{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        background: #2a2a2a;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        height: 300px;
+        position: relative;
+    }
+    
+    .chart-controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        overflow-x: auto;
+        padding-bottom: 5px;
+    }
+    
+    .control-btn {
+        background: #3a3a3a;
+        border: none;
+        color: #fff;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    
+    .control-btn.active {
+        background: #3498db;
+    }
+    
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(42, 42, 42, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        z-index: 10;
+    }
+    
+    .spinner {
+        width: 30px;
+        height: 30px;
+        border: 3px solid #ffffff;
+        border-top: 3px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header-section">
+    <h1>Interaktiv Analys</h1>
+    <p class="subtitle">Realtidsdata & Historik</p>
+</div>
+
+<!-- Time Range Selector -->
+<div class="chart-controls">
+    <button class="control-btn active" onclick="updateTimeRange(24)">24h</button>
+    <button class="control-btn" onclick="updateTimeRange(48)">48h</button>
+    <button class="control-btn" onclick="updateTimeRange(168)">7 Dagar</button>
+</div>
+
+<!-- Temperature Chart -->
+<div class="card">
+    <h3>Temperaturer</h3>
+    <div class="chart-container">
+        <div id="tempLoader" class="loading-overlay"><div class="spinner"></div></div>
+        <canvas id="tempChart"></canvas>
+    </div>
+</div>
+
+<!-- Efficiency Chart -->
+<div class="card">
+    <h3>Effektivitet (COP & Delta T)</h3>
+    <div class="chart-container">
+        <div id="effLoader" class="loading-overlay"><div class="spinner"></div></div>
+        <canvas id="effChart"></canvas>
+    </div>
+</div>
+
+<!-- Compressor Chart -->
+<div class="card">
+    <h3>Kompressor</h3>
+    <div class="chart-container">
+        <div id="compLoader" class="loading-overlay"><div class="spinner"></div></div>
+        <canvas id="compChart"></canvas>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let charts = {};
+    let currentHours = 24;
+
+    // Common chart options
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false,
+        },
+        plugins: {
+            legend: {
+                labels: { color: '#e0e0e0' }
+            }
+        },
+        scales: {
+            x: {
+                grid: { color: '#404040' },
+                ticks: { color: '#b0b0b0' }
+            },
+            y: {
+                grid: { color: '#404040' },
+                ticks: { color: '#b0b0b0' }
+            }
+        }
+    };
+
+    function initCharts() {
+        // Temperature Chart
+        charts.temp = new Chart(document.getElementById('tempChart'), {
+            type: 'line',
+            data: { datasets: [] },
+            options: {
+                ...commonOptions,
+                scales: {
+                    ...commonOptions.scales,
+                    y: {
+                        ...commonOptions.scales.y,
+                        title: { display: true, text: '°C' }
+                    }
+                }
+            }
+        });
+
+        // Efficiency Chart
+        charts.eff = new Chart(document.getElementById('effChart'), {
+            type: 'line',
+            data: { datasets: [] },
+            options: {
+                ...commonOptions,
+                scales: {
+                    ...commonOptions.scales,
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'COP' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'Delta T' },
+                        grid: { drawOnChartArea: false }
+                    }
+                }
+            }
+        });
+
+        // Compressor Chart
+        charts.comp = new Chart(document.getElementById('compChart'), {
+            type: 'line',
+            data: { datasets: [] },
+            options: {
+                ...commonOptions,
+                elements: {
+                    line: { tension: 0.1, fill: true }
+                }
+            }
+        });
+
+        loadData(currentHours);
+    }
+
+    async function loadData(hours) {
+        // Show loaders
+        document.querySelectorAll('.loading-overlay').forEach(el => el.style.display = 'flex');
+
+        try {
+            // Fetch data in parallel
+            const [tempData, effData, compData] = await Promise.all([
+                fetchChartData(['outdoor', 'indoor', 'supply', 'return'], hours),
+                fetchChartData(['cop', 'delta_t'], hours),
+                fetchChartData(['compressor'], hours)
+            ]);
+
+            updateTempChart(tempData);
+            updateEffChart(effData);
+            updateCompChart(compData);
+
+        } catch (error) {
+            console.error('Failed to load chart data:', error);
+        } finally {
+            // Hide loaders
+            document.querySelectorAll('.loading-overlay').forEach(el => el.style.display = 'none');
+        }
+    }
+
+    async function fetchChartData(types, hours) {
+        const datasets = [];
+        for (const type of types) {
+            const response = await fetch(`/api/chart/${type}?hours=${hours}`);
+            const json = await response.json();
+            if (json.success) {
+                datasets.push({
+                    type: type,
+                    data: json.data
+                });
+            }
+        }
+        return datasets;
+    }
+
+    function updateTempChart(datasets) {
+        const colors = {
+            outdoor: '#3498db',
+            indoor: '#2ecc71',
+            supply: '#e74c3c',
+            return: '#9b59b6'
+        };
+
+        charts.temp.data.datasets = datasets.map(ds => ({
+            label: getLabel(ds.type),
+            data: ds.data.values,
+            borderColor: colors[ds.type],
+            backgroundColor: colors[ds.type],
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHitRadius: 10
+        }));
+        
+        // Sync labels from first dataset
+        if (datasets.length > 0) {
+            charts.temp.data.labels = datasets[0].data.labels.map(formatTime);
+        }
+        charts.temp.update();
+    }
+
+    function updateEffChart(datasets) {
+        charts.eff.data.datasets = datasets.map(ds => ({
+            label: getLabel(ds.type),
+            data: ds.data.values,
+            borderColor: ds.type === 'cop' ? '#f1c40f' : '#e67e22',
+            yAxisID: ds.type === 'cop' ? 'y' : 'y1',
+            borderWidth: 2,
+            pointRadius: 0
+        }));
+
+        if (datasets.length > 0) {
+            charts.eff.data.labels = datasets[0].data.labels.map(formatTime);
+        }
+        charts.eff.update();
+    }
+
+    function updateCompChart(datasets) {
+        charts.comp.data.datasets = datasets.map(ds => ({
+            label: 'Kompressor (Hz)',
+            data: ds.data.values,
+            borderColor: '#95a5a6',
+            backgroundColor: 'rgba(149, 165, 166, 0.2)',
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: true
+        }));
+
+        if (datasets.length > 0) {
+            charts.comp.data.labels = datasets[0].data.labels.map(formatTime);
+        }
+        charts.comp.update();
+    }
+
+    function getLabel(type) {
+        const labels = {
+            outdoor: 'Utomhus',
+            indoor: 'Inomhus',
+            supply: 'Framledning',
+            return: 'Retur',
+            cop: 'COP',
+            delta_t: 'Delta T',
+            compressor: 'Kompressor'
+        };
+        return labels[type] || type;
+    }
+
+    function formatTime(isoString) {
+        const date = new Date(isoString);
+        return date.getHours().toString().padStart(2, '0') + ':' + 
+               date.getMinutes().toString().padStart(2, '0');
+    }
+
+    function updateTimeRange(hours) {
+        currentHours = hours;
+        
+        // Update buttons
+        document.querySelectorAll('.control-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.textContent.includes(hours) || 
+                (hours === 168 && btn.textContent.includes('7')));
+        });
+
+        loadData(hours);
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', initCharts);
+</script>
+{% endblock %}

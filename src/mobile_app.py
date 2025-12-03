@@ -1332,5 +1332,10 @@ def service_worker():
     """Service Worker for offline support"""
     return send_from_directory('mobile/static/js', 'sw.js')
 
+@app.route('/interactive')
+def interactive_visualizations():
+    """Interactive Visualizations page"""
+    return render_template('visualizations_interactive.html')
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8502, debug=False)
