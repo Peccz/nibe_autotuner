@@ -214,6 +214,23 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         logger.info("AUTONOMOUS AI AGENT V2 (GEMINI) - Analysis")
         logger.info("="*80)
 
+        # Check if any PlannedTest is currently active and blocking optimization
+        blocking_test = self._check_for_blocking_test()
+        if blocking_test:
+            logger.warning(f"⚠️ PlannedTest {blocking_test.id} is ACTIVE - Skipping optimization to preserve test integrity")
+            logger.info(f"   Test: {blocking_test.hypothesis}")
+            logger.info(f"   Parameter: {blocking_test.parameter.parameter_name}")
+            logger.info(f"   Started: {blocking_test.started_at}")
+            return AIDecision(
+                action='hold',
+                parameter=None,
+                current_value=None,
+                suggested_value=None,
+                reasoning=f"Holding: PlannedTest {blocking_test.id} ({blocking_test.parameter.parameter_name}) is active. AI optimization paused to preserve test integrity.",
+                confidence=1.0,
+                expected_impact="No changes until test completes"
+            )
+
         # Train HW analyzer (lightweight, uses cached data if available)
         try:
             self.hw_analyzer.train_on_history(days_back=14)
@@ -304,6 +321,37 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
                 return False, f"Offset {decision.suggested_value} is below empirical minimum ({ParameterConfig.OFFSET_REDUCED}) for current outdoor temps. No additional savings, risks discomfort."
 
         return True, ""
+
+    def _check_for_blocking_test(self) -> Optional[PlannedTest]:
+        """
+        Check if any PlannedTest is currently active and would conflict with optimization.
+
+        Tests that block optimization:
+        - curve_offset tests (conflicts with AI offset adjustments)
+        - heating_curve tests (conflicts with AI curve adjustments)
+        - start_compressor tests (conflicts with AI compressor logic)
+
+        Tests that DON'T block:
+        - hot_water_demand (different parameter, no conflict)
+        - increased_ventilation (different parameter, no conflict)
+
+        Returns:
+            PlannedTest if blocking test is active, None otherwise
+        """
+        # Parameters that conflict with AI optimization
+        BLOCKING_PARAMETER_IDS = ['47007', '47011', '47206']  # heating_curve, curve_offset, start_compressor
+
+        # Check for active tests
+        active_tests = self.analyzer.session.query(PlannedTest).filter(
+            PlannedTest.status == 'active'
+        ).all()
+
+        for test in active_tests:
+            if test.parameter and test.parameter.parameter_id in BLOCKING_PARAMETER_IDS:
+                logger.info(f"Found blocking PlannedTest {test.id}: {test.parameter.parameter_name} (status={test.status})")
+                return test
+
+        return None
 
     def _get_recent_learning_history(self, hours_back: int = 24) -> str:
         """
