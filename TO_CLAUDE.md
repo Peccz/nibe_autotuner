@@ -669,6 +669,99 @@ För fullständig teknisk dokumentation av alla parametrar, tidskonstanter, regl
 
 ---
 
-**Dokumentversion:** 1.0
+---
+
+## Val 11: Test-Lock Mekanism för PlannedTests
+
+**Beslut:** Implementera automatisk pausning av AI-optimering under vissa PlannedTests
+
+**Problem identifierat:**
+```
+Scenario: PlannedTest för curve_offset (-10, mäta tidskonstant)
+- Test startas: offset = -10, status='active'
+- 1h senare: AI ser offset -10, tänker "för lågt!", ändrar till -5
+- Resultat: Test förstört, kan inte mäta tidskonstant korrekt
+```
+
+**Lösning: Selektiv Test-Lock**
+
+**Parametrar som blockerar AI (konfliktrisk):**
+- `47011` (curve_offset) - AI justerar offset varje timme
+- `47007` (heating_curve) - AI kan justera kurva
+- `47206` (start_compressor) - AI påverkar kompressorlogik
+
+**Parametrar som INTE blockerar (kan köra parallellt):**
+- `47041` (hot_water_demand) - Separata system, ingen konflikt
+- `50005` (increased_ventilation) - Oberoende parameter
+
+**Implementation:**
+```python
+def _check_for_blocking_test(self) -> Optional[PlannedTest]:
+    # Check if any active test uses conflicting parameters
+    BLOCKING_PARAMETER_IDS = ['47007', '47011', '47206']
+
+    active_tests = session.query(PlannedTest).filter(
+        PlannedTest.status == 'active'
+    ).all()
+
+    for test in active_tests:
+        if test.parameter.parameter_id in BLOCKING_PARAMETER_IDS:
+            return test  # Found blocking test
+
+    return None  # No conflicts, AI can proceed
+```
+
+**Beteende när blockerad:**
+```python
+# AI returnerar immediately innan analys
+return AIDecision(
+    action='hold',
+    reasoning=f"Holding: PlannedTest {test.id} is active. AI paused to preserve test integrity.",
+    confidence=1.0
+)
+```
+
+**Exempel:**
+
+**Scenario 1: Curve Offset Test (BLOCKERAR)**
+```
+10:00 - PlannedTest startas: offset -3 → -10 (status='active')
+11:00 - AI kör: ⚠️ Blocked! PlannedTest #5 (curve_offset) active
+        → Returns 'hold', no changes
+12:00 - AI kör: ⚠️ Still blocked
+        → Returns 'hold', no changes
+...
+58:00 (efter 48h) - Test completed (status='completed')
+59:00 - AI kör: ✓ No blocking tests
+        → AI optimization resumes normally
+```
+
+**Scenario 2: Hot Water Test (BLOCKERAR INTE)**
+```
+10:00 - PlannedTest startas: hot_water_demand 1 → 2 (status='active')
+11:00 - AI kör: ✓ No conflict, different parameter
+        → AI adjusts curve_offset -3 → -5 (normal optimization)
+12:00 - AI kör: ✓ Still no conflict
+        → AI continues optimization as usual
+```
+
+**Fördelar:**
+1. ✅ **Teintegritet** - Vetenskapliga tester får stabila förhållanden
+2. ✅ **Selektiv pausning** - Bara konfliktande parametrar blockerar
+3. ✅ **Automatisk** - Ingen manuell intervention krävs
+4. ✅ **Transparent** - Loggar förklarar varför AI pausades
+
+**Alternativ som övervägdes:**
+- ❌ Blockera ALL AI under ALLA tester - För restriktivt
+- ❌ Låt AI fortsätta (ignorera testerna) - Förstör testdata
+- ✅ **Selektiv blockering baserat på parameter** - Optimal balans
+
+**Motivering:**
+Hot water-tester kan köra parallellt eftersom de påverkar olika delsystem.
+Curve/kompressor-tester måste få exklusiv kontroll för att data ska bli meningsfull.
+
+---
+
+**Dokumentversion:** 1.1
 **Datum:** 2025-12-04
-**Status:** Produktion (v1)
+**Status:** Produktion (v1.1 - med test-lock)
