@@ -29,9 +29,9 @@ echo "=================================================="
 echo "Autonomous AI Agent - $(date)"
 echo "=================================================="
 
-# Run AI agent (dry_run=False means it will apply changes!)
+# Run AI agent V2 with safety guardrails (dry_run=False means it will apply changes!)
 PYTHONPATH=./src ./venv/bin/python -c "
-from autonomous_ai_agent import AutonomousAIAgent
+from autonomous_ai_agent_v2 import AutonomousAIAgentV2
 from analyzer import HeatPumpAnalyzer
 from api_client import MyUplinkClient
 from weather_service import SMHIWeatherService
@@ -56,15 +56,15 @@ try:
     analyzer = HeatPumpAnalyzer()
     weather_service = SMHIWeatherService()
 
-    # Create AI agent
-    agent = AutonomousAIAgent(
+    # Create AI agent V2 (with hardcoded safety guardrails)
+    agent = AutonomousAIAgentV2(
         analyzer=analyzer,
         api_client=api_client,
         weather_service=weather_service,
         device_id=device.device_id
     )
 
-    # Analyze and decide (LIVE MODE - applies changes!)
+    # Analyze and decide (LIVE MODE - applies changes if safe!)
     decision = agent.analyze_and_decide(hours_back=72, dry_run=False)
 
     print()
