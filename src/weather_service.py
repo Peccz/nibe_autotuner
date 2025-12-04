@@ -66,7 +66,8 @@ class SMHIWeatherService:
             data = response.json()
 
             forecasts = []
-            cutoff_time = datetime.utcnow() + timedelta(hours=hours_ahead)
+            from datetime import timezone
+            cutoff_time = datetime.now(timezone.utc) + timedelta(hours=hours_ahead)
 
             for time_series in data.get('timeSeries', []):
                 timestamp = datetime.fromisoformat(time_series['validTime'].replace('Z', '+00:00'))

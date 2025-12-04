@@ -1,25 +1,59 @@
 """
 Autonomous AI Agent V2 - Optimized & Safe
-Uses Google Gemini API with strict safety guardrails and token optimization.
+Uses Google Gemini API with fallback models and strict safety guardrails.
 """
 import os
 import json
 import re
 from datetime import datetime
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted, GoogleAPIError
 from loguru import logger
 from pydantic import BaseModel, Field, ValidationError, ConfigDict
 
 # Reuse existing classes
 from autonomous_ai_agent import AIDecision, AutonomousAIAgent
-from models import AIDecisionLog, Parameter, ParameterChange
+from models import AIDecisionLog, Parameter, ParameterChange, PlannedTest, ABTestResult
 from price_service import ElectricityPriceService
 from hw_analyzer import HotWaterPatternAnalyzer
+from scientific_analyzer import ScientificTestAnalyzer
 
 # ============================================================================
 # CONFIGURATION CONSTANTS
 # ============================================================================
+
+class ModelConfig:
+    """Configuration for AI models with fallback support"""
+
+    # Model priority list - tries in order until one succeeds
+    # Priority: Fast & cheap models first, then fallback to more capable ones
+    FALLBACK_MODELS = [
+        {
+            'provider': 'gemini',
+            'model': 'gemini-2.0-flash-exp',
+            'name': 'Gemini 2.0 Flash Experimental',
+            'requires_api_key': 'GOOGLE_API_KEY',
+        },
+        {
+            'provider': 'gemini',
+            'model': 'gemini-2.5-flash',
+            'name': 'Gemini 2.5 Flash',
+            'requires_api_key': 'GOOGLE_API_KEY',
+        },
+        {
+            'provider': 'gemini',
+            'model': 'gemini-2.0-flash',
+            'name': 'Gemini 2.0 Flash',
+            'requires_api_key': 'GOOGLE_API_KEY',
+        },
+        {
+            'provider': 'gemini',
+            'model': 'gemini-flash-latest',
+            'name': 'Gemini Flash Latest',
+            'requires_api_key': 'GOOGLE_API_KEY',
+        },
+    ]
 
 class ParameterConfig:
     """Central configuration for parameter names and their API IDs"""
@@ -45,13 +79,13 @@ class ParameterConfig:
 
     # Maximum step size changes to prevent aggressive adjustments
     MAX_STEP_SIZES = {
-        'curve_offset': 2,      # Max ±2 steps
-        'heating_curve': 1,     # Max ±1 step
+        'curve_offset': 5,      # Max ±5 steps - allows effective on/off control based on price
+        'heating_curve': 2,     # Max ±2 steps
         'room_temp': 1,         # Max ±1°C
     }
 
     # Minimum temperature thresholds
-    MIN_INDOOR_TEMP = 19.0  # Never target below this
+    MIN_INDOOR_TEMP = 20.0  # Never target below this
 
     # Confidence thresholds
     MIN_CONFIDENCE_TO_APPLY = 0.70
@@ -85,27 +119,87 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
     
     def __init__(self, analyzer, api_client, weather_service, device_id, anthropic_api_key=None):
         """
-        Initialize autonomous AI agent with Gemini
+        Initialize autonomous AI agent with Gemini and fallback models
         """
         self.analyzer = analyzer
         self.api_client = api_client
         self.weather_service = weather_service
         self.device_id = device_id
-        
+
         # Initialize Price Service (defaults to SE3 Stockholm)
         self.price_service = ElectricityPriceService("SE3")
-        
+
         # Initialize HW Usage Analyzer
         self.hw_analyzer = HotWaterPatternAnalyzer()
 
-        # Configure Gemini
+        # Initialize Scientific Test Analyzer
+        self.scientific_analyzer = ScientificTestAnalyzer()
+
+        # Configure Gemini with available models
+        self.available_models = []
         api_key = os.getenv('GOOGLE_API_KEY')
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY not found in environment")
-            
-        genai.configure(api_key=api_key)
-        # Use Gemini 2.0 Flash (or Pro) for speed and reasoning
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+
+        if api_key:
+            genai.configure(api_key=api_key)
+            # Initialize all available Gemini models
+            for model_config in ModelConfig.FALLBACK_MODELS:
+                if model_config['provider'] == 'gemini':
+                    try:
+                        model = genai.GenerativeModel(model_config['model'])
+                        self.available_models.append({
+                            'model': model,
+                            'config': model_config,
+                        })
+                        logger.info(f"Initialized fallback model: {model_config['name']}")
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize {model_config['name']}: {e}")
+
+        if not self.available_models:
+            raise ValueError("No AI models available. Please set GOOGLE_API_KEY in environment")
+
+        logger.info(f"Total available models: {len(self.available_models)}")
+
+    def _call_ai_with_fallback(self, prompt: str) -> str:
+        """
+        Try calling AI models in priority order with automatic fallback.
+        Returns the response text from the first successful model.
+        """
+        last_error = None
+
+        for i, model_entry in enumerate(self.available_models):
+            model = model_entry['model']
+            config = model_entry['config']
+
+            try:
+                logger.info(f"Trying model {i+1}/{len(self.available_models)}: {config['name']}")
+
+                response = model.generate_content(
+                    prompt,
+                    generation_config={"response_mime_type": "application/json"}
+                )
+
+                logger.info(f"✓ Success with {config['name']}")
+                return response.text
+
+            except ResourceExhausted as e:
+                logger.warning(f"✗ {config['name']}: Rate limit exceeded (429)")
+                last_error = e
+                # Continue to next model
+
+            except GoogleAPIError as e:
+                logger.warning(f"✗ {config['name']}: API error - {str(e)}")
+                last_error = e
+                # Continue to next model
+
+            except Exception as e:
+                logger.warning(f"✗ {config['name']}: Unexpected error - {str(e)}")
+                last_error = e
+                # Continue to next model
+
+        # All models failed
+        error_msg = f"All {len(self.available_models)} models failed. Last error: {str(last_error)}"
+        logger.error(error_msg)
+        raise Exception(error_msg)
 
     def analyze_and_decide(self, hours_back: int = 72, dry_run: bool = True) -> AIDecision:
         logger.info("="*80)
@@ -125,20 +219,12 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         # 2. Create Optimized Prompt
         prompt = self._create_optimized_prompt(context)
 
-        # 3. Call Gemini API
+        # 3. Call AI with automatic fallback
         try:
-            logger.info("Calling Gemini API...")
-            
-            # Force JSON response via generation config
-            response = self.model.generate_content(
-                prompt,
-                generation_config={"response_mime_type": "application/json"}
-            )
-            
-            # Log token usage
-            logger.info("Gemini response received")
+            logger.info("Calling AI with fallback support...")
 
-            response_text = response.text
+            # Try models in priority order until one succeeds
+            response_text = self._call_ai_with_fallback(prompt)
             decision_model = self._parse_json_response_robust(response_text)
 
             decision = AIDecision(
@@ -206,16 +292,166 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
 
         return True, ""
 
+    def _get_recent_learning_history(self, hours_back: int = 24) -> str:
+        """
+        Fetch recent parameter changes and their outcomes for AI learning.
+        Returns a compact summary of what worked and what didn't.
+        """
+        try:
+            from datetime import timedelta
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+
+            # Get recent parameter changes
+            recent_changes = self.analyzer.session.query(ParameterChange).filter(
+                ParameterChange.timestamp >= cutoff_time
+            ).order_by(ParameterChange.timestamp.desc()).limit(10).all()
+
+            if not recent_changes:
+                return "HISTORY: No recent changes"
+
+            # Build compact history summary
+            history_lines = []
+            for change in recent_changes:
+                # Get parameter name
+                param = self.analyzer.session.query(Parameter).filter_by(
+                    id=change.parameter_id
+                ).first()
+
+                if not param:
+                    continue
+
+                # Find parameter logical name
+                param_name = None
+                for name, pid in ParameterConfig.PARAMETER_IDS.items():
+                    if pid == param.parameter_id:
+                        param_name = name
+                        break
+
+                if not param_name:
+                    continue
+
+                # Calculate time since change
+                hours_ago = (datetime.utcnow() - change.timestamp).total_seconds() / 3600
+
+                # Try to get COP before/after (simplified - just check nearby metrics)
+                try:
+                    # Get metrics 6h before and 6h after change
+                    before_metrics = self.analyzer.calculate_metrics(
+                        hours_back=6,
+                        end_time=change.timestamp
+                    )
+                    after_start = change.timestamp + timedelta(hours=1)
+                    after_end = change.timestamp + timedelta(hours=7)
+
+                    # Only calculate if enough time has passed
+                    if datetime.utcnow() > after_end:
+                        after_metrics = self.analyzer.calculate_metrics(
+                            hours_back=6,
+                            end_time=after_end
+                        )
+                        cop_change = after_metrics.estimated_cop - before_metrics.estimated_cop
+                        result = f"COP:{cop_change:+.2f}"
+                    else:
+                        result = "pending"
+                except:
+                    result = "N/A"
+
+                history_lines.append(
+                    f"{int(hours_ago)}h ago: {param_name} {change.old_value}→{change.new_value} ({result})"
+                )
+
+            if history_lines:
+                return "HISTORY(last 24h):\n" + "\n".join(history_lines[:5])  # Top 5 most recent
+            else:
+                return "HISTORY: No evaluable changes"
+
+        except Exception as e:
+            logger.warning(f"Could not fetch learning history: {e}")
+            return "HISTORY: Error fetching"
+
+    def _get_combined_forecast(self) -> str:
+        """
+        Get combined price + weather forecast for predictive control.
+        Price: fallback hourly pattern (cheap at night, expensive during day)
+        Weather: SMHI temperature forecast
+        """
+        try:
+            from datetime import datetime
+
+            now = datetime.now()
+            current_hour = now.hour
+
+            # === PRICE FORECAST ===
+            # Simple hourly pattern based on typical Swedish electricity prices
+            # Cheap: 22-06, Expensive: 07-09, 17-21, Normal: rest
+            expensive_hours = []
+            cheap_hours = []
+
+            for h in range(current_hour, current_hour + 12):
+                hour = h % 24
+                if hour in [7, 8, 9, 17, 18, 19, 20, 21]:
+                    expensive_hours.append(hour)
+                elif hour in [22, 23, 0, 1, 2, 3, 4, 5, 6]:
+                    cheap_hours.append(hour)
+
+            price_str = "Price:"
+            if expensive_hours:
+                price_str += f" EXPENSIVE at {','.join(map(str, expensive_hours[:4]))}h"
+            if cheap_hours:
+                price_str += f" CHEAP at {','.join(map(str, cheap_hours[:4]))}h"
+
+            # === WEATHER FORECAST ===
+            weather_str = "Weather:"
+            try:
+                # Get 12h temperature forecast
+                temp_forecast = self.weather_service.get_temperature_forecast(hours_ahead=12)
+
+                if temp_forecast:
+                    temps = [t for _, t in temp_forecast]
+                    avg_temp = sum(temps) / len(temps)
+                    min_temp = min(temps)
+                    max_temp = max(temps)
+
+                    # Determine trend
+                    current_temp = temps[0] if temps else None
+                    end_temp = temps[-1] if len(temps) > 1 else None
+
+                    if current_temp and end_temp:
+                        if end_temp < current_temp - 2:
+                            trend = "COOLING"
+                        elif end_temp > current_temp + 2:
+                            trend = "WARMING"
+                        else:
+                            trend = "STABLE"
+                    else:
+                        trend = "UNKNOWN"
+
+                    weather_str += f" {min_temp:.1f}-{max_temp:.1f}°C (avg:{avg_temp:.1f}°C) {trend}"
+                else:
+                    weather_str += " No data"
+            except Exception as e:
+                logger.warning(f"Could not get weather forecast: {e}")
+                weather_str += " Error"
+
+            return f"FORECAST(next 12h): {price_str} | {weather_str}"
+
+        except Exception as e:
+            logger.warning(f"Could not get combined forecast: {e}")
+            return "FORECAST: Error"
+
     def _build_optimized_context(self, metrics) -> str:
         """Compact context to save tokens"""
-        
+
         # Fetch Price Data
         try:
             p_info = self.price_service.get_current_price_info()
-            price_str = f"Price:{p_info.get('current_price_sek',0)} SEK/kWh. Status:{'CHEAP' if p_info.get('is_cheap') else 'EXPENSIVE' if p_info.get('is_expensive') else 'NORMAL'}."
+            price_str = f"Price:{p_info.get('current_price_sek',0):.2f} SEK/kWh. Status:{'CHEAP' if p_info.get('is_cheap') else 'EXPENSIVE' if p_info.get('is_expensive') else 'NORMAL'}."
         except Exception as e:
             logger.warning(f"Failed to get prices: {e}")
             price_str = "Price: N/A"
+
+        # Fetch Combined Price + Weather Forecast
+        forecast_str = self._get_combined_forecast()
 
         # Fetch HW Probability
         try:
@@ -223,6 +459,9 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
             hw_str = f"HW_Usage_Risk: {'HIGH' if hw_prob > 0.5 else 'LOW'} ({hw_prob:.1f})"
         except Exception as e:
             hw_str = "HW_Usage_Risk: UNKNOWN"
+
+        # Fetch learning history
+        history_str = self._get_recent_learning_history(hours_back=24)
 
         return f"""DT:{datetime.now().strftime('%Y-%m-%d %H:%M')}
 METRICS(72h):
@@ -232,7 +471,10 @@ COP:{metrics.estimated_cop:.2f}
 DegMin:{metrics.degree_minutes:.0f}
 Curve:{metrics.heating_curve}/Offset:{metrics.curve_offset}
 {price_str}
+{forecast_str}
 {hw_str}
+
+{history_str}
 """
 
     def _create_optimized_prompt(self, context: str) -> str:
@@ -244,10 +486,28 @@ Output JSON only.
 Action: adjust|hold|investigate
 Params: heating_curve(1-15), curve_offset(-10-10), start_compressor(-DM), hot_water_demand(0-2), increased_ventilation(0-4)
 Rules: Indoor target 20-22C. Max 1 change. Min conf 0.7.
-STRATEGY: 
-1. If Price EXPENSIVE: Lower heat (Offset -1). Set HotWater=Small(0) if HW_Usage_Risk is LOW.
-2. If Price CHEAP: Buffer heat (Offset +1). Set HotWater=Large(2) if HW_Usage_Risk is HIGH.
-3. If HW_Usage_Risk is HIGH: Ensure HotWater is at least Medium(1).
+
+IMPORTANT: DegMin is a START THRESHOLD (when compressor starts), NOT an indicator of overheating.
+- DegMin negative = compressor starts earlier
+- To check if heating too much: Compare Indoor temp vs target (20-22C)
+- If Indoor > 22C AND price expensive: Lower curve_offset
+- If Indoor < 20C: Never lower heating, regardless of price
+
+THERMAL LAG: House takes ~3h to respond to heating changes. BE PREDICTIVE!
+- If expensive prices coming in 2-4h: Act NOW (lower heating before price spike)
+- If cheap prices coming soon: Buffer heat NOW (raise before price drops)
+- If weather COOLING: Increase heat NOW (before temp drops)
+- If weather WARMING: Decrease heat NOW (before temp rises)
+- System response time ~3h, so prepare in advance
+
+STRATEGY (PREDICTIVE):
+1. FORECAST EXPENSIVE + STABLE/WARMING Weather: If Indoor >= 20.5C: Lower heat NOW (Offset -2 to -5). Set HotWater=Small(0) if HW_Usage_Risk LOW.
+2. FORECAST CHEAP + STABLE/COOLING Weather: If Indoor <= 21.5C: Buffer heat NOW (Offset +2 to +5). Set HotWater=Large(2) if HW_Usage_Risk HIGH.
+3. WEATHER COOLING: Increase heat proactively even if price expensive (comfort > cost when temp dropping).
+4. WEATHER WARMING: Decrease heat proactively even if price cheap (save energy when temp rising).
+5. CURRENT EXPENSIVE but CHEAP ahead: Hold/minor adjust only.
+6. If HW_Usage_Risk is HIGH: Ensure HotWater is at least Medium(1).
+7. LEARN FROM HISTORY: Review recent changes and their COP impact. Avoid repeating changes that decreased COP.
 
 Example:
 {{"action":"adjust","parameter":"hot_water_demand","current_value":1,"suggested_value":0,"reasoning":"Price is EXPENSIVE & HW Usage Risk is LOW. Saving energy.","confidence":0.9,"expected_impact":"Save energy"}}
@@ -306,3 +566,165 @@ Example:
             logger.error(f"Pydantic validation failed: {e}")
             logger.error(f"Data received: {data}")
             raise ValueError(f"AI response failed validation: {e}")
+
+    def evaluate_scientific_test_results(self, test: PlannedTest, start_time: datetime, end_time: datetime) -> Dict:
+        """
+        Evaluate scientific test results using specialized analysis methods.
+
+        This method determines which analysis to run based on the test's hypothesis
+        or parameter, then uses the scientific_analyzer to get detailed metrics.
+
+        Args:
+            test: The PlannedTest object that was completed
+            start_time: When the test started
+            end_time: When the test ended
+
+        Returns:
+            Dictionary with evaluation results and analysis data
+        """
+        logger.info("="*80)
+        logger.info(f"EVALUATING SCIENTIFIC TEST: {test.hypothesis}")
+        logger.info(f"Period: {start_time} to {end_time}")
+        logger.info("="*80)
+
+        # Get parameter info
+        param = self.analyzer.session.query(Parameter).filter_by(id=test.parameter_id).first()
+        if not param:
+            logger.error(f"Parameter ID {test.parameter_id} not found")
+            return {'success': False, 'error': 'Parameter not found'}
+
+        param_id = param.parameter_id
+        duration_hours = (end_time - start_time).total_seconds() / 3600
+
+        evaluation = {
+            'test_id': test.id,
+            'parameter_id': param_id,
+            'parameter_name': param.parameter_name,
+            'hypothesis': test.hypothesis,
+            'start_time': start_time.isoformat(),
+            'end_time': end_time.isoformat(),
+            'duration_hours': round(duration_hours, 2),
+            'analysis': {},
+            'conclusion': '',
+            'success': True
+        }
+
+        # Determine which analysis to run based on parameter and hypothesis
+        logger.info(f"Analyzing test for parameter {param_id} ({param.parameter_name})")
+
+        # Test 1: Curve Offset (-10) - Measure cooling rate
+        if param_id == '47011' and 'tidskonstant' in test.hypothesis.lower():
+            logger.info("Running cooling rate analysis (thermal time constant test)")
+            cooling_analysis = self.scientific_analyzer.analyze_cooling_rate(start_time, end_time)
+            evaluation['analysis']['cooling_rate'] = cooling_analysis
+
+            if cooling_analysis['success']:
+                rate = cooling_analysis['cooling_rate_c_per_hour']
+                r2 = cooling_analysis['r_squared']
+
+                # Interpret results
+                if abs(rate) < 0.1:
+                    conclusion = f"House has excellent thermal stability. Cooling rate: {rate:.3f}°C/h (R²={r2:.2f}). Very well insulated."
+                elif rate < 0:  # Cooling
+                    conclusion = f"House cooling at {abs(rate):.3f}°C/h (R²={r2:.2f}). Thermal time constant suggests good insulation."
+                else:  # Heating
+                    conclusion = f"House warming at {rate:.3f}°C/h (R²={r2:.2f}). Heat pump compensating for low offset setting."
+
+                evaluation['conclusion'] = conclusion
+                logger.info(f"Conclusion: {conclusion}")
+            else:
+                evaluation['conclusion'] = f"Analysis failed: {cooling_analysis.get('error', 'Unknown error')}"
+                evaluation['success'] = False
+
+        # Test 2: Start Compressor (-160) - Minimize starts
+        elif param_id == '47206' and 'kompressor' in test.hypothesis.lower():
+            logger.info("Running compressor starts analysis")
+            starts_analysis = self.scientific_analyzer.count_compressor_starts(start_time, end_time)
+            evaluation['analysis']['compressor_starts'] = starts_analysis
+
+            if starts_analysis['success']:
+                count = starts_analysis['start_count']
+                avg_runtime = starts_analysis['avg_runtime_minutes']
+
+                # Interpret results
+                starts_per_day = count / (duration_hours / 24)
+                if count < 5 and duration_hours >= 24:
+                    conclusion = f"Excellent: Only {count} starts in {duration_hours:.1f}h ({starts_per_day:.1f}/day). Avg runtime: {avg_runtime:.1f} min. Long cycles = high COP."
+                elif count < 10 and duration_hours >= 24:
+                    conclusion = f"Good: {count} starts in {duration_hours:.1f}h ({starts_per_day:.1f}/day). Avg runtime: {avg_runtime:.1f} min. Acceptable cycle length."
+                else:
+                    conclusion = f"Many starts: {count} in {duration_hours:.1f}h ({starts_per_day:.1f}/day). Avg runtime: {avg_runtime:.1f} min. Consider raising threshold further."
+
+                evaluation['conclusion'] = conclusion
+                logger.info(f"Conclusion: {conclusion}")
+            else:
+                evaluation['conclusion'] = f"Analysis failed: {starts_analysis.get('error', 'Unknown error')}"
+                evaluation['success'] = False
+
+        # Test 3: Hot Water Demand (2=Large) - Test max temp without immersion heater
+        elif param_id == '47041' and 'varmvatten' in test.hypothesis.lower():
+            logger.info("Running hot water temperature analysis")
+
+            # Check immersion heater usage (with known issues)
+            logger.warning("⚠️ Immersion heater parameter (43427/49993/43084) may give incorrect values")
+            heater_analysis = self.scientific_analyzer.check_immersion_heater_usage(start_time, end_time)
+
+            # For now, we'll use hot water temperature as the main metric
+            # Get max hot water temperature achieved
+            try:
+                conn = self.analyzer.session.connection()
+                from sqlalchemy import text
+
+                # Get hot water top temperature (40013)
+                query = text("""
+                    SELECT MAX(pr.value) as max_temp
+                    FROM parameter_readings pr
+                    JOIN parameters p ON pr.parameter_id = p.id
+                    WHERE p.parameter_id = '40013'
+                        AND pr.timestamp >= :start_time
+                        AND pr.timestamp <= :end_time
+                """)
+
+                result = conn.execute(query, {'start_time': start_time, 'end_time': end_time})
+                row = result.fetchone()
+                max_hw_temp = row[0] if row and row[0] else None
+
+                evaluation['analysis']['hot_water'] = {
+                    'max_temperature': max_hw_temp,
+                    'immersion_heater_analysis': heater_analysis,
+                    'note': 'Immersion heater data may be unreliable - using temperature as primary metric'
+                }
+
+                if max_hw_temp:
+                    # Assume immersion heater NOT used if temp stays below 55-58°C
+                    # (heat pump alone typically maxes around 55°C)
+                    if max_hw_temp < 55:
+                        conclusion = f"Heat pump alone achieved {max_hw_temp:.1f}°C. No immersion heater needed (temp < 55°C threshold)."
+                    elif max_hw_temp < 58:
+                        conclusion = f"Heat pump achieved {max_hw_temp:.1f}°C. Likely no immersion heater (temp < 58°C). Close to limit."
+                    else:
+                        conclusion = f"Max temp {max_hw_temp:.1f}°C achieved. Possible immersion heater use (temp ≥ 58°C) - verify manually."
+
+                    evaluation['conclusion'] = conclusion
+                    logger.info(f"Conclusion: {conclusion}")
+                else:
+                    evaluation['conclusion'] = "No hot water temperature data available"
+                    evaluation['success'] = False
+
+            except Exception as e:
+                logger.error(f"Failed to query hot water temperature: {e}")
+                evaluation['conclusion'] = f"Error querying hot water temp: {e}"
+                evaluation['success'] = False
+
+        else:
+            # Generic analysis - run all available metrics
+            logger.info("Running generic multi-metric analysis")
+            summary = self.scientific_analyzer.get_test_summary(start_time, end_time)
+            evaluation['analysis'] = summary
+            evaluation['conclusion'] = f"Generic analysis completed for {param.parameter_name}. Review detailed metrics."
+
+        logger.info("="*80)
+        logger.info(f"EVALUATION COMPLETE: {evaluation['conclusion'][:80]}...")
+        logger.info("="*80)
+
+        return evaluation

@@ -4,12 +4,13 @@ Automatically captures and compares metrics before and after changes
 """
 from datetime import datetime, timedelta
 from typing import Optional, Dict
+import json
 from loguru import logger
 from sqlalchemy.orm import Session
 
 from models import (
     Device, ParameterChange, ABTestResult,
-    ParameterReading, Parameter
+    ParameterReading, Parameter, PlannedTest
 )
 from analyzer import HeatPumpAnalyzer
 from sqlalchemy import func
@@ -511,3 +512,123 @@ class ABTester:
             result = self.evaluate_change(change)
             if result:
                 logger.info(f"✓ Change {change.id} evaluated successfully")
+
+    def evaluate_planned_test(self, test: PlannedTest, ai_agent=None) -> Optional[ABTestResult]:
+        """
+        Evaluate a PlannedTest using scientific analysis methods.
+
+        This method is specifically for PlannedTest objects (scientific tests),
+        NOT for regular ParameterChange objects (which use standard COP analysis).
+
+        Args:
+            test: PlannedTest object with status='completed'
+            ai_agent: AutonomousAIAgentV2 instance (optional, will create if not provided)
+
+        Returns:
+            ABTestResult with scientific analysis data
+        """
+        try:
+            if test.status != 'completed':
+                logger.warning(f"PlannedTest {test.id} is not completed yet (status={test.status})")
+                return None
+
+            if not test.started_at or not test.completed_at:
+                logger.error(f"PlannedTest {test.id} missing start/end timestamps")
+                return None
+
+            logger.info("="*80)
+            logger.info(f"EVALUATING SCIENTIFIC PLANNED TEST: {test.id}")
+            logger.info(f"Hypothesis: {test.hypothesis}")
+            logger.info("="*80)
+
+            # Create AI agent if not provided
+            if ai_agent is None:
+                from autonomous_ai_agent_v2 import AutonomousAIAgentV2
+                from api_client import MyUplinkClient
+                from weather_service import SMHIWeatherService
+
+                device = self.session.query(Device).first()
+                if not device:
+                    logger.error("No device found in database")
+                    return None
+
+                ai_agent = AutonomousAIAgentV2(
+                    analyzer=self.analyzer,
+                    api_client=MyUplinkClient(),
+                    weather_service=SMHIWeatherService(),
+                    device_id=device.device_id
+                )
+
+            # Run scientific evaluation
+            evaluation = ai_agent.evaluate_scientific_test_results(
+                test,
+                test.started_at,
+                test.completed_at
+            )
+
+            if not evaluation['success']:
+                logger.error(f"Scientific evaluation failed: {evaluation.get('error', 'Unknown error')}")
+                return None
+
+            # Create ABTestResult to store the scientific analysis
+            result = ABTestResult(
+                parameter_change_id=None,  # This is a PlannedTest, not a ParameterChange
+                before_start=test.started_at - timedelta(hours=self.BEFORE_HOURS),
+                before_end=test.started_at,
+                after_start=test.started_at,
+                after_end=test.completed_at,
+                # Store scientific analysis in recommendation field as JSON
+                recommendation=json.dumps(evaluation, indent=2, default=str),
+                # Set default values for required fields (not applicable for scientific tests)
+                cop_before=0.0,
+                cop_after=0.0,
+                cop_change_percent=0.0,
+                delta_t_before=0.0,
+                delta_t_after=0.0,
+                delta_t_change_percent=0.0,
+                success_score=100.0 if evaluation['success'] else 0.0
+            )
+
+            self.session.add(result)
+            self.session.commit()
+
+            # Link result to test
+            test.result_id = result.id
+            self.session.commit()
+
+            logger.info("="*80)
+            logger.info(f"✓ PlannedTest {test.id} evaluated successfully")
+            logger.info(f"Conclusion: {evaluation['conclusion'][:80]}...")
+            logger.info("="*80)
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error evaluating PlannedTest: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def get_completed_planned_tests_for_evaluation(self) -> list:
+        """Get all completed PlannedTests that need evaluation (no result yet)"""
+        tests = self.session.query(PlannedTest).filter(
+            PlannedTest.status == 'completed',
+            PlannedTest.result_id == None  # Not yet evaluated
+        ).all()
+
+        return tests
+
+    def evaluate_all_completed_planned_tests(self, ai_agent=None):
+        """Evaluate all completed PlannedTests that don't have results yet"""
+        tests = self.get_completed_planned_tests_for_evaluation()
+        logger.info(f"Found {len(tests)} completed PlannedTests ready for scientific evaluation")
+
+        results = []
+        for test in tests:
+            logger.info(f"Evaluating PlannedTest {test.id}...")
+            result = self.evaluate_planned_test(test, ai_agent)
+            if result:
+                results.append(result)
+                logger.info(f"✓ PlannedTest {test.id} evaluated successfully")
+
+        return results

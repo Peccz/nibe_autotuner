@@ -421,7 +421,9 @@ Now analyze the system and provide your decision:"""
             'heating_curve': '47007',
             'curve_offset': '47011',
             'room_temp': '47015',
-            'start_compressor': '47206'
+            'start_compressor': '47206',
+            'hot_water_demand': '47041',
+            'increased_ventilation': '50005'
         }
 
         param_id = param_map.get(decision.parameter)
