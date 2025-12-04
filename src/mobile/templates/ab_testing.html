@@ -188,6 +188,11 @@
 {% block content %}
 <div class="info-box">
     <strong>💡 Så fungerar A/B-testning:</strong> När du ändrar en parameter jämförs automatiskt 48h före och 48h efter ändringen. Efter 48h får du en vetenskaplig utvärdering av om ändringen var bra!
+    <br><br>
+    <strong>🔍 Status:</strong>
+    <br>• 👤 <strong>Användare</strong> - Manuell ändring via Dashboard Quick Actions
+    <br>• 🤖 <strong>AI-agent</strong> - Automatisk optimering av AI
+    <br>• ⚙️ <strong>Automatisk</strong> - Schemalagd körning
 </div>
 
 <!-- Loading indicator -->
@@ -296,11 +301,24 @@ function createTestCard(test) {
         recClass = 'adjust';
     }
 
+    // Determine applied_by icon and text
+    const appliedByIcon = test.applied_by === 'ai' ? '🤖' :
+                         test.applied_by === 'user' ? '👤' :
+                         test.applied_by === 'automatic' ? '⚙️' : '❓';
+    const appliedByText = test.applied_by === 'ai' ? 'AI-agent' :
+                         test.applied_by === 'user' ? 'Användare' :
+                         test.applied_by === 'automatic' ? 'Automatisk' : 'Okänd';
+
     card.innerHTML = `
         <div class="test-header">
             <div>
                 <div class="test-title">${test.parameter_name}</div>
-                <div class="test-date">${dateStr}</div>
+                <div class="test-date">
+                    ${dateStr}
+                    <span style="margin-left: 8px; padding: 2px 8px; background: rgba(0,0,0,0.05); border-radius: 4px; font-size: 11px;">
+                        ${appliedByIcon} ${appliedByText}
+                    </span>
+                </div>
             </div>
             <div class="score-circle ${scoreClass}">
                 ${Math.round(test.success_score)}

@@ -346,11 +346,14 @@ def get_ab_tests():
                 'old_value': change.old_value,
                 'new_value': change.new_value,
                 'timestamp': change.timestamp.isoformat(),
+                'applied_by': change.applied_by if change.applied_by else 'unknown',
+                'status': 'completed',
                 'cop_before': result.cop_before,
                 'cop_after': result.cop_after,
                 'cop_change_percent': result.cop_change_percent,
                 'delta_t_before': result.delta_t_before,
                 'delta_t_after': result.delta_t_after,
+                'delta_t_change_percent': ((result.delta_t_after - result.delta_t_before) / result.delta_t_before * 100) if result.delta_t_before and result.delta_t_before != 0 else 0,
                 'indoor_temp_before': result.indoor_temp_before,
                 'indoor_temp_after': result.indoor_temp_after,
                 'indoor_temp_change': result.indoor_temp_change,
@@ -1136,8 +1139,8 @@ def get_planned_tests():
         from models import PlannedTest
 
         tests = session.query(PlannedTest).filter_by(status='pending').order_by(
-            PlannedTest.priority.desc(),
-            PlannedTest.confidence.desc()
+            PlannedTest.priority_score.desc(),
+            PlannedTest.execution_order.asc()
         ).all()
 
         data = []
@@ -1150,6 +1153,8 @@ def get_planned_tests():
                 'hypothesis': test.hypothesis,
                 'expected_improvement': test.expected_improvement,
                 'priority': test.priority,
+                'priority_score': test.priority_score if test.priority_score else 0.0,
+                'execution_order': test.execution_order if test.execution_order else 999,
                 'confidence': test.confidence * 100,
                 'reasoning': test.reasoning,
                 'scheduled_date': test.proposed_at.isoformat()

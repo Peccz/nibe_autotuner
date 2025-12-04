@@ -262,6 +262,8 @@ class PlannedTest(Base):
     hypothesis = Column(String(500))  # Why we think this will help
     expected_improvement = Column(String(200))  # Expected benefit
     priority = Column(String(20))  # 'high', 'medium', 'low'
+    priority_score = Column(Float, default=0.0)  # Numeric priority score (0-100)
+    execution_order = Column(Integer)  # Recommended execution order
     confidence = Column(Float)  # 0.0-1.0
     reasoning = Column(String(1000))  # AI reasoning
     status = Column(String(20), default='pending')  # 'pending', 'active', 'completed', 'cancelled'

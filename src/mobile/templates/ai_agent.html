@@ -599,14 +599,34 @@ async function loadAIData() {
             document.getElementById('plannedCount').textContent = planned.data.length + ' st';
 
             const html = planned.data.map(test => `
-                <div class="test-item" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <strong>${test.parameter_name}</strong>
-                        <span style="padding: 0.25rem 0.5rem; background: ${test.priority === 'high' ? '#f44336' : (test.priority === 'medium' ? '#ff9800' : '#4caf50')}; color: white; border-radius: 4px; font-size: 0.8rem;">${test.priority.toUpperCase()}</span>
+                <div class="test-item" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; position: relative;">
+                    <div style="position: absolute; top: 0.5rem; left: 0.5rem; background: #2d5f8e; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem;">
+                        #${test.execution_order}
                     </div>
-                    <p><strong>Hypotes:</strong> ${test.hypothesis}</p>
-                    <p><strong>Förväntad förbättring:</strong> ${test.expected_improvement}</p>
-                    <p><strong>Konfidens:</strong> ${test.confidence}%</p>
+                    <div style="margin-left: 50px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <div>
+                                <strong>${test.parameter_name}</strong>
+                                <div style="font-size: 0.85rem; color: #666; margin-top: 0.25rem;">
+                                    ${test.current_value} → ${test.proposed_value}
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="padding: 0.25rem 0.5rem; background: ${test.priority === 'high' ? '#f44336' : (test.priority === 'medium' ? '#ff9800' : '#4caf50')}; color: white; border-radius: 4px; font-size: 0.8rem; margin-bottom: 0.25rem;">
+                                    ${test.priority.toUpperCase()}
+                                </div>
+                                <div style="font-size: 0.75rem; color: #666;">
+                                    Score: ${test.priority_score ? test.priority_score.toFixed(1) : 'N/A'}
+                                </div>
+                            </div>
+                        </div>
+                        <p style="margin: 0.5rem 0; font-size: 0.9rem;"><strong>Hypotes:</strong> ${test.hypothesis}</p>
+                        <p style="margin: 0.5rem 0; font-size: 0.9rem;"><strong>Förväntad förbättring:</strong> ${test.expected_improvement}</p>
+                        <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.85rem; color: #666;">
+                            <span>💡 Konfidens: ${Math.round(test.confidence)}%</span>
+                            <span>📅 ${new Date(test.scheduled_date).toLocaleDateString('sv-SE')}</span>
+                        </div>
+                    </div>
                 </div>
             `).join('');
             document.getElementById('plannedTestsList').innerHTML = html;
