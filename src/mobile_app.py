@@ -191,7 +191,7 @@ def get_chart_data(chart_type):
             'indoor': 40033,     # Indoor temp
             'supply': 40008,     # Supply temp
             'return': 40012,     # Return temp
-            'compressor': 43424, # Compressor frequency
+            'compressor': 41778, # Current compressor frequency (Hz)
             'hot_water': 40013,  # Hot water temp
             'pump_speed': 43437  # Circulation pump speed (GP1)
         }
