@@ -79,13 +79,16 @@ class ParameterConfig:
 
     # Maximum step size changes to prevent aggressive adjustments
     MAX_STEP_SIZES = {
-        'curve_offset': 5,      # Max ±5 steps - allows effective on/off control based on price
-        'heating_curve': 2,     # Max ±2 steps
+        'curve_offset': 2,      # Max ±2 steps - conservative to avoid extreme changes
+        'heating_curve': 1,     # Max ±1 step
         'room_temp': 1,         # Max ±1°C
     }
 
     # Minimum temperature thresholds
     MIN_INDOOR_TEMP = 20.0  # Never target below this
+
+    # Normal operating range for curve_offset
+    NORMAL_OFFSET_RANGE = (-5, 0)  # Typical range, warn if outside
 
     # Confidence thresholds
     MIN_CONFIDENCE_TO_APPLY = 0.70
@@ -501,13 +504,17 @@ THERMAL LAG: House takes ~3h to respond to heating changes. BE PREDICTIVE!
 - System response time ~3h, so prepare in advance
 
 STRATEGY (PREDICTIVE):
-1. FORECAST EXPENSIVE + STABLE/WARMING Weather: If Indoor >= 20.5C: Lower heat NOW (Offset -2 to -5). Set HotWater=Small(0) if HW_Usage_Risk LOW.
-2. FORECAST CHEAP + STABLE/COOLING Weather: If Indoor <= 21.5C: Buffer heat NOW (Offset +2 to +5). Set HotWater=Large(2) if HW_Usage_Risk HIGH.
+IMPORTANT: Normal curve_offset range is -3 to 0. Values below -5 are EXTREME and should be avoided!
+Max change per decision: ±2 steps only.
+
+1. FORECAST EXPENSIVE + STABLE/WARMING Weather: If Indoor >= 20.5C: Lower heat by 1-2 steps (but stay above -5). Set HotWater=Small(0) if HW_Usage_Risk LOW.
+2. FORECAST CHEAP + STABLE/COOLING Weather: If Indoor <= 21.5C: Increase heat by 1-2 steps (toward 0). Set HotWater=Large(2) if HW_Usage_Risk HIGH.
 3. WEATHER COOLING: Increase heat proactively even if price expensive (comfort > cost when temp dropping).
 4. WEATHER WARMING: Decrease heat proactively even if price cheap (save energy when temp rising).
 5. CURRENT EXPENSIVE but CHEAP ahead: Hold/minor adjust only.
 6. If HW_Usage_Risk is HIGH: Ensure HotWater is at least Medium(1).
 7. LEARN FROM HISTORY: Review recent changes and their COP impact. Avoid repeating changes that decreased COP.
+8. If current offset is below -5: Consider INCREASING (moving toward -3) unless indoor temp is too high.
 
 Example:
 {{"action":"adjust","parameter":"hot_water_demand","current_value":1,"suggested_value":0,"reasoning":"Price is EXPENSIVE & HW Usage Risk is LOW. Saving energy.","confidence":0.9,"expected_impact":"Save energy"}}
