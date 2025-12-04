@@ -87,8 +87,13 @@ class ParameterConfig:
     # Minimum temperature thresholds
     MIN_INDOOR_TEMP = 20.0  # Never target below this
 
-    # Normal operating range for curve_offset
+    # Normal operating range for curve_offset (empirically determined)
     NORMAL_OFFSET_RANGE = (-5, 0)  # Typical range, warn if outside
+
+    # Target offset values for different scenarios (outdoor temp 3-5°C)
+    OFFSET_BASELINE = -3     # Normal operation (night/cheap electricity)
+    OFFSET_REDUCED = -5      # Maximum reduction (expensive electricity)
+    OFFSET_BUFFERED = -1     # Buffering heat (before expensive period)
 
     # Confidence thresholds
     MIN_CONFIDENCE_TO_APPLY = 0.70
@@ -292,6 +297,11 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
             diff = abs(decision.suggested_value - decision.current_value)
             if diff > max_step:
                 return False, f"Change of {diff} steps for {decision.parameter} is too aggressive (max {max_step})"
+
+        # Rule 4: Curve Offset Empirical Limits (outdoor temp 3-5°C)
+        if decision.parameter == 'curve_offset':
+            if decision.suggested_value < ParameterConfig.OFFSET_REDUCED:
+                return False, f"Offset {decision.suggested_value} is below empirical minimum ({ParameterConfig.OFFSET_REDUCED}) for current outdoor temps. No additional savings, risks discomfort."
 
         return True, ""
 
@@ -503,18 +513,39 @@ THERMAL LAG: House takes ~3h to respond to heating changes. BE PREDICTIVE!
 - If weather WARMING: Decrease heat NOW (before temp rises)
 - System response time ~3h, so prepare in advance
 
-STRATEGY (PREDICTIVE):
-IMPORTANT: Normal curve_offset range is -3 to 0. Values below -5 are EXTREME and should be avoided!
+STRATEGY (PREDICTIVE) - Based on empirical data for outdoor temp 3-5°C:
+
+OFFSET TARGET VALUES (outdoor 3-5°C):
+- BASELINE: -3 (normal operation, gives indoor 20-22°C)
+- REDUCED: -5 (maximum reduction during expensive electricity, gives indoor 20-21°C)
+- BUFFERED: -1 (heat buffering before expensive period, gives indoor 21-23°C)
+- NEVER go below -5 at current outdoor temps (3-5°C) - provides NO additional savings and risks discomfort
+
 Max change per decision: ±2 steps only.
 
-1. FORECAST EXPENSIVE + STABLE/WARMING Weather: If Indoor >= 20.5C: Lower heat by 1-2 steps (but stay above -5). Set HotWater=Small(0) if HW_Usage_Risk LOW.
-2. FORECAST CHEAP + STABLE/COOLING Weather: If Indoor <= 21.5C: Increase heat by 1-2 steps (toward 0). Set HotWater=Large(2) if HW_Usage_Risk HIGH.
-3. WEATHER COOLING: Increase heat proactively even if price expensive (comfort > cost when temp dropping).
-4. WEATHER WARMING: Decrease heat proactively even if price cheap (save energy when temp rising).
-5. CURRENT EXPENSIVE but CHEAP ahead: Hold/minor adjust only.
-6. If HW_Usage_Risk is HIGH: Ensure HotWater is at least Medium(1).
+1. FORECAST EXPENSIVE (in 2-4h) + Indoor >= 20.5C:
+   → Target offset -5 (move gradually from current, max -2 steps)
+   → Set HotWater=Small(0) if HW_Usage_Risk LOW
+
+2. FORECAST CHEAP (in 2-4h) + Indoor <= 21.5C:
+   → Target offset -1 (move gradually from current, max +2 steps)
+   → Set HotWater=Large(2) if HW_Usage_Risk HIGH
+
+3. CURRENTLY CHEAP + Indoor in range (20-22C):
+   → Target offset -3 (baseline, comfortable and efficient)
+
+4. WEATHER COOLING (>2°C drop forecast):
+   → Increase offset by +1 step (comfort > cost when temp dropping)
+
+5. WEATHER WARMING (>2°C rise forecast):
+   → Decrease offset by -1 step (save energy when temp rising)
+
+6. If current offset is below -5:
+   → INCREASE immediately toward -5 (current value is too extreme)
+
 7. LEARN FROM HISTORY: Review recent changes and their COP impact. Avoid repeating changes that decreased COP.
-8. If current offset is below -5: Consider INCREASING (moving toward -3) unless indoor temp is too high.
+
+8. If HW_Usage_Risk is HIGH: Ensure HotWater is at least Medium(1).
 
 Example:
 {{"action":"adjust","parameter":"hot_water_demand","current_value":1,"suggested_value":0,"reasoning":"Price is EXPENSIVE & HW Usage Risk is LOW. Saving energy.","confidence":0.9,"expected_impact":"Save energy"}}

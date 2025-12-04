@@ -66,9 +66,12 @@
 - Max: +10
 - Steg: 1 (heltal)
 
-**Aktuell användning:**
-- Normalt intervall: -10 till 0
-- Typiskt läge: -3 till -8 (beroende på pris/väder)
+**Aktuell användning (empiriskt bestämd för outdoor 3-5°C):**
+- Normalt intervall: -5 till 0
+- BASLINJE: -3 (normal drift, ger 20-22°C inomhus)
+- REDUCERAT: -5 (max sänkning vid dyrt el, ger 20-21°C inomhus)
+- BUFFRAT: -1 (värmebuffring före dyr period, ger 21-23°C inomhus)
+- **ALDRIG under -5 vid nuvarande utetemp** (ger ingen extra besparing)
 
 **Effekt:**
 - **-1 steg (t.ex. -5 → -6):** Sänker framledningstemperatur ~2-3°C
@@ -87,24 +90,31 @@ Tid     Framledning  Radiator   Rumsluft
 ```
 
 **Säkerhetsgränser:**
-- Max ändring per steg: ±5 (tidigare ±2, ökat för att möjliggöra prediktiv styrning)
+- Max ändring per steg: ±2 (konservativt för att undvika extrema värden)
 - Min konfidens för ändring: 70%
 - Minsta rumstemperatur: 20.0°C (får aldrig understigas)
+- Hårdkodad minimum för offset: -5 (empirisk gräns för outdoor 3-5°C)
 
 **Osäkerhet:**
 - Framledningstemperatur-relation: **MEDEL** (±1°C osäkerhet)
 - Rumstemperatur-effekt: **HÖG osäkerhet** (beror på väder, sol, vind)
 - Tidsrespons: **MEDEL** (±30min variabilitet)
 
-**Användningsmönster:**
+**Användningsmönster (empiriskt baserat):**
 ```python
-# Dyrt elpris + varmt inomhus → Sänk
-if price_expensive and indoor_temp >= 20.5:
-    offset -= 2  # till -5 steg
+# BASLINJE: Normal drift (natt/billigt el)
+offset = -3  # → Indoor 20-22°C
 
-# Billigt elpris + svalt inomhus → Höj
-if price_cheap and indoor_temp <= 21.5:
-    offset += 3  # till +5 steg
+# DYRT ELPRIS (2-4h framåt) + Varmt inomhus
+if forecast_expensive and indoor_temp >= 20.5:
+    offset = -5  # Max sänkning → Indoor 20-21°C
+
+# BILLIGT ELPRIS (2-4h framåt) + Svalt inomhus
+if forecast_cheap and indoor_temp <= 21.5:
+    offset = -1  # Buffring → Indoor 21-23°C
+
+# ALDRIG gå under -5 vid outdoor 3-5°C
+offset = max(offset, -5)
 ```
 
 ---
