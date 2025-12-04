@@ -448,9 +448,11 @@ Now analyze the system and provide your decision:"""
                 change = ParameterChange(
                     device_id=self.analyzer.get_device().id,
                     parameter_id=param.id,
+                    timestamp=datetime.utcnow(),
                     old_value=decision.current_value,
                     new_value=decision.suggested_value,
-                    reason=f"Autonomous AI: {decision.reasoning[:200]}"
+                    reason=f"Autonomous AI: {decision.reasoning[:200]}",
+                    applied_by='ai'
                 )
                 self.analyzer.session.add(change)
                 self.analyzer.session.commit()

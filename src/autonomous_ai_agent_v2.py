@@ -1,6 +1,6 @@
 """
 Autonomous AI Agent V2 - Optimized & Safe
-Uses Claude API with strict safety guardrails and token optimization.
+Uses Google Gemini API with strict safety guardrails and token optimization.
 """
 import os
 import json
@@ -15,8 +15,62 @@ from pydantic import BaseModel, Field, ValidationError, ConfigDict
 from autonomous_ai_agent import AIDecision, AutonomousAIAgent
 from models import AIDecisionLog, Parameter, ParameterChange
 from price_service import ElectricityPriceService
+from hw_analyzer import HotWaterPatternAnalyzer
 
-# ... (Keep Config classes as is) ...
+# ============================================================================
+# CONFIGURATION CONSTANTS
+# ============================================================================
+
+class ParameterConfig:
+    """Central configuration for parameter names and their API IDs"""
+    # Parameter name mappings (logical name -> API parameter ID)
+    PARAMETER_IDS = {
+        'heating_curve': '47007',
+        'curve_offset': '47011',
+        'room_temp': '47015',
+        'start_compressor': '47206',
+        'hot_water_demand': '47041',
+        'increased_ventilation': '50005',
+    }
+
+    # Safety bounds for each parameter
+    BOUNDS = {
+        'heating_curve': (1, 15),           # Nibe curve range
+        'curve_offset': (-10, 10),          # Nibe offset range
+        'start_compressor': (-1000, -60),   # DM range
+        'room_temp': (18, 25),              # Reasonable indoor temp range
+        'hot_water_demand': (0, 2),         # 0=Small, 1=Medium, 2=Large
+        'increased_ventilation': (0, 4),    # 0=Normal
+    }
+
+    # Maximum step size changes to prevent aggressive adjustments
+    MAX_STEP_SIZES = {
+        'curve_offset': 2,      # Max ±2 steps
+        'heating_curve': 1,     # Max ±1 step
+        'room_temp': 1,         # Max ±1°C
+    }
+
+    # Minimum temperature thresholds
+    MIN_INDOOR_TEMP = 19.0  # Never target below this
+
+    # Confidence thresholds
+    MIN_CONFIDENCE_TO_APPLY = 0.70
+
+# ============================================================================
+# PYDANTIC MODELS FOR ROBUST JSON PARSING
+# ============================================================================
+
+class AIDecisionModel(BaseModel):
+    """Pydantic model for AI decision JSON validation"""
+    model_config = ConfigDict(extra="ignore")  # Ignore unknown fields
+
+    action: str = Field(..., pattern="^(adjust|hold|investigate)$")
+    parameter: Optional[str] = None
+    current_value: Optional[float] = None
+    suggested_value: Optional[float] = None
+    reasoning: str = Field(default="", min_length=0)
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    expected_impact: str = Field(default="", min_length=0)
 
 class AutonomousAIAgentV2(AutonomousAIAgent):
     """
@@ -26,6 +80,7 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
     3. Explicit Token Tracking
     4. Electricity Price Awareness (Fas 2)
     5. Powered by Google Gemini 2.5 Flash
+    6. Smart Hot Water Control (Usage Pattern Analysis)
     """
     
     def __init__(self, analyzer, api_client, weather_service, device_id, anthropic_api_key=None):
@@ -39,6 +94,9 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         
         # Initialize Price Service (defaults to SE3 Stockholm)
         self.price_service = ElectricityPriceService("SE3")
+        
+        # Initialize HW Usage Analyzer
+        self.hw_analyzer = HotWaterPatternAnalyzer()
 
         # Configure Gemini
         api_key = os.getenv('GOOGLE_API_KEY')
@@ -53,6 +111,12 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         logger.info("="*80)
         logger.info("AUTONOMOUS AI AGENT V2 (GEMINI) - Analysis")
         logger.info("="*80)
+
+        # Train HW analyzer (lightweight, uses cached data if available)
+        try:
+            self.hw_analyzer.train_on_history(days_back=14)
+        except Exception as e:
+            logger.warning(f"HW Analyzer training failed: {e}")
 
         # 1. Build Optimized Context
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
@@ -71,7 +135,7 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
                 generation_config={"response_mime_type": "application/json"}
             )
             
-            # Log token usage (Gemini provides this in usage_metadata if enabled, but simple log here)
+            # Log token usage
             logger.info("Gemini response received")
 
             response_text = response.text
@@ -153,6 +217,13 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
             logger.warning(f"Failed to get prices: {e}")
             price_str = "Price: N/A"
 
+        # Fetch HW Probability
+        try:
+            hw_prob = self.hw_analyzer.get_usage_probability(datetime.now())
+            hw_str = f"HW_Usage_Risk: {'HIGH' if hw_prob > 0.5 else 'LOW'} ({hw_prob:.1f})"
+        except Exception as e:
+            hw_str = "HW_Usage_Risk: UNKNOWN"
+
         return f"""DT:{datetime.now().strftime('%Y-%m-%d %H:%M')}
 METRICS(72h):
 Outdoor:{metrics.avg_outdoor_temp:.1f}C
@@ -161,6 +232,7 @@ COP:{metrics.estimated_cop:.2f}
 DegMin:{metrics.degree_minutes:.0f}
 Curve:{metrics.heating_curve}/Offset:{metrics.curve_offset}
 {price_str}
+{hw_str}
 """
 
     def _create_optimized_prompt(self, context: str) -> str:
@@ -172,10 +244,13 @@ Output JSON only.
 Action: adjust|hold|investigate
 Params: heating_curve(1-15), curve_offset(-10-10), start_compressor(-DM), hot_water_demand(0-2), increased_ventilation(0-4)
 Rules: Indoor target 20-22C. Max 1 change. Min conf 0.7.
-STRATEGY: If Price is EXPENSIVE -> Lower heat (Offset -1) or HotWater=Small. If CHEAP -> Buffer heat?
+STRATEGY: 
+1. If Price EXPENSIVE: Lower heat (Offset -1). Set HotWater=Small(0) if HW_Usage_Risk is LOW.
+2. If Price CHEAP: Buffer heat (Offset +1). Set HotWater=Large(2) if HW_Usage_Risk is HIGH.
+3. If HW_Usage_Risk is HIGH: Ensure HotWater is at least Medium(1).
 
 Example:
-{{"action":"adjust","parameter":"hot_water_demand","current_value":1,"suggested_value":0,"reasoning":"Price is EXPENSIVE (2.5 SEK). Reducing hot water demand temporarily.","confidence":0.9,"expected_impact":"Save ~5 SEK"}}
+{{"action":"adjust","parameter":"hot_water_demand","current_value":1,"suggested_value":0,"reasoning":"Price is EXPENSIVE & HW Usage Risk is LOW. Saving energy.","confidence":0.9,"expected_impact":"Save energy"}}
 """
 
     def _parse_json_response_robust(self, text: str) -> AIDecisionModel:
@@ -197,6 +272,14 @@ Example:
         try:
             # Parse JSON
             data = json.loads(clean_text)
+
+            # Handle case where Gemini returns a list instead of a dict
+            if isinstance(data, list):
+                if len(data) > 0 and isinstance(data[0], dict):
+                    logger.warning("Gemini returned a list, using first element")
+                    data = data[0]
+                else:
+                    raise ValueError("Gemini returned a list but no valid dict found")
 
             # Validate with Pydantic
             decision_model = AIDecisionModel(**data)

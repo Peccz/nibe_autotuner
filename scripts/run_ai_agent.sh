@@ -10,16 +10,20 @@
 set -e  # Exit on error
 
 # Change to project directory
-cd /home/peccz/AI/nibe_autotuner
+cd /home/peccz/nibe_autotuner
 
-# Load environment variables (includes ANTHROPIC_API_KEY)
-if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
-fi
+# Load environment variables (includes GOOGLE_API_KEY for Gemini)
+set -a
+[ -f .env ] && . .env
+set +a
+
+# Explicitly export critical environment variables for Python subprocess
+export GOOGLE_API_KEY
+export TIBBER_API_TOKEN
 
 # Check if API key is set
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "ERROR: ANTHROPIC_API_KEY not set!"
+if [ -z "$GOOGLE_API_KEY" ]; then
+    echo "ERROR: GOOGLE_API_KEY not set!"
     echo "Please set it in .env file or environment"
     exit 1
 fi
@@ -30,7 +34,8 @@ echo "Autonomous AI Agent - $(date)"
 echo "=================================================="
 
 # Run AI agent V2 with safety guardrails (dry_run=False means it will apply changes!)
-PYTHONPATH=./src ./venv/bin/python -c "
+export PYTHONPATH=./src
+./venv/bin/python -c "
 from autonomous_ai_agent_v2 import AutonomousAIAgentV2
 from analyzer import HeatPumpAnalyzer
 from api_client import MyUplinkClient
