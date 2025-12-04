@@ -145,40 +145,49 @@ Prediktivt (bra):
 
 ### Val 4: Säkerhetsgränser och Flexibilitet
 
-**Beslut:** Max ±5 steg för curve_offset (tidigare ±2)
+**Beslut:** Max ±2 steg för curve_offset med empiriska gränser
 
 **Historik:**
 1. **Initial implementation:** ±2 steg max
-2. **Problem upptäckt:** För långsamt för prediktiv styrning
-   - Att gå från offset -3 till -8 (optimal vid dyrt pris) skulle ta 5 timmar
-   - 3h svarstid + 5h justering = 8h totalt (för långsamt)
-3. **Ändring:** Ökade till ±5 steg
+2. **Tillfällig ändring:** ±5 steg (för snabb respons)
+   - Problem: AI gick till extrema värden (-9, -10)
+   - Rumstemperatur sjönk mot 20°C-gränsen
+3. **Final implementation:** Tillbaka till ±2 steg + empiriska gränser
+   - Empirisk analys visade: offset -5 är MAXIMUM för outdoor 3-5°C
+   - Hårdkodad gräns: Aldrig under -5
+   - Målvärden: -3 (baslinje), -5 (dyrt), -1 (buffring)
 
-**Motivering för ±5:**
+**Motivering för ±2:**
 ```
 Scenario: Kl 14:00, pris blir dyrt 17:00-21:00
-Behov: Sänka från offset -3 till -8 (5 steg)
+Nuvarande offset: -3
+Mål: Offset -5 (empirisk max för dyra perioder)
 
-Med ±2: Kräver 3 separata justeringar över 3h → För sent
-Med ±5: En justering → Effekt märks vid 17:00 → Optimal
+Med ±2: En justering (-3 → -5) → Effekt märks vid 17:00 → Optimal
+Risk vid större steg: AI gick till -9, -10 (onödigt extremt)
 ```
 
 **Riskanalys:**
 - Risk: För aggressiv ändring → Huset blir för kallt
-- Mitigering 1: Indoor temp-kontroll (aldrig under 20°C)
-- Mitigering 2: AI måste ha 70%+ konfidens
-- Mitigering 3: AI ser historik och lär sig undvika för stora ändringar
+- Mitigering 1: Max ±2 steg (graduell ändring)
+- Mitigering 2: Hårdkodad minimum: offset -5 (empiriskt bevisat)
+- Mitigering 3: Indoor temp-kontroll (aldrig under 20°C)
+- Mitigering 4: AI måste ha 70%+ konfidens
+- Mitigering 5: AI ser historik och lär sig optimal frekvens
 
 **Validering:**
 ```
-Faktiska ändringar senaste 24h:
-- 10:00: -3 → -4 (1 steg) → Temp: 22.1 → 21.7°C ✓ OK
-- 10:03: -4 → -5 (1 steg) → Temp: 22.1 → 21.7°C ✓ OK
-- 14:02: -6 → -7 (1 steg) → Temp: 21.6 → 21.6°C ✓ OK
-- 14:45: -7 → -8 (1 steg) → Temp: 21.6 → 21.6°C ✓ OK
+Empirisk analys (48h data):
+- Offset -3: Indoor 20-22°C (baslinje, bekvämt)
+- Offset -5: Indoor 20-21°C (max besparing, fortfarande säkert)
+- Offset -9: Indoor 21.1°C (minimal extra nytta vs -5, närmre 20°C-gräns)
 
-Totalt: -3 → -8 (5 steg) över 5h
-Resultat: Ingen överskriding av säkerhetsgränser
+Slutsats: -5 är OPTIMAL max. Lägre värden ger ingen nytta.
+
+Faktisk drift efter fix:
+- 19:44: -3 → -5 (2 steg, inom limit) ✓ OK
+- AI reasoning: "Strategy recommends targeting offset of -5"
+- Följer nu empiriska målvärden korrekt
 ```
 
 ---
@@ -577,32 +586,34 @@ Minimum: 21.4°C (aldrig under 20.0°C-gränsen)
 
 #### Parameterjusteringar
 ```
-Offset-ändringar senaste 24h:
-10:00: -3 → -4 (pris dyrt)
-10:03: -4 → -5 (pris dyrt)
-13:40: -5 → -6 (pris dyrt, test av fallback)
-14:02: -6 → -7 (pris dyrt)
-14:45: -7 → -8 (pris dyrt)
-14:54: -8 → -9 (pris dyrt, prognos 17-20h dyrt)
+Initial implementation (före fix):
+10:00-14:54: -3 → -9 (6 steg över 5h)
+Problem: AI gick till extrema värden utan empirisk grund
 
-Totalt: -3 → -9 (6 steg) över 5h
-Resultat: Förberedelse för kvällstopp i elpris
+Efter empirisk analys och fix:
+19:44: -3 → -5 (2 steg, följer empiriskt max)
+Resultat: Stannar vid optimal nivå, ingen överaggression
 ```
 
-#### AI-reasoning exempel
+#### AI-reasoning exempel (efter fix)
 ```json
 {
   "action": "adjust",
   "parameter": "curve_offset",
-  "current_value": -8.0,
-  "suggested_value": -9.0,
-  "reasoning": "Price is EXPENSIVE and forecast shows continued high prices 17-20h.
-               Weather STABLE (no cooling expected). Indoor temp 21.4C is
-               comfortably above minimum. Reducing heating now prepares for
-               expensive period with 3h lead time.",
-  "confidence": 0.85
+  "current_value": -3.0,
+  "suggested_value": -5.0,
+  "reasoning": "Forecast shows current and imminent expensive electricity
+               prices (19, 20, 21h). Indoor temperature (21.4C) is within
+               comfort range and above 20.5C, allowing for a reduction in
+               heating. The strategy recommends targeting an offset of -5
+               during expensive periods. Current offset is -3.0, so a -2
+               step adjustment to -5.0 is appropriate and within the allowed
+               maximum change.",
+  "confidence": 0.90
 }
 ```
+
+**Observation:** AI följer nu empiriska målvärden (-3, -5, -1) istället för att gå till extrema värden.
 
 ### Kostnadsbesparing (uppskattad)
 
