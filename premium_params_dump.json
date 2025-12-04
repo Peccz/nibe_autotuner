@@ -1,0 +1,716 @@
+[
+  {
+    "id": "40004",
+    "name": "Outdoor temperature",
+    "value": 4.1,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40008",
+    "name": "Supply line (BT2)",
+    "value": 24.7,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40012",
+    "name": "Return line (BT3)",
+    "value": 24.4,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40013",
+    "name": "Hot water top (BT7)",
+    "value": 52.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40014",
+    "name": "Hot water char\u00adging (BT6)",
+    "value": 47.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40017",
+    "name": "Con\u00addenser (BT12)",
+    "value": 24.4,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40018",
+    "name": "Dis\u00adcharge (BT14)",
+    "value": 39.1,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40019",
+    "name": "Liquid line (BT15)",
+    "value": 29.5,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40020",
+    "name": "Evap\u00adorator (BT16)",
+    "value": 20.4,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40022",
+    "name": "Suction gas (BT17)",
+    "value": 21.8,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40025",
+    "name": "Exhaust air (AZ30-BT20)",
+    "value": 22.3,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40026",
+    "name": "Extract air (AZ30-BT21)",
+    "value": 20.7,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40033",
+    "name": "Room temp\u00aderature (BT50)",
+    "value": 22.1,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40067",
+    "name": "Average outdoor temp (BT1)",
+    "value": 4.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40079",
+    "name": "Current (BE3)",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "A"
+  },
+  {
+    "id": "40081",
+    "name": "Current (BE2)",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "A"
+  },
+  {
+    "id": "40083",
+    "name": "Current (BE1)",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "A"
+  },
+  {
+    "id": "40145",
+    "name": "Oil temp\u00aderature (EP15-BT29)",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40146",
+    "name": "Oil temp\u00aderature (BT29)",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "40940",
+    "name": "current value",
+    "value": 100.0,
+    "range": "Enum",
+    "unit": "DM"
+  },
+  {
+    "id": "40941",
+    "name": "Degree minutes",
+    "value": 100.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "41778",
+    "name": "Current com\u00adpressor fre\u00adquency",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "Hz"
+  },
+  {
+    "id": "41929",
+    "name": "Mode (Smart Price Adaption)",
+    "value": 2.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "42782",
+    "name": "Value, air veloc\u00adity sensor (BS1)",
+    "value": 192.2,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "43009",
+    "name": "Calcu\u00adlated supply climate system 1",
+    "value": 21.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "43066",
+    "name": "Defrost\u00ading time",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "s"
+  },
+  {
+    "id": "43081",
+    "name": "Time factor add heat",
+    "value": 230.5,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "43084",
+    "name": "Power inter\u00adnal add. heat",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "kW"
+  },
+  {
+    "id": "43108",
+    "name": "Current fan mode",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "43109",
+    "name": "Current hot water mode",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "43116",
+    "name": "Hot water: charge current value ((BT12 | BT63))",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "43122",
+    "name": "Min com\u00adpressor fre\u00adquency",
+    "value": 20.0,
+    "range": "Enum",
+    "unit": "Hz"
+  },
+  {
+    "id": "43123",
+    "name": "Max com\u00adpressor fre\u00adquency",
+    "value": 120.0,
+    "range": "Enum",
+    "unit": "Hz"
+  },
+  {
+    "id": "43124",
+    "name": "Refer\u00adence, air speed sensor",
+    "value": -32768.0,
+    "range": "Enum",
+    "unit": "m3/h"
+  },
+  {
+    "id": "43125",
+    "name": "De\u00adcrease from refer\u00adence value",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "%"
+  },
+  {
+    "id": "43140",
+    "name": "Invert\u00ader temp\u00aderature",
+    "value": 22.9,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "43146",
+    "name": "dT Invert\u00ader - exh air (BT20)",
+    "value": 0.8,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "43161",
+    "name": "Extern. adjust\u00adment climate system 1",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "43239",
+    "name": "- of which hot water:",
+    "value": 145.0,
+    "range": "Enum",
+    "unit": "hrs"
+  },
+  {
+    "id": "43416",
+    "name": "Number of compressor starts",
+    "value": 6099.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "43420",
+    "name": "Oper. time",
+    "value": 12139.0,
+    "range": "Enum",
+    "unit": "h"
+  },
+  {
+    "id": "43424",
+    "name": "Oper. time hot water",
+    "value": 2808.0,
+    "range": "Enum",
+    "unit": "h"
+  },
+  {
+    "id": "43427",
+    "name": "Status com\u00adpressor",
+    "value": 20.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "43437",
+    "name": "Heating medium pump speed (GP1)",
+    "value": 30.0,
+    "range": "Enum",
+    "unit": "%"
+  },
+  {
+    "id": "44896",
+    "name": "Heating offset (Smart Price Adaption)",
+    "value": -4.5,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "44898",
+    "name": "Pool offset (Smart Price Adaption)",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "44899",
+    "name": "Cooling offset (Smart Price Adaption)",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "44908",
+    "name": "Status (Smart Price Adaption)",
+    "value": 30.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47007",
+    "name": "heating curve",
+    "value": 7.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47011",
+    "name": "Offset",
+    "value": -3.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47015",
+    "name": "climate system",
+    "value": 20.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47020",
+    "name": "flow line temp. at 30 \u00b0C",
+    "value": 15.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47021",
+    "name": "flow line temp. at 20 \u00b0C",
+    "value": 15.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47022",
+    "name": "flow line temp. at 10 \u00b0C",
+    "value": 26.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47023",
+    "name": "flow line temp. at 0 \u00b0C",
+    "value": 32.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47024",
+    "name": "flow line temp. at -10 \u00b0C",
+    "value": 35.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47025",
+    "name": "flow line temp. at -20 \u00b0C",
+    "value": 40.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47026",
+    "name": "flow line temp. at -30 \u00b0C",
+    "value": 45.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47027",
+    "name": "outdoor temp. point",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47028",
+    "name": "change in curve",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47032",
+    "name": "climate system",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47041",
+    "name": "Hot water demand",
+    "value": 1.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47050",
+    "name": "activated",
+    "value": 1.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47051",
+    "name": "period",
+    "value": 14.0,
+    "range": "Enum",
+    "unit": "days"
+  },
+  {
+    "id": "47137",
+    "name": "op. mode",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47206",
+    "name": "start compressor",
+    "value": -200.0,
+    "range": "Enum",
+    "unit": "DM"
+  },
+  {
+    "id": "47209",
+    "name": "diff. between additional steps",
+    "value": 100.0,
+    "range": "Enum",
+    "unit": "DM"
+  },
+  {
+    "id": "47212",
+    "name": "set max electrical add.",
+    "value": 650.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47271",
+    "name": "speed 4",
+    "value": 4.0,
+    "range": "Enum",
+    "unit": "hrs"
+  },
+  {
+    "id": "47272",
+    "name": "speed 3",
+    "value": 4.0,
+    "range": "Enum",
+    "unit": "hrs"
+  },
+  {
+    "id": "47273",
+    "name": "speed 2",
+    "value": 4.0,
+    "range": "Enum",
+    "unit": "hrs"
+  },
+  {
+    "id": "47274",
+    "name": "speed 1",
+    "value": 4.0,
+    "range": "Enum",
+    "unit": "hrs"
+  },
+  {
+    "id": "47375",
+    "name": "stop heating",
+    "value": 13.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47376",
+    "name": "stop additional heat",
+    "value": 1.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47377",
+    "name": "filtering time",
+    "value": 8.0,
+    "range": "Enum",
+    "unit": "hrs"
+  },
+  {
+    "id": "47394",
+    "name": "control room sensor syst",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47537",
+    "name": "night cooling",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "47538",
+    "name": "start temp. exhaust air",
+    "value": 24.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "47539",
+    "name": "min diff. outdoor-exhaust",
+    "value": 7.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "48072",
+    "name": "start diff additional heat",
+    "value": 1500.0,
+    "range": "Enum",
+    "unit": "DM"
+  },
+  {
+    "id": "48132",
+    "name": "Hot water boost",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "48442",
+    "name": "activated",
+    "value": 1.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "48443",
+    "name": "affect room temperature",
+    "value": 1.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "48444",
+    "name": "- degree of effect",
+    "value": 8.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "48445",
+    "name": "affect hot water",
+    "value": 1.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "48566",
+    "name": "- degree of effect",
+    "value": 4.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "49909",
+    "name": "start time",
+    "value": 3.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "49993",
+    "name": "Int elec add heat",
+    "value": 4.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "49994",
+    "name": "Prior\u00adity",
+    "value": 10.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "49995",
+    "name": "Pump: Heating medium (GP1)",
+    "value": 1.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "50004",
+    "name": "Tempo\u00adrary lux",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "50005",
+    "name": "In\u00adcreased venti\u00adlation",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "50095",
+    "name": "status:",
+    "value": 15003.0,
+    "range": "Enum",
+    "unit": "min"
+  },
+  {
+    "id": "50113",
+    "name": "status:",
+    "value": 1512.0,
+    "range": "Enum",
+    "unit": "kW"
+  },
+  {
+    "id": "50221",
+    "name": "fan speed exhaust air",
+    "value": 50.0,
+    "range": "Enum",
+    "unit": "%"
+  },
+  {
+    "id": "50225",
+    "name": "Current temp\u00aderature system 1",
+    "value": -32768.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "50233",
+    "name": "Set point value temp system 1, heat",
+    "value": -32768.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "50241",
+    "name": "Set point value temp system 1, cooling",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "50249",
+    "name": "Next periodic increase: 2025 - 12 - 15",
+    "value": 3.0,
+    "range": "Enum",
+    "unit": ""
+  },
+  {
+    "id": "50325",
+    "name": "Hot water temp.",
+    "value": 52.0,
+    "range": "Enum",
+    "unit": "\u00b0C"
+  },
+  {
+    "id": "50345",
+    "name": "Hot water amount",
+    "value": 24.0,
+    "range": "Enum",
+    "unit": "min"
+  },
+  {
+    "id": "65535",
+    "name": "Text not found: id[], fw[nibe-e11], lang[en-US]",
+    "value": 0.0,
+    "range": "Enum",
+    "unit": ""
+  }
+]

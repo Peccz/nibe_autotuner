@@ -221,8 +221,8 @@ sudo journalctl -u nibe-autotuner -f
 
 **Fix:**
 ```bash
-# Check if compressor has been active
-sqlite3 ~/nibe_autotuner/data/nibe_autotuner.db "SELECT datetime(timestamp, 'localtime'), value FROM parameter_readings WHERE parameter_id = 43424 AND value >= 20 ORDER BY timestamp DESC LIMIT 10;"
+# Check if compressor has been active (check frequency > 0 Hz)
+sqlite3 ~/nibe_autotuner/data/nibe_autotuner.db "SELECT datetime(timestamp, 'localtime'), value FROM parameter_readings WHERE parameter_id = (SELECT id FROM parameters WHERE parameter_id = '41778') AND value > 0 ORDER BY timestamp DESC LIMIT 10;"
 
 # If no results, heat pump hasn't run recently (normal if warm enough)
 ```

@@ -95,7 +95,7 @@ class HeatPumpAnalyzer:
     PARAM_DM_HEATING_START = '47206'
     PARAM_DM_HEATING_STOP = '48072'
     PARAM_DM_CURRENT = '40940'  # Current degree minutes value
-    PARAM_COMPRESSOR_STATE = '43424'
+    PARAM_COMPRESSOR_FREQUENCY = '41778'  # Current compressor frequency (Hz) - used to detect if running
 
     # Nibe F730 Manufacturer Specifications
     # Source: docs/NIBE_F730_BASELINE.md
@@ -368,16 +368,16 @@ class HeatPumpAnalyzer:
         end_time: datetime
     ) -> float:
         """Calculate total compressor runtime in hours"""
-        # Get compressor state readings (0=off, 1=on)
-        readings = self.get_readings(device, self.PARAM_COMPRESSOR_STATE, start_time, end_time)
+        # Get compressor frequency readings (Hz) - >0 means running
+        readings = self.get_readings(device, self.PARAM_COMPRESSOR_FREQUENCY, start_time, end_time)
 
         if not readings:
             return 0.0
 
-        # Calculate runtime by integrating state over time
+        # Calculate runtime by integrating when frequency > 0
         total_seconds = 0.0
         for i in range(len(readings) - 1):
-            if readings[i][1] > 0:  # Compressor is on
+            if readings[i][1] > 0:  # Compressor is running (frequency > 0 Hz)
                 time_diff = (readings[i + 1][0] - readings[i][0]).total_seconds()
                 total_seconds += time_diff
 

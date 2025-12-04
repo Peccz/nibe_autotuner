@@ -174,7 +174,7 @@ class Backtester:
         # Map API IDs to DB IDs
         # We need to query the Parameter table to map '40004' to its DB ID
         param_map = {}
-        for pid in ['40004', '40033', '43424']: # Outdoor, Indoor, Compressor
+        for pid in ['40004', '40033', '41778']: # Outdoor, Indoor, Compressor Frequency
             p = self.analyzer.get_parameter(pid)
             if p:
                 param_map[pid] = p.id

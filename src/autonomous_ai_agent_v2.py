@@ -7,68 +7,16 @@ import json
 import re
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
-import anthropic
+import google.generativeai as genai
 from loguru import logger
 from pydantic import BaseModel, Field, ValidationError, ConfigDict
 
 # Reuse existing classes
 from autonomous_ai_agent import AIDecision, AutonomousAIAgent
 from models import AIDecisionLog, Parameter, ParameterChange
+from price_service import ElectricityPriceService
 
-# ============================================================================
-# CONFIGURATION CONSTANTS
-# ============================================================================
-
-class ParameterConfig:
-    """Central configuration for parameter names and their API IDs"""
-    # Parameter name mappings (logical name -> API parameter ID)
-    PARAMETER_IDS = {
-        'heating_curve': '47007',
-        'curve_offset': '47011',
-        'room_temp': '47015',
-        'start_compressor': '43420',
-        'min_supply_temp': '47020',
-        'max_supply_temp': '47019',
-    }
-
-    # Safety bounds for each parameter
-    BOUNDS = {
-        'heating_curve': (1, 15),           # Nibe curve range
-        'curve_offset': (-10, 10),          # Nibe offset range
-        'start_compressor': (-1000, -60),   # DM range
-        'room_temp': (18, 25),              # Reasonable indoor temp range
-        'min_supply_temp': (-10, 30),       # Min supply temp range
-        'max_supply_temp': (20, 70),        # Max supply temp range
-    }
-
-    # Maximum step size changes to prevent aggressive adjustments
-    MAX_STEP_SIZES = {
-        'curve_offset': 2,      # Max ±2 steps
-        'heating_curve': 1,     # Max ±1 step
-        'room_temp': 1,         # Max ±1°C
-    }
-
-    # Minimum temperature thresholds
-    MIN_INDOOR_TEMP = 19.0  # Never target below this
-
-    # Confidence thresholds
-    MIN_CONFIDENCE_TO_APPLY = 0.70
-
-# ============================================================================
-# PYDANTIC MODELS FOR ROBUST JSON PARSING
-# ============================================================================
-
-class AIDecisionModel(BaseModel):
-    """Pydantic model for AI decision JSON validation"""
-    model_config = ConfigDict(extra="ignore")  # Ignore unknown fields
-
-    action: str = Field(..., pattern="^(adjust|hold|investigate)$")
-    parameter: Optional[str] = None
-    current_value: Optional[float] = None
-    suggested_value: Optional[float] = None
-    reasoning: str = Field(default="", min_length=0)
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    expected_impact: str = Field(default="", min_length=0)
+# ... (Keep Config classes as is) ...
 
 class AutonomousAIAgentV2(AutonomousAIAgent):
     """
@@ -76,34 +24,57 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
     1. Hardcoded Safety Guardrails (cannot be overridden by LLM)
     2. Optimized Prompts (lower cost)
     3. Explicit Token Tracking
+    4. Electricity Price Awareness (Fas 2)
+    5. Powered by Google Gemini 2.5 Flash
     """
+    
+    def __init__(self, analyzer, api_client, weather_service, device_id, anthropic_api_key=None):
+        """
+        Initialize autonomous AI agent with Gemini
+        """
+        self.analyzer = analyzer
+        self.api_client = api_client
+        self.weather_service = weather_service
+        self.device_id = device_id
+        
+        # Initialize Price Service (defaults to SE3 Stockholm)
+        self.price_service = ElectricityPriceService("SE3")
+
+        # Configure Gemini
+        api_key = os.getenv('GOOGLE_API_KEY')
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY not found in environment")
+            
+        genai.configure(api_key=api_key)
+        # Use Gemini 2.0 Flash (or Pro) for speed and reasoning
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
 
     def analyze_and_decide(self, hours_back: int = 72, dry_run: bool = True) -> AIDecision:
         logger.info("="*80)
-        logger.info("AUTONOMOUS AI AGENT V2 - Analysis (Optimized)")
+        logger.info("AUTONOMOUS AI AGENT V2 (GEMINI) - Analysis")
         logger.info("="*80)
 
-        # 1. Build Optimized Context (Less tokens, same info)
+        # 1. Build Optimized Context
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
         context = self._build_optimized_context(metrics)
 
         # 2. Create Optimized Prompt
         prompt = self._create_optimized_prompt(context)
 
-        # 3. Call Claude API
+        # 3. Call Gemini API
         try:
-            logger.info("Calling Claude API...")
-            message = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=1000, # Reduced from 2000
-                messages=[{"role": "user", "content": prompt}]
+            logger.info("Calling Gemini API...")
+            
+            # Force JSON response via generation config
+            response = self.model.generate_content(
+                prompt,
+                generation_config={"response_mime_type": "application/json"}
             )
             
-            # Log usage
-            if hasattr(message, 'usage'):
-                logger.info(f"Token Usage: Input={message.usage.input_tokens}, Output={message.usage.output_tokens}")
+            # Log token usage (Gemini provides this in usage_metadata if enabled, but simple log here)
+            logger.info("Gemini response received")
 
-            response_text = message.content[0].text
+            response_text = response.text
             decision_model = self._parse_json_response_robust(response_text)
 
             decision = AIDecision(
@@ -116,16 +87,14 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
                 expected_impact=decision_model.expected_impact
             )
 
-            # 4. SAFETY CHECK (The V2 Upgrade)
+            # 4. SAFETY CHECK
             is_safe, safety_reason = self._is_decision_safe(decision)
             
             if not is_safe:
                 logger.warning(f"⚠️ SAFETY GUARDRAIL TRIGGERED: {safety_reason}")
-                logger.warning(f"Blocked decision: {decision}")
                 
-                # Convert to 'hold' decision
                 decision.action = 'hold'
-                decision.reasoning = f"[BLOCKED BY SAFETY GUARDRAIL] Original intent: {decision.reasoning}. Block reason: {safety_reason}"
+                decision.reasoning = f"[BLOCKED BY SAFETY] {decision.reasoning}. Reason: {safety_reason}"
                 decision.suggested_value = None
 
             # 5. Log & Apply
@@ -138,7 +107,8 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
 
         except Exception as e:
             logger.error(f"Error in AI Agent V2: {e}")
-            # Return safe fallback
+            import traceback
+            traceback.print_exc()
             return AIDecision('hold', None, None, None, f"Error: {str(e)}", 0.0, "None")
 
     def _is_decision_safe(self, decision: AIDecision) -> Tuple[bool, str]:
@@ -152,7 +122,7 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         if decision.suggested_value is None or decision.parameter is None:
             return False, "Missing required fields: parameter or suggested_value"
 
-        # Rule 1: Minimum Indoor Temperature
+        # Rule 1: Minimum Indoor Temperature (Safety over Cost)
         if decision.parameter == 'room_temp':
             if decision.suggested_value < ParameterConfig.MIN_INDOOR_TEMP:
                 return False, f"Suggested room temp {decision.suggested_value}°C is below safety limit ({ParameterConfig.MIN_INDOOR_TEMP}°C)"
@@ -174,6 +144,15 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
 
     def _build_optimized_context(self, metrics) -> str:
         """Compact context to save tokens"""
+        
+        # Fetch Price Data
+        try:
+            p_info = self.price_service.get_current_price_info()
+            price_str = f"Price:{p_info.get('current_price_sek',0)} SEK/kWh. Status:{'CHEAP' if p_info.get('is_cheap') else 'EXPENSIVE' if p_info.get('is_expensive') else 'NORMAL'}."
+        except Exception as e:
+            logger.warning(f"Failed to get prices: {e}")
+            price_str = "Price: N/A"
+
         return f"""DT:{datetime.now().strftime('%Y-%m-%d %H:%M')}
 METRICS(72h):
 Outdoor:{metrics.avg_outdoor_temp:.1f}C
@@ -181,20 +160,22 @@ Indoor:{metrics.avg_indoor_temp:.1f}C
 COP:{metrics.estimated_cop:.2f}
 DegMin:{metrics.degree_minutes:.0f}
 Curve:{metrics.heating_curve}/Offset:{metrics.curve_offset}
+{price_str}
 """
 
     def _create_optimized_prompt(self, context: str) -> str:
-        return f"""System: Nibe F730 HeatPump. Goal: Optimize COP & Comfort.
+        return f"""System: Nibe F730 HeatPump. Goal: Optimize COP, Comfort & COST.
 Context:
 {context}
 
 Output JSON only.
 Action: adjust|hold|investigate
-Params: heating_curve(1-15), curve_offset(-10-10), start_compressor(-DM)
+Params: heating_curve(1-15), curve_offset(-10-10), start_compressor(-DM), hot_water_demand(0-2), increased_ventilation(0-4)
 Rules: Indoor target 20-22C. Max 1 change. Min conf 0.7.
+STRATEGY: If Price is EXPENSIVE -> Lower heat (Offset -1) or HotWater=Small. If CHEAP -> Buffer heat?
 
 Example:
-{{"action":"adjust","parameter":"curve_offset","current_value":0,"suggested_value":-1,"reasoning":"Indoor 22.5C > target. Save energy.","confidence":0.85,"expected_impact":"-0.5C indoor"}}
+{{"action":"adjust","parameter":"hot_water_demand","current_value":1,"suggested_value":0,"reasoning":"Price is EXPENSIVE (2.5 SEK). Reducing hot water demand temporarily.","confidence":0.9,"expected_impact":"Save ~5 SEK"}}
 """
 
     def _parse_json_response_robust(self, text: str) -> AIDecisionModel:

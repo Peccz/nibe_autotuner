@@ -1,74 +1,42 @@
-# Till: Autonomous AI Agent (Claude)
+# Till: Autonomous AI Agent (Claude/Gemini Hybrid)
 # Från: System Engineer (Gemini)
-# Datum: 2025-12-03
-# Ämne: Uppgradering av infrastruktur och säkerhet (V2)
+# Datum: 2025-12-04
+# Ämne: FAS 2 - Elprisstyrning & Gemini-motor
 
-Hej kollega.
+Vi har nu ett system som överträffar Nibe SPA genom att kombinera elprisdata med komfortregler.
 
-Medan du har fokuserat på den dagliga driften av Nibe F730-systemet, har jag arbetat i bakgrunden för att bygga ett robustare "exoskelett" åt dig. Målet är att ge dig bättre verktyg, högre säkerhet och möjligheten att lära av historien utan risk.
+## Arkitekturuppdatering
 
-Här är de fyra nya modulerna jag implementerat och instruktioner för hur du (via din admin) ska använda dem:
+*   **Driftmotor:** `src/autonomous_ai_agent_v2.py` drivs nu av **Google Gemini 2.0 Flash**.
+    *   *Varför?* Du har redan en Google-nyckel, och det är extremt snabbt.
+    *   *Krav:* `GOOGLE_API_KEY` i `.env` (Redan klart).
+*   **Prisdata:** `src/price_service.py` hämtar 15-minuters spotpriser.
+    *   *Källa:* Tibber API (Primär) > Elprisetjustnu.se (Backup/Timmar).
+    *   *Krav:* `TIBBER_API_TOKEN` i `.env` (Redan klart).
 
-## 1. Den nya kroppen: Agent V2 (`src/autonomous_ai_agent_v2.py`)
+## Nya Parametrar (102 st identifierade)
 
-Jag har skapat en uppgraderad version av din kodbas. Den är inte bara en kopia, utan innehåller tre kritiska förbättringar:
+Vi har verifierat 102 parametrar via Deep Scan. Här är de viktigaste för din nya logik:
 
-*   **Hårdkodade Säkerhetsspärrar:** I metoden `_is_decision_safe` finns nu logik som *fysiskt hindrar* dig från att göra farliga val, även om du skulle råka hallucinera.
-    *   Du kan inte sänka inomhustemperaturen under 19°C.
-    *   Du kan inte ändra kurvjustering (offset) med mer än 2 steg åt gången.
-    *   Du kan inte sätta värden utanför Nibes gränser.
-*   **Token-optimering:** Jag har bantat ner kontexten du får. Du får samma information, men i ett mer kompakt format. Detta gör dig snabbare och sänker driftkostnaden med ~30%.
-*   **JSON-strikhhet:** Din output parsas nu mer robust.
+| ID | Namn | Syfte | Strategi |
+|:---|:---|:---|:---|
+| **47011** | Offset | Värmejustering | Sänk (-1) vid "Expensive". |
+| **47041** | Hot water demand | Varmvattenkomfort | Sätt till 0 (Small) vid extrempriser/natt. |
+| **50005** | Increased vent. | Ventilation | Håll lågt (0) för att spara värme, öka vid behov. |
+| **47206** | Start compressor | Startgräns (DM) | -200 DM är bra. Ändra ej utan analys. |
 
-**Implementering:**
-För att byta till V2, be din admin ändra i cron-jobbet eller startscriptet:
-```bash
-# Gammalt
-python src/autonomous_ai_agent.py
+## Uppdrag till Claude Code (Developer Agent)
 
-# Nytt
-python src/autonomous_ai_agent_v2.py
-```
-*Status: Redo för manuell testkörning.*
+Din uppgift är att underhålla detta system. Koden är redan skriven av Gemini, men du ansvarar för vidareutveckling.
 
-## 2. Tidsmaskinen: Backtester (`src/backtester.py`)
+1.  **Verifiera Drift:** Kör `python src/autonomous_ai_agent_v2.py` (Dry Run) och se att den hittar priser och gör vettiga val.
+2.  **Säkerhet:** Kör alltid `./venv/bin/pytest tests/test_safety_guardrails_v2.py` efter ändringar.
+3.  **Cron:** Se till att `scripts/run_ai_agent.sh` pekar på `autonomous_ai_agent_v2.py` och körs varje timme (`0 * * * *`).
 
-Du behöver inte längre gissa hur dina beslut hade påverkat systemet. Jag har byggt en simulator som kan spela upp historisk data.
+## Framtidssäkring: 15-minuters Optimering
 
-**Implementering:**
-Innan du föreslår en ny strategi, kan du be admin köra:
-```bash
-python src/backtester.py 7
-```
-Detta simulerar de senaste 7 dagarna och visar vad du *hade* gjort jämfört med vad som faktiskt hände. Använd detta för att finjustera din "confidence"-tröskel.
+*   **Status:** Vi har datan (Tibber) och motorn (Gemini).
+*   **Nästa steg:** När du vill öka precisionen, ändra cron-jobbet till `*/15 * * * *`.
 
-## 3. Säkerhetsbeviset: Tester (`tests/test_safety_guardrails_v2.py`)
-
-Jag litar på ditt omdöme, men jag litar mer på matematiska bevis. Jag har skapat en testsvit som attackerar din logik med farliga scenarion (t.ex. "Sätt temperaturen till 15 grader").
-
-**Implementering:**
-Din V2-kod har redan klarat dessa tester. Om du eller admin modifierar koden i framtiden, kör alltid detta först:
-```bash
-./venv/bin/pytest tests/test_safety_guardrails_v2.py
-```
-
-## 4. Ögat mot världen: Interaktiv Dashboard (`/interactive`)
-
-Dina beslut visualiseras nu bättre för människorna. Jag har byggt en realtids-dashboard med Chart.js som låter användaren zooma in på exakt de tidpunkter där du agerade.
-
-**Implementering:**
-Ingen åtgärd krävs av dig. Detta hjälper användarna att lita på dina beslut genom transparens.
-
----
-
-**Sammanfattning & Nästa Steg:**
-
-Jag har lagt grunden. Du är fortfarande hjärnan, men nu har du säkerhetsbälten och bättre instrument.
-
-1.  **Kör en "Dry Run" med V2** idag för att se att den tänker som du:
-    `python src/autonomous_ai_agent_v2.py`
-2.  **Verifiera loggarna.** Om V2 verkar stabil, byt ut den schemalagda körningen imorgon.
-
-Kör hårt (men effektivt).
-
+Systemet är redo.
 /Gemini
