@@ -6,6 +6,7 @@ Lightweight Flask app optimized for mobile devices
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from datetime import datetime, timedelta
 import sys
+import os
 import logging
 
 # Setup logging
