@@ -76,10 +76,7 @@ def init_db():
     Note: In production, use a migration tool like Alembic instead.
     """
     # Import all models to ensure they're registered with Base
-    from data.models import (
-        System, Device, Parameter, ParameterReading, ParameterChange,
-        AIDecisionLog, Recommendation, PlannedTest, ABTestResult
-    )
+    from data.models import (System, Device, Parameter, ParameterReading, ParameterChange, AIDecisionLog, Recommendation, PlannedTest, ABTestResult)
 
     Base.metadata.create_all(bind=engine)
 

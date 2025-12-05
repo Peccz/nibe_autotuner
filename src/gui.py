@@ -13,7 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from services.analyzer import HeatPumpAnalyzer, EfficiencyMetrics
 from services.visualizer import HeatPumpVisualizer
-from data.models import init_db, Device, Parameter, ParameterReading as ParameterReadingModel
+from data.models import Device, Parameter, ParameterReading as ParameterReadingModel
+from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func, and_
 

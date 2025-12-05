@@ -17,7 +17,8 @@ logging.basicConfig(level=logging.INFO)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.analyzer import HeatPumpAnalyzer
-from data.models import ParameterChange, Device, Parameter, ABTestResult, init_db
+from data.models import ParameterChange, Device, Parameter, ABTestResult
+from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 from integrations.ab_tester import ABTester
 from services.optimizer import SmartOptimizer

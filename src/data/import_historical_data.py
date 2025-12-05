@@ -7,7 +7,8 @@ from pathlib import Path
 from datetime import datetime
 from loguru import logger
 from data.csv_importer import CSVImporter
-from data.models import init_db, Device, Parameter, ParameterReading as ParameterReadingModel
+from data.models import Device, Parameter, ParameterReading as ParameterReadingModel
+from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import and_
 

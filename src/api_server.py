@@ -16,10 +16,8 @@ from services.analyzer import HeatPumpAnalyzer, EfficiencyMetrics, OptimizationO
 from services.visualizer import HeatPumpVisualizer
 from data.csv_importer import CSVImporter
 from core.config import settings
-from data.models import (
-    init_db, Device, Parameter, ParameterReading as ParameterReadingModel,
-    Recommendation, ParameterChange
-)
+from data.models import (Device, Parameter, ParameterReading as ParameterReadingModel, Recommendation, ParameterChange)
+from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func, and_
 

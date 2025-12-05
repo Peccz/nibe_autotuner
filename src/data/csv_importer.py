@@ -10,7 +10,8 @@ import pandas as pd
 from loguru import logger
 from sqlalchemy import and_
 
-from data.models import init_db, Device, Parameter, ParameterReading
+from data.models import Device, Parameter, ParameterReading
+from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 
 

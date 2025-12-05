@@ -11,7 +11,8 @@ from services.analyzer import HeatPumpAnalyzer
 from services.optimizer import SmartOptimizer
 from integrations.api_client import MyUplinkClient
 from integrations.auth import MyUplinkAuth
-from data.models import Device, ParameterChange, init_db
+from data.models import Device, ParameterChange
+from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 
 

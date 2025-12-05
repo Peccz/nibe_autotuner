@@ -469,7 +469,8 @@ Now analyze the system and provide your decision:"""
 
 def main():
     """Test autonomous AI agent"""
-    from data.models import Device, init_db
+    from data.models import Device
+from data.database import init_db
     from sqlalchemy.orm import sessionmaker
 
     # Initialize

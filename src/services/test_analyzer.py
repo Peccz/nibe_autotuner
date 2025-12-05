@@ -3,7 +3,8 @@ Test the analyzer module with current data
 """
 from loguru import logger
 from services.analyzer import HeatPumpAnalyzer
-from data.models import init_db, ParameterReading
+from data.models import ParameterReading
+from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 

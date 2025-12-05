@@ -9,11 +9,8 @@ from loguru import logger
 from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
 
-from data.models import (
-    Base, System, Device, Parameter, ParameterReading,
-    ParameterChange, Recommendation, RecommendationResult,
-    init_db
-)
+from data.models import (System, Device, Parameter, ParameterReading, ParameterChange, Recommendation, RecommendationResult)
+from data.database import Base, init_db
 from sqlalchemy.orm import sessionmaker
 from services.cop_model import COPModel
 

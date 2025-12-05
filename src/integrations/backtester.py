@@ -16,7 +16,8 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from services.analyzer import HeatPumpAnalyzer
-from data.models import init_db, Device, ParameterReading, ParameterChange
+from data.models import Device, ParameterReading, ParameterChange
+from data.database import init_db
 from integrations.autonomous_ai_agent import AutonomousAIAgent, AIDecision
 from integrations.api_client import MyUplinkClient
 from services.weather_service import SMHIWeatherService

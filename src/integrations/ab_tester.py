@@ -8,10 +8,7 @@ import json
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from data.models import (
-    Device, ParameterChange, ABTestResult,
-    ParameterReading, Parameter, PlannedTest
-)
+from data.models import (Device, ParameterChange, ABTestResult, ParameterReading, Parameter, PlannedTest)
 from services.analyzer import HeatPumpAnalyzer
 from sqlalchemy import func
 

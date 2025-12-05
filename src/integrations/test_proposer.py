@@ -12,7 +12,8 @@ from loguru import logger
 from services.analyzer import HeatPumpAnalyzer
 from integrations.api_client import MyUplinkClient
 from services.weather_service import SMHIWeatherService
-from data.models import Device, ABTestResult, ParameterChange, Parameter, PlannedTest, init_db
+from data.models import Device, ABTestResult, ParameterChange, Parameter, PlannedTest
+from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 from core.config import settings
 
@@ -351,7 +352,8 @@ Now propose tests:"""
 
 def main():
     """Run test proposer"""
-    from data.models import Device, init_db
+    from data.models import Device
+from data.database import init_db
     from sqlalchemy.orm import sessionmaker
 
     # Initialize
