@@ -151,11 +151,11 @@ class HeatPumpAnalyzer:
 
     def __init__(self, db_path: str = 'data/nibe_autotuner.db'):
         """Initialize analyzer with database connection"""
+        from data.database import engine, SessionLocal
+
         self.db_path = db_path
-        database_url = f'sqlite:///./{db_path}'
-        self.engine = init_db(database_url)
-        SessionMaker = sessionmaker(bind=self.engine)
-        self.session = SessionMaker()
+        self.engine = engine
+        self.session = SessionLocal()
 
     def __del__(self):
         """Clean up database connection"""
