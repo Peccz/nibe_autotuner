@@ -1,8 +1,8 @@
 import sys
 import os
 
-# Add src to path
-sys.path.insert(0, os.path.abspath('src'))
+# Add src to path (scripts/maintenance/ -> root)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
 
 from models import init_db, Parameter
 from sqlalchemy.orm import sessionmaker

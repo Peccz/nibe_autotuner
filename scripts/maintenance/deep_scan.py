@@ -4,8 +4,8 @@ import json
 import asyncio
 from typing import List, Dict
 
-# Add src to path
-sys.path.insert(0, os.path.abspath('src'))
+# Add src to path (scripts/maintenance/ -> root)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
 
 from api_client import MyUplinkClient
 from auth import MyUplinkAuth

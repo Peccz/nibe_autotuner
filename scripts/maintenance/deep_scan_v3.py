@@ -3,7 +3,8 @@ import os
 import json
 import requests
 
-sys.path.insert(0, os.path.abspath('src'))
+# Add src to path (scripts/maintenance/ -> root)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
 from auth import MyUplinkAuth
 from models import init_db, Device
 from sqlalchemy.orm import sessionmaker

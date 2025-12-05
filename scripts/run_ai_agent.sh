@@ -10,7 +10,7 @@
 set -e  # Exit on error
 
 # Change to project directory
-cd /home/peccz/nibe_autotuner
+cd /home/peccz/AI/nibe_autotuner
 
 # Load environment variables (includes GOOGLE_API_KEY for Gemini)
 set -a
