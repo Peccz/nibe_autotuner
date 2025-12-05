@@ -2,7 +2,6 @@
 Autonomous AI Agent V2 - Optimized & Safe
 Uses Google Gemini API with fallback models and strict safety guardrails.
 """
-import os
 import json
 import re
 from datetime import datetime
@@ -14,6 +13,7 @@ from pydantic import BaseModel, Field, ValidationError, ConfigDict
 
 # Reuse existing classes
 from autonomous_ai_agent import AIDecision, AutonomousAIAgent
+from config import settings
 from models import AIDecisionLog, Parameter, ParameterChange, PlannedTest, ABTestResult
 from price_service import ElectricityPriceService
 from hw_analyzer import HotWaterPatternAnalyzer
@@ -145,10 +145,9 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
 
         # Configure Gemini with available models
         self.available_models = []
-        api_key = os.getenv('GOOGLE_API_KEY')
 
-        if api_key:
-            genai.configure(api_key=api_key)
+        if settings.GOOGLE_API_KEY:
+            genai.configure(api_key=settings.GOOGLE_API_KEY)
             # Initialize all available Gemini models
             for model_config in ModelConfig.FALLBACK_MODELS:
                 if model_config['provider'] == 'gemini':

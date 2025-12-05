@@ -5,10 +5,10 @@ Combines: Performance Score, Cost Tracking, AI Recommendations
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dataclasses import dataclass
-import os
 
 from analyzer import HeatPumpAnalyzer
 from gemini_agent import GeminiAgent, GeminiRecommendation
+from config import settings
 
 
 @dataclass
@@ -70,7 +70,7 @@ class SmartOptimizer:
 
         # Initialize Gemini if API key is available
         self.gemini_agent = None
-        if use_ai and os.getenv('GOOGLE_API_KEY'):
+        if use_ai and settings.GOOGLE_API_KEY:
             try:
                 self.gemini_agent = GeminiAgent()
             except Exception as e:

@@ -2,7 +2,6 @@
 Autonomous AI Agent for Nibe Autotuner
 Uses Claude API to make intelligent decisions based on real-time data
 """
-import os
 import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -13,6 +12,7 @@ from loguru import logger
 from analyzer import HeatPumpAnalyzer
 from api_client import MyUplinkClient
 from weather_service import SMHIWeatherService
+from config import settings
 
 
 @dataclass
@@ -66,7 +66,7 @@ class AutonomousAIAgent:
         self.device_id = device_id
 
         # Initialize Claude client
-        api_key = anthropic_api_key or os.getenv('ANTHROPIC_API_KEY')
+        api_key = anthropic_api_key or settings.ANTHROPIC_API_KEY
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not found. Set it in .env or pass as parameter")
 
@@ -483,7 +483,7 @@ def main():
         return
 
     # Check for API key
-    if not os.getenv('ANTHROPIC_API_KEY'):
+    if not settings.ANTHROPIC_API_KEY:
         logger.error("ANTHROPIC_API_KEY not set in environment")
         logger.info("Set it in .env file or export ANTHROPIC_API_KEY=your-key")
         return

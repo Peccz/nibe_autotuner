@@ -1,18 +1,14 @@
 """
 myUplink API Client for data retrieval
 """
-import os
 from typing import Dict, List, Optional
 import requests
 from loguru import logger
-from dotenv import load_dotenv
 
 from auth import MyUplinkAuth
+from config import settings
 
-# Load environment variables
-load_dotenv()
-
-API_BASE_URL = os.getenv('MYUPLINK_API_BASE_URL', 'https://api.myuplink.com')
+API_BASE_URL = settings.MYUPLINK_API_BASE_URL
 
 
 class MyUplinkClient:

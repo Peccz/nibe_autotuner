@@ -4,13 +4,13 @@ Gemini AI Agent for Nibe Heat Pump Optimization
 Uses Google Gemini 2.5 Flash for intelligent analysis and recommendations.
 """
 
-import os
 import json
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import google.generativeai as genai
 from dataclasses import dataclass
 from loguru import logger
+from config import settings
 
 
 @dataclass
@@ -36,7 +36,7 @@ class GeminiAgent:
         Args:
             api_key: Google API key (if not provided, reads from GOOGLE_API_KEY env var)
         """
-        self.api_key = api_key or os.getenv('GOOGLE_API_KEY')
+        self.api_key = api_key or settings.GOOGLE_API_KEY
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY not found in environment")
 

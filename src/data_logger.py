@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from auth import MyUplinkAuth
 from api_client import MyUplinkClient
+from config import settings
 from models import (
     init_db,
     get_session,
@@ -21,8 +22,15 @@ from models import (
 class DataLogger:
     """Continuously logs heat pump data to database"""
 
-    def __init__(self, database_url='sqlite:///./data/nibe_autotuner.db'):
-        self.engine = init_db(database_url)
+    def __init__(self, database_url: str = None):
+        """
+        Initialize DataLogger
+
+        Args:
+            database_url: Database connection URL. If None, uses settings.DATABASE_URL
+        """
+        db_url = database_url or settings.DATABASE_URL
+        self.engine = init_db(db_url)
         self.session = get_session(self.engine)
         self.auth = MyUplinkAuth()
         self.client = MyUplinkClient(self.auth)

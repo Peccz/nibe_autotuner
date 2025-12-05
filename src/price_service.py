@@ -6,16 +6,16 @@ Priority:
 2. Elprisetjustnu.se (Fallback) - Hourly only
 """
 import requests
-import os
 import json
 from datetime import datetime, timedelta
 from loguru import logger
 from typing import List, Dict, Optional
+from config import settings
 
 class ElectricityPriceService:
     def __init__(self, price_area: str = "SE3"):
         self.price_area = price_area
-        self.tibber_token = os.getenv('TIBBER_API_TOKEN')
+        self.tibber_token = settings.TIBBER_API_TOKEN
         
     def get_current_price_info(self) -> Dict:
         """Get analysis of current price situation"""

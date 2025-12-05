@@ -1,7 +1,6 @@
 """
 OAuth2 Authentication module for myUplink API
 """
-import os
 import json
 import webbrowser
 from pathlib import Path
@@ -10,18 +9,16 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import requests
 from requests_oauthlib import OAuth2Session
-from dotenv import load_dotenv
 from loguru import logger
 
-# Load environment variables
-load_dotenv()
+from config import settings
 
-# Configuration
-CLIENT_ID = os.getenv('MYUPLINK_CLIENT_ID')
-CLIENT_SECRET = os.getenv('MYUPLINK_CLIENT_SECRET')
-REDIRECT_URI = os.getenv('MYUPLINK_CALLBACK_URL', 'http://localhost:8080/oauth/callback')
-AUTH_URL = os.getenv('MYUPLINK_AUTH_URL', 'https://api.myuplink.com/oauth/authorize')
-TOKEN_URL = os.getenv('MYUPLINK_TOKEN_URL', 'https://api.myuplink.com/oauth/token')
+# Configuration from centralized settings
+CLIENT_ID = settings.MYUPLINK_CLIENT_ID
+CLIENT_SECRET = settings.MYUPLINK_CLIENT_SECRET
+REDIRECT_URI = settings.MYUPLINK_CALLBACK_URL
+AUTH_URL = settings.MYUPLINK_AUTH_URL
+TOKEN_URL = settings.MYUPLINK_TOKEN_URL
 TOKENS_FILE = Path.home() / '.myuplink_tokens.json'
 
 

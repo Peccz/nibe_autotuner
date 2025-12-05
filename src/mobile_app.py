@@ -6,7 +6,6 @@ Lightweight Flask app optimized for mobile devices
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from datetime import datetime, timedelta
 import sys
-import os
 import logging
 
 # Setup logging
@@ -24,6 +23,7 @@ from optimizer import SmartOptimizer
 from api_client import MyUplinkClient
 from auth import MyUplinkAuth
 from auto_optimizer import AutoOptimizer
+from config import settings
 
 app = Flask(__name__,
             template_folder='mobile/templates',
@@ -1068,8 +1068,7 @@ def get_ai_agent_status():
     session = SessionMaker()
     try:
         from models import AIDecisionLog
-        import os
-
+        
         # Count total analyses and adjustments
         total_analyses = session.query(AIDecisionLog).count()
         total_adjustments = session.query(AIDecisionLog).filter_by(applied=True).count()
@@ -1083,7 +1082,7 @@ def get_ai_agent_status():
         monthly_cost_sek = total_analyses * 0.10 / max(1, total_analyses / 60)
 
         status = {
-            'enabled': os.getenv('GOOGLE_API_KEY') is not None,
+            'enabled': settings.GOOGLE_API_KEY is not None,
             'last_run': last_decision.timestamp.isoformat() if last_decision else None,
             'next_run': 'Schemalagd via auto_optimizer cron',
             'total_analyses': total_analyses,

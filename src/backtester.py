@@ -2,7 +2,6 @@
 Backtester for Nibe Autotuner AI Agent
 Simulates AI agent behavior on historical data to evaluate performance and safety.
 """
-import os
 import sys
 import json
 from datetime import datetime, timedelta
@@ -21,6 +20,7 @@ from models import init_db, Device, ParameterReading, ParameterChange
 from autonomous_ai_agent import AutonomousAIAgent, AIDecision
 from api_client import MyUplinkClient
 from weather_service import SMHIWeatherService
+from config import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -205,7 +205,7 @@ class Backtester:
         """
         
         # If no API key, return a mock decision
-        if not os.getenv('ANTHROPIC_API_KEY'):
+        if not settings.ANTHROPIC_API_KEY:
             return AIDecision(
                 action='hold', 
                 parameter=None, current_value=None, suggested_value=None, 

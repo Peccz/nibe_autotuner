@@ -3,7 +3,6 @@ Test Proposer - AI-driven test proposal generation
 Analyzes recent data and proposes prioritized tests
 """
 
-import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from dataclasses import dataclass
@@ -15,6 +14,7 @@ from api_client import MyUplinkClient
 from weather_service import SMHIWeatherService
 from models import Device, ABTestResult, ParameterChange, Parameter, PlannedTest, init_db
 from sqlalchemy.orm import sessionmaker
+from config import settings
 
 
 @dataclass
@@ -57,7 +57,7 @@ class TestProposer:
         self.device_id = device_id
 
         # Initialize Claude client if key provided
-        api_key = anthropic_api_key or os.getenv('ANTHROPIC_API_KEY')
+        api_key = anthropic_api_key or settings.ANTHROPIC_API_KEY
         if api_key:
             self.client = anthropic.Anthropic(api_key=api_key)
             self.use_ai = True

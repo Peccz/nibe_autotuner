@@ -15,6 +15,7 @@ from loguru import logger
 from analyzer import HeatPumpAnalyzer, EfficiencyMetrics, OptimizationOpportunity
 from visualizer import HeatPumpVisualizer
 from csv_importer import CSVImporter
+from config import settings
 from models import (
     init_db, Device, Parameter, ParameterReading as ParameterReadingModel,
     Recommendation, ParameterChange
@@ -39,10 +40,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database connection
-db_path = 'data/nibe_autotuner.db'
-database_url = f'sqlite:///./{db_path}'
-engine = init_db(database_url)
+# Initialize database connection from settings
+engine = init_db(settings.DATABASE_URL)
 SessionMaker = sessionmaker(bind=engine)
 
 
