@@ -8,8 +8,8 @@ cd /home/peccz/nibe_autotuner
 PYTHONPATH=./src ./venv/bin/python -c "
 from ventilation_optimizer import VentilationOptimizer
 from api_client import MyUplinkClient
-from analyzer import HeatPumpAnalyzer
-from models import Device, init_db
+from services.analyzer import HeatPumpAnalyzer
+from data.models import Device, init_db
 from sqlalchemy.orm import sessionmaker
 
 # Initialize

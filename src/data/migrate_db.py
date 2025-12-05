@@ -2,7 +2,7 @@
 """
 Database migration script - Add AB Testing tables
 """
-from models import init_db, Base
+from data.models import init_db, Base
 
 def migrate():
     """Run database migration"""

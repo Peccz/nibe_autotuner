@@ -2,8 +2,8 @@
 Test script to explore myUplink API endpoints
 """
 from loguru import logger
-from auth import MyUplinkAuth
-from api_client import MyUplinkClient
+from integrations.auth import MyUplinkAuth
+from integrations.api_client import MyUplinkClient
 
 def test_system_details():
     """Test fetching detailed system information"""

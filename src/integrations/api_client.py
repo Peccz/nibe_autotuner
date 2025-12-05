@@ -5,8 +5,8 @@ from typing import Dict, List, Optional
 import requests
 from loguru import logger
 
-from auth import MyUplinkAuth
-from config import settings
+from integrations.auth import MyUplinkAuth
+from core.config import settings
 
 API_BASE_URL = settings.MYUPLINK_API_BASE_URL
 

@@ -50,7 +50,7 @@ import sys
 sys.path.insert(0, 'src')
 
 from ab_tester import ABTester
-from analyzer import HeatPumpAnalyzer
+from services.analyzer import HeatPumpAnalyzer
 from loguru import logger
 
 # Configure logger to also write to stdout

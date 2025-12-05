@@ -4,8 +4,8 @@ Test if myUplink API provides historical data
 import requests
 from datetime import datetime, timedelta
 from loguru import logger
-from auth import MyUplinkAuth
-from api_client import MyUplinkClient
+from integrations.auth import MyUplinkAuth
+from integrations.api_client import MyUplinkClient
 
 def test_historical_endpoints():
     """Test various endpoints for historical data"""

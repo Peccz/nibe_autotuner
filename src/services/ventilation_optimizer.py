@@ -8,8 +8,8 @@ from typing import Dict, Optional
 from loguru import logger
 from dataclasses import dataclass
 
-from api_client import MyUplinkClient
-from analyzer import HeatPumpAnalyzer
+from integrations.api_client import MyUplinkClient
+from services.analyzer import HeatPumpAnalyzer
 
 
 @dataclass
@@ -335,7 +335,7 @@ class VentilationOptimizer:
 
 def main():
     """Test ventilation optimizer"""
-    from models import Device, init_db
+    from data.models import Device, init_db
     from sqlalchemy.orm import sessionmaker
 
     # Initialize

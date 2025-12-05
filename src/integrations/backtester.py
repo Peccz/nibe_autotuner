@@ -15,12 +15,12 @@ from tqdm import tqdm
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from analyzer import HeatPumpAnalyzer
-from models import init_db, Device, ParameterReading, ParameterChange
-from autonomous_ai_agent import AutonomousAIAgent, AIDecision
-from api_client import MyUplinkClient
-from weather_service import SMHIWeatherService
-from config import settings
+from services.analyzer import HeatPumpAnalyzer
+from data.models import init_db, Device, ParameterReading, ParameterChange
+from integrations.autonomous_ai_agent import AutonomousAIAgent, AIDecision
+from integrations.api_client import MyUplinkClient
+from services.weather_service import SMHIWeatherService
+from core.config import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

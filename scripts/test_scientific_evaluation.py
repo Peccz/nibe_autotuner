@@ -11,10 +11,10 @@ import json
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from models import init_db, PlannedTest, Parameter
+from data.models import init_db, PlannedTest, Parameter
 from sqlalchemy.orm import sessionmaker
 from autonomous_ai_agent_v2 import AutonomousAIAgentV2
-from analyzer import HeatPumpAnalyzer
+from services.analyzer import HeatPumpAnalyzer
 from api_client import MyUplinkClient
 from weather_service import SMHIWeatherService
 
@@ -62,7 +62,7 @@ def test_scientific_evaluation():
         weather_service = SMHIWeatherService()
 
         # Get device from database
-        from models import Device
+        from data.models import Device
         device = session.query(Device).first()
         if not device:
             print("❌ No device found in database")

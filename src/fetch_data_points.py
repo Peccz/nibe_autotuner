@@ -3,8 +3,8 @@ Fetch data points from Nibe heat pump
 """
 import json
 from loguru import logger
-from auth import MyUplinkAuth
-from api_client import MyUplinkClient
+from integrations.auth import MyUplinkAuth
+from integrations.api_client import MyUplinkClient
 
 def fetch_all_data_points():
     """Fetch and display all data points from the heat pump"""

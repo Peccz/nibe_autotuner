@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from loguru import logger
 
-from analyzer import HeatPumpAnalyzer
+from services.analyzer import HeatPumpAnalyzer
 
 
 class HeatPumpVisualizer:

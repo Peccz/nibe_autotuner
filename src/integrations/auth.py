@@ -11,7 +11,7 @@ import requests
 from requests_oauthlib import OAuth2Session
 from loguru import logger
 
-from config import settings
+from core.config import settings
 
 # Configuration from centralized settings
 CLIENT_ID = settings.MYUPLINK_CLIENT_ID

@@ -6,10 +6,10 @@ from datetime import datetime
 from loguru import logger
 from sqlalchemy.exc import IntegrityError
 
-from auth import MyUplinkAuth
-from api_client import MyUplinkClient
-from config import settings
-from models import (
+from integrations.auth import MyUplinkAuth
+from integrations.api_client import MyUplinkClient
+from core.config import settings
+from data.models import (
     init_db,
     get_session,
     System,

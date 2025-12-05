@@ -4,8 +4,8 @@ Investigate the myUplink API structure for writing parameters
 import json
 import requests
 from loguru import logger
-from auth import MyUplinkAuth
-from api_client import MyUplinkClient
+from integrations.auth import MyUplinkAuth
+from integrations.api_client import MyUplinkClient
 
 def investigate_api():
     """Check API documentation and structure"""

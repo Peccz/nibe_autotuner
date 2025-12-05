@@ -8,7 +8,7 @@ and type checking.
 All configuration should be accessed through the `settings` singleton object.
 
 Example:
-    from config import settings
+    from core.config import settings
 
     # Access configuration
     api_key = settings.GOOGLE_API_KEY
@@ -132,7 +132,7 @@ settings = Settings()
 Global settings singleton. Import and use this throughout the application.
 
 Example:
-    from config import settings
+    from core.config import settings
 
     if settings.AI_ENABLED:
         # Use AI features

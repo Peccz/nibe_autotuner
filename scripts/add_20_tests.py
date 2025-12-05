@@ -10,7 +10,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from models import Parameter, PlannedTest, init_db
+from data.models import Parameter, PlannedTest, init_db
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 from loguru import logger

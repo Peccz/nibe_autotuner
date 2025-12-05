@@ -2,8 +2,8 @@
 Test the analyzer module with current data
 """
 from loguru import logger
-from analyzer import HeatPumpAnalyzer
-from models import init_db, ParameterReading
+from services.analyzer import HeatPumpAnalyzer
+from data.models import init_db, ParameterReading
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 
@@ -84,7 +84,7 @@ def main():
         if timestamps >= 2:
             # Only run the full report if we have enough data
             logger.info("Running full analysis...")
-            from analyzer import main as run_analysis
+            from services.analyzer import main as run_analysis
             run_analysis()
         else:
             logger.info("Skipping full analysis - need more data points")

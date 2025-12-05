@@ -10,7 +10,7 @@ from datetime import datetime
 import google.generativeai as genai
 from dataclasses import dataclass
 from loguru import logger
-from config import settings
+from core.config import settings
 
 
 @dataclass

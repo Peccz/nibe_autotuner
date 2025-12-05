@@ -7,11 +7,11 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from loguru import logger
 
-from analyzer import HeatPumpAnalyzer
-from optimizer import SmartOptimizer
-from api_client import MyUplinkClient
-from auth import MyUplinkAuth
-from models import Device, ParameterChange, init_db
+from services.analyzer import HeatPumpAnalyzer
+from services.optimizer import SmartOptimizer
+from integrations.api_client import MyUplinkClient
+from integrations.auth import MyUplinkAuth
+from data.models import Device, ParameterChange, init_db
 from sqlalchemy.orm import sessionmaker
 
 

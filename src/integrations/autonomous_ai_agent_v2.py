@@ -12,12 +12,12 @@ from loguru import logger
 from pydantic import BaseModel, Field, ValidationError, ConfigDict
 
 # Reuse existing classes
-from autonomous_ai_agent import AIDecision, AutonomousAIAgent
-from config import settings
-from models import AIDecisionLog, Parameter, ParameterChange, PlannedTest, ABTestResult
-from price_service import ElectricityPriceService
-from hw_analyzer import HotWaterPatternAnalyzer
-from scientific_analyzer import ScientificTestAnalyzer
+from integrations.autonomous_ai_agent import AIDecision, AutonomousAIAgent
+from core.config import settings
+from data.models import AIDecisionLog, Parameter, ParameterChange, PlannedTest, ABTestResult
+from services.price_service import ElectricityPriceService
+from services.hw_analyzer import HotWaterPatternAnalyzer
+from services.scientific_analyzer import ScientificTestAnalyzer
 
 # ============================================================================
 # CONFIGURATION CONSTANTS

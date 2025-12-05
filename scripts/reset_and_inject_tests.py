@@ -10,7 +10,7 @@ from datetime import datetime
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from models import init_db, PlannedTest, Parameter
+from data.models import init_db, PlannedTest, Parameter
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 

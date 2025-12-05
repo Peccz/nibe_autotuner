@@ -4,7 +4,7 @@ Test CSV importer with sample data
 from datetime import datetime, timedelta
 from pathlib import Path
 from loguru import logger
-from csv_importer import CSVImporter
+from data.csv_importer import CSVImporter
 
 
 def create_sample_csv():

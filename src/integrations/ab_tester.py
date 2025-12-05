@@ -8,11 +8,11 @@ import json
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from models import (
+from data.models import (
     Device, ParameterChange, ABTestResult,
     ParameterReading, Parameter, PlannedTest
 )
-from analyzer import HeatPumpAnalyzer
+from services.analyzer import HeatPumpAnalyzer
 from sqlalchemy import func
 
 
@@ -543,9 +543,9 @@ class ABTester:
 
             # Create AI agent if not provided
             if ai_agent is None:
-                from autonomous_ai_agent_v2 import AutonomousAIAgentV2
-                from api_client import MyUplinkClient
-                from weather_service import SMHIWeatherService
+                from integrations.autonomous_ai_agent_v2 import AutonomousAIAgentV2
+                from integrations.api_client import MyUplinkClient
+                from services.weather_service import SMHIWeatherService
 
                 device = self.session.query(Device).first()
                 if not device:

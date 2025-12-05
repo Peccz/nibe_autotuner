@@ -25,10 +25,10 @@ echo "=================================================="
 # Run test proposer
 PYTHONPATH=./src ./venv/bin/python -c "
 from test_proposer import TestProposer
-from analyzer import HeatPumpAnalyzer
+from services.analyzer import HeatPumpAnalyzer
 from api_client import MyUplinkClient
 from weather_service import SMHIWeatherService
-from models import Device, init_db
+from data.models import Device, init_db
 from sqlalchemy.orm import sessionmaker
 import sys
 

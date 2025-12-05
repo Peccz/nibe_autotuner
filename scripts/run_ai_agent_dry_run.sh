@@ -32,11 +32,11 @@ echo "=================================================="
 
 # Run AI agent (dry_run=True means it will NOT apply changes)
 PYTHONPATH=./src ./venv/bin/python -c "
-from autonomous_ai_agent import AutonomousAIAgent
-from analyzer import HeatPumpAnalyzer
+from integrations.autonomous_ai_agent import AutonomousAIAgent
+from services.analyzer import HeatPumpAnalyzer
 from api_client import MyUplinkClient
 from weather_service import SMHIWeatherService
-from models import Device, init_db
+from data.models import Device, init_db
 from sqlalchemy.orm import sessionmaker
 import sys
 

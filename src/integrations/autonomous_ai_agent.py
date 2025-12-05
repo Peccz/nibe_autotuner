@@ -9,10 +9,10 @@ from dataclasses import dataclass
 import anthropic
 from loguru import logger
 
-from analyzer import HeatPumpAnalyzer
-from api_client import MyUplinkClient
-from weather_service import SMHIWeatherService
-from config import settings
+from services.analyzer import HeatPumpAnalyzer
+from integrations.api_client import MyUplinkClient
+from services.weather_service import SMHIWeatherService
+from core.config import settings
 
 
 @dataclass
@@ -86,13 +86,13 @@ class AutonomousAIAgent:
         weather_rec = self.weather_service.should_adjust_for_weather()
 
         # Get recent changes from database
-        from models import ParameterChange
+        from data.models import ParameterChange
         recent_changes = self.analyzer.session.query(ParameterChange).order_by(
             ParameterChange.timestamp.desc()
         ).limit(5).all()
 
         # Get A/B test results
-        from models import ABTestResult
+        from data.models import ABTestResult
         recent_tests = self.analyzer.session.query(ABTestResult).order_by(
             ABTestResult.created_at.desc()
         ).limit(3).all()
@@ -367,7 +367,7 @@ Now analyze the system and provide your decision:"""
             decision: AIDecision to log
             dry_run: Whether this was a dry run
         """
-        from models import AIDecisionLog, Parameter
+        from data.models import AIDecisionLog, Parameter
 
         # Get parameter if this is an adjustment
         param_id = None
@@ -441,7 +441,7 @@ Now analyze the system and provide your decision:"""
             )
 
             # Log change to database
-            from models import ParameterChange, Parameter
+            from data.models import ParameterChange, Parameter
             param = self.analyzer.session.query(Parameter).filter_by(
                 parameter_id=param_id
             ).first()
@@ -469,7 +469,7 @@ Now analyze the system and provide your decision:"""
 
 def main():
     """Test autonomous AI agent"""
-    from models import Device, init_db
+    from data.models import Device, init_db
     from sqlalchemy.orm import sessionmaker
 
     # Initialize

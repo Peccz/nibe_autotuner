@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timedelta
 from loguru import logger
 from typing import List, Dict, Optional
-from config import settings
+from core.config import settings
 
 class ElectricityPriceService:
     def __init__(self, price_area: str = "SE3"):

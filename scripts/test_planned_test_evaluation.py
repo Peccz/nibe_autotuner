@@ -11,10 +11,10 @@ import json
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from models import init_db, PlannedTest, Parameter
+from data.models import init_db, PlannedTest, Parameter
 from sqlalchemy.orm import sessionmaker
 from ab_tester import ABTester
-from analyzer import HeatPumpAnalyzer
+from services.analyzer import HeatPumpAnalyzer
 
 def test_planned_test_evaluation():
     """Test the PlannedTest evaluation workflow"""

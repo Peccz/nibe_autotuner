@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 
-from analyzer import HeatPumpAnalyzer
-from gemini_agent import GeminiAgent, GeminiRecommendation
-from config import settings
+from services.analyzer import HeatPumpAnalyzer
+from integrations.gemini_agent import GeminiAgent, GeminiRecommendation
+from core.config import settings
 
 
 @dataclass

@@ -12,11 +12,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from loguru import logger
 
-from analyzer import HeatPumpAnalyzer, EfficiencyMetrics, OptimizationOpportunity
-from visualizer import HeatPumpVisualizer
-from csv_importer import CSVImporter
-from config import settings
-from models import (
+from services.analyzer import HeatPumpAnalyzer, EfficiencyMetrics, OptimizationOpportunity
+from services.visualizer import HeatPumpVisualizer
+from data.csv_importer import CSVImporter
+from core.config import settings
+from data.models import (
     init_db, Device, Parameter, ParameterReading as ParameterReadingModel,
     Recommendation, ParameterChange
 )

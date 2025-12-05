@@ -3,8 +3,8 @@ Test write access to myUplink API
 """
 import time
 from loguru import logger
-from auth import MyUplinkAuth
-from api_client import MyUplinkClient
+from integrations.auth import MyUplinkAuth
+from integrations.api_client import MyUplinkClient
 
 def test_write_access():
     """Test writing to a safe parameter"""

@@ -15,15 +15,15 @@ logging.basicConfig(level=logging.INFO)
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from analyzer import HeatPumpAnalyzer
-from models import ParameterChange, Device, Parameter, ABTestResult, init_db
+from services.analyzer import HeatPumpAnalyzer
+from data.models import ParameterChange, Device, Parameter, ABTestResult, init_db
 from sqlalchemy.orm import sessionmaker
-from ab_tester import ABTester
-from optimizer import SmartOptimizer
-from api_client import MyUplinkClient
-from auth import MyUplinkAuth
-from auto_optimizer import AutoOptimizer
-from config import settings
+from integrations.ab_tester import ABTester
+from services.optimizer import SmartOptimizer
+from integrations.api_client import MyUplinkClient
+from integrations.auth import MyUplinkAuth
+from services.auto_optimizer import AutoOptimizer
+from core.config import settings
 
 app = Flask(__name__,
             template_folder='mobile/templates',
@@ -609,7 +609,7 @@ def dismiss_suggestion():
 def gemini_chat():
     """Chat with Gemini AI agent about heat pump performance"""
     try:
-        from gemini_agent import GeminiAgent
+        from integrations.gemini_agent import GeminiAgent
 
         data = request.get_json()
         message = data.get('message', '').strip()
@@ -646,7 +646,7 @@ def gemini_chat():
 def gemini_analyze():
     """Get AI analysis and recommendations from Gemini"""
     try:
-        from gemini_agent import GeminiAgent
+        from integrations.gemini_agent import GeminiAgent
 
         data = request.get_json()
         hours = data.get('hours', 24)
@@ -1007,7 +1007,7 @@ def get_ventilation_status():
     """Get current ventilation status and strategy"""
     session = SessionMaker()
     try:
-        from ventilation_optimizer import VentilationOptimizer
+        from services.ventilation_optimizer import VentilationOptimizer
 
         device = session.query(Device).first()
         if not device:
@@ -1067,7 +1067,7 @@ def get_ai_agent_status():
     """Get AI agent status"""
     session = SessionMaker()
     try:
-        from models import AIDecisionLog
+        from data.models import AIDecisionLog
         
         # Count total analyses and adjustments
         total_analyses = session.query(AIDecisionLog).count()
@@ -1102,7 +1102,7 @@ def get_latest_ai_decision():
     """Get latest AI decision"""
     session = SessionMaker()
     try:
-        from models import AIDecisionLog, Parameter
+        from data.models import AIDecisionLog, Parameter
 
         decision_log = session.query(AIDecisionLog).order_by(
             AIDecisionLog.timestamp.desc()
@@ -1135,7 +1135,7 @@ def get_planned_tests():
     """Get planned tests"""
     session = SessionMaker()
     try:
-        from models import PlannedTest
+        from data.models import PlannedTest
 
         tests = session.query(PlannedTest).filter_by(status='pending').order_by(
             PlannedTest.priority_score.desc(),
@@ -1171,7 +1171,7 @@ def get_active_tests():
     """Get active tests"""
     session = SessionMaker()
     try:
-        from models import PlannedTest
+        from data.models import PlannedTest
 
         tests = session.query(PlannedTest).filter_by(status='active').all()
 
@@ -1208,7 +1208,7 @@ def get_completed_tests():
     """Get completed tests with results"""
     session = SessionMaker()
     try:
-        from models import PlannedTest, ABTestResult
+        from data.models import PlannedTest, ABTestResult
 
         limit = request.args.get('limit', 10, type=int)
 
@@ -1247,7 +1247,7 @@ def get_learning_stats():
     """Get learning statistics"""
     session = SessionMaker()
     try:
-        from models import PlannedTest, ABTestResult
+        from data.models import PlannedTest, ABTestResult
 
         # Get all completed tests with results
         completed_tests = session.query(PlannedTest).filter_by(status='completed').join(

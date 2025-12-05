@@ -11,9 +11,9 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from analyzer import HeatPumpAnalyzer, EfficiencyMetrics
-from visualizer import HeatPumpVisualizer
-from models import init_db, Device, Parameter, ParameterReading as ParameterReadingModel
+from services.analyzer import HeatPumpAnalyzer, EfficiencyMetrics
+from services.visualizer import HeatPumpVisualizer
+from data.models import init_db, Device, Parameter, ParameterReading as ParameterReadingModel
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func, and_
 
@@ -457,7 +457,7 @@ def main():
                 param_name = custom_parameter if parameter_type == "Annat" else parameter_type
 
                 # Store in database
-                from models import ParameterChange
+                from data.models import ParameterChange
 
                 try:
                     device = st.session_state.analyzer.get_device()
@@ -497,7 +497,7 @@ def main():
         st.subheader("📜 Ändringshistorik")
 
         try:
-            from models import ParameterChange
+            from data.models import ParameterChange
 
             device = st.session_state.analyzer.get_device()
 
