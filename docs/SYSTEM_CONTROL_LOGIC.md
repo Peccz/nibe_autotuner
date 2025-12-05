@@ -68,8 +68,8 @@
 
 **Aktuell användning (empiriskt bestämd för outdoor 3-5°C):**
 - Normalt intervall: -5 till 0
-- BASLINJE: -3 (normal drift, ger 20-22°C inomhus)
-- REDUCERAT: -5 (max sänkning vid dyrt el, ger 20-21°C inomhus)
+- BASLINJE: -3 (normal drift, ger 20.5-22°C inomhus)
+- REDUCERAT: -5 (max sänkning vid dyrt el, ger 20.5-21°C inomhus)
 - BUFFRAT: -1 (värmebuffring före dyr period, ger 21-23°C inomhus)
 - **ALDRIG under -5 vid nuvarande utetemp** (ger ingen extra besparing)
 
@@ -92,7 +92,7 @@ Tid     Framledning  Radiator   Rumsluft
 **Säkerhetsgränser:**
 - Max ändring per steg: ±2 (konservativt för att undvika extrema värden)
 - Min konfidens för ändring: 70%
-- Minsta rumstemperatur: 20.0°C (får aldrig understigas)
+- Minsta rumstemperatur: 20.5°C (får aldrig understigas, konfigurerbar i GUI)
 - Hårdkodad minimum för offset: -5 (empirisk gräns för outdoor 3-5°C)
 
 **Osäkerhet:**
@@ -1013,19 +1013,27 @@ Analyzed 1774 readings. Found 0 usage events.
 
 #### 1. Minsta innetemperatur
 ```python
-MIN_INDOOR_TEMP = 20.0  # °C - ABSOLUT GRÄNS
+MIN_INDOOR_TEMP = 20.5  # °C - ABSOLUT GRÄNS (KONFIGURERBAR)
 ```
 **Motivering:**
-- Komfort: Under 20°C upplevs som kallt
+- Komfort: Under 20.5°C upplevs som kallt för de flesta
 - Hälsa: Risk för mögel/fukt vid långvarig låg temp
 - Legionella: Varmvatten riskerar bakterietillväxt
 
+**Konfiguration:**
+- Standardvärde: 20.5°C
+- Kan justeras i GUI (Settings) mellan 18.0°C och 23.0°C
+- Ändring kräver omstart av AI-agent för att träda i kraft
+- Lagras i `.env` fil som `MIN_INDOOR_TEMP=20.5`
+
 **Implementation:**
 ```python
+from core.config import settings
+
 if decision.parameter in ['curve_offset', 'heating_curve', 'room_temp']:
     predicted_indoor = simulate_temperature_effect(decision)
-    if predicted_indoor < 20.0:
-        BLOCK_DECISION("Risk för att understiga 20°C")
+    if predicted_indoor < settings.MIN_INDOOR_TEMP:
+        BLOCK_DECISION(f"Risk för att understiga {settings.MIN_INDOOR_TEMP}°C")
 ```
 
 ---

@@ -397,7 +397,7 @@ class SmartOptimizer:
             ))
 
         # Suggestion 6: Indoor temp too low
-        elif metrics.avg_indoor_temp < 20.0:
+        elif metrics.avg_indoor_temp < 20.5:
             current_offset = metrics.curve_offset
             suggested_offset = current_offset + 1
 

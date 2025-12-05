@@ -84,9 +84,6 @@ class ParameterConfig:
         'room_temp': 1,         # Max ±1°C
     }
 
-    # Minimum temperature thresholds
-    MIN_INDOOR_TEMP = 20.0  # Never target below this
-
     # Normal operating range for curve_offset (empirically determined)
     NORMAL_OFFSET_RANGE = (-5, 0)  # Typical range, warn if outside
 
@@ -298,8 +295,8 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
 
         # Rule 1: Minimum Indoor Temperature (Safety over Cost)
         if decision.parameter == 'room_temp':
-            if decision.suggested_value < ParameterConfig.MIN_INDOOR_TEMP:
-                return False, f"Suggested room temp {decision.suggested_value}°C is below safety limit ({ParameterConfig.MIN_INDOOR_TEMP}°C)"
+            if decision.suggested_value < settings.MIN_INDOOR_TEMP:
+                return False, f"Suggested room temp {decision.suggested_value}°C is below safety limit ({settings.MIN_INDOOR_TEMP}°C)"
 
         # Rule 2: Parameter Bounds
         if decision.parameter in ParameterConfig.BOUNDS:
@@ -545,13 +542,14 @@ Context:
 Output JSON only.
 Action: adjust|hold|investigate
 Params: heating_curve(1-15), curve_offset(-10-10), start_compressor(-DM), hot_water_demand(0-2), increased_ventilation(0-4)
-Rules: Indoor target 20-22C. Max 1 change. Min conf 0.7.
+Rules: Indoor target 20.5-22C (MINIMUM 20.5°C). Max 1 change. Min conf 0.7.
 
 IMPORTANT: DegMin is a START THRESHOLD (when compressor starts), NOT an indicator of overheating.
 - DegMin negative = compressor starts earlier
-- To check if heating too much: Compare Indoor temp vs target (20-22C)
+- To check if heating too much: Compare Indoor temp vs target (20.5-22C)
+- ABSOLUTE MINIMUM: 20.5°C - never target below this
 - If Indoor > 22C AND price expensive: Lower curve_offset
-- If Indoor < 20C: Never lower heating, regardless of price
+- If Indoor < 20.5C: Never lower heating, regardless of price
 
 THERMAL LAG: House takes ~3h to respond to heating changes. BE PREDICTIVE!
 - If expensive prices coming in 2-4h: Act NOW (lower heating before price spike)
@@ -563,22 +561,23 @@ THERMAL LAG: House takes ~3h to respond to heating changes. BE PREDICTIVE!
 STRATEGY (PREDICTIVE) - Based on empirical data for outdoor temp 3-5°C:
 
 OFFSET TARGET VALUES (outdoor 3-5°C):
-- BASELINE: -3 (normal operation, gives indoor 20-22°C)
-- REDUCED: -5 (maximum reduction during expensive electricity, gives indoor 20-21°C)
+- BASELINE: -3 (normal operation, gives indoor 20.5-22°C)
+- REDUCED: -5 (maximum reduction during expensive electricity, gives indoor 20.5-21°C)
 - BUFFERED: -1 (heat buffering before expensive period, gives indoor 21-23°C)
-- NEVER go below -5 at current outdoor temps (3-5°C) - provides NO additional savings and risks discomfort
+- NEVER go below -5 at current outdoor temps (3-5°C) - provides NO additional savings and risks going below 20.5°C minimum
 
 Max change per decision: ±2 steps only.
 
-1. FORECAST EXPENSIVE (in 2-4h) + Indoor >= 20.5C:
+1. FORECAST EXPENSIVE (in 2-4h) + Indoor >= 21.0C:
    → Target offset -5 (move gradually from current, max -2 steps)
    → Set HotWater=Small(0) if HW_Usage_Risk LOW
+   → ONLY if indoor temp provides buffer above 20.5°C minimum
 
 2. FORECAST CHEAP (in 2-4h) + Indoor <= 21.5C:
    → Target offset -1 (move gradually from current, max +2 steps)
    → Set HotWater=Large(2) if HW_Usage_Risk HIGH
 
-3. CURRENTLY CHEAP + Indoor in range (20-22C):
+3. CURRENTLY CHEAP + Indoor in range (20.5-22C):
    → Target offset -3 (baseline, comfortable and efficient)
 
 4. WEATHER COOLING (>2°C drop forecast):

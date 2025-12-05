@@ -93,6 +93,19 @@ class Settings(BaseSettings):
     """Mobile PWA server port"""
 
     # ============================================================================
+    # Heat Pump Control Parameters
+    # ============================================================================
+
+    MIN_INDOOR_TEMP: float = 20.5
+    """Minimum allowed indoor temperature (°C) - safety threshold"""
+
+    TARGET_INDOOR_TEMP_MIN: float = 20.5
+    """Target indoor temperature minimum (°C)"""
+
+    TARGET_INDOOR_TEMP_MAX: float = 22.0
+    """Target indoor temperature maximum (°C)"""
+
+    # ============================================================================
     # Feature Flags
     # ============================================================================
 
@@ -174,6 +187,8 @@ def print_config_summary() -> None:
     print(f"Log Level:           {settings.LOG_LEVEL}")
     print(f"API Server:          {settings.API_SERVER_HOST}:{settings.API_SERVER_PORT}")
     print(f"Mobile App:          {settings.MOBILE_APP_HOST}:{settings.MOBILE_APP_PORT}")
+    print(f"Min Indoor Temp:     {settings.MIN_INDOOR_TEMP}°C")
+    print(f"Target Temp Range:   {settings.TARGET_INDOOR_TEMP_MIN}°C - {settings.TARGET_INDOOR_TEMP_MAX}°C")
     print(f"AI Enabled:          {settings.AI_ENABLED}")
     print(f"Tibber Enabled:      {settings.TIBBER_ENABLED}")
     print(f"Anthropic Enabled:   {settings.ANTHROPIC_ENABLED}")

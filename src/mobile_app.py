@@ -1303,6 +1303,83 @@ def get_learning_stats():
     finally:
         session.close()
 
+@app.route('/settings')
+def settings_page():
+    """Settings page"""
+    return render_template('settings.html')
+
+@app.route('/api/settings', methods=['GET'])
+def get_settings():
+    """Get current settings"""
+    try:
+        return jsonify({
+            'success': True,
+            'settings': {
+                'min_indoor_temp': settings.MIN_INDOOR_TEMP,
+                'target_indoor_temp_min': settings.TARGET_INDOOR_TEMP_MIN,
+                'target_indoor_temp_max': settings.TARGET_INDOOR_TEMP_MAX,
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/settings', methods=['POST'])
+def update_settings():
+    """Update settings"""
+    try:
+        data = request.json
+
+        # Update MIN_INDOOR_TEMP if provided
+        if 'min_indoor_temp' in data:
+            new_min_temp = float(data['min_indoor_temp'])
+
+            # Validate range (reasonable bounds)
+            if new_min_temp < 18.0 or new_min_temp > 23.0:
+                return jsonify({
+                    'success': False,
+                    'error': 'Min indoor temp must be between 18.0°C and 23.0°C'
+                }), 400
+
+            # Update .env file
+            import os
+            env_path = '.env'
+            if os.path.exists(env_path):
+                with open(env_path, 'r') as f:
+                    lines = f.readlines()
+
+                # Update or add MIN_INDOOR_TEMP line
+                found = False
+                for i, line in enumerate(lines):
+                    if line.startswith('MIN_INDOOR_TEMP='):
+                        lines[i] = f'MIN_INDOOR_TEMP={new_min_temp}\n'
+                        found = True
+                        break
+
+                if not found:
+                    lines.append(f'\n# Heat Pump Control Parameters\nMIN_INDOOR_TEMP={new_min_temp}\n')
+
+                with open(env_path, 'w') as f:
+                    f.writelines(lines)
+            else:
+                # Create .env file
+                with open(env_path, 'w') as f:
+                    f.write(f'# Heat Pump Control Parameters\nMIN_INDOOR_TEMP={new_min_temp}\n')
+
+            # Update in-memory settings (requires restart to take effect properly)
+            settings.MIN_INDOOR_TEMP = new_min_temp
+
+            return jsonify({
+                'success': True,
+                'message': f'Min indoor temp updated to {new_min_temp}°C. Restart services to apply.',
+                'restart_required': True
+            })
+
+        return jsonify({'success': False, 'error': 'No settings to update'}), 400
+
+    except Exception as e:
+        logger.error(f"Failed to update settings: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/manifest.json')
 def manifest():
     """PWA manifest"""

@@ -183,7 +183,7 @@ class AutoOptimizer:
                 ))
 
         # Action 3: Indoor temperature too low - Raise offset
-        elif metrics.avg_indoor_temp < 20.0:
+        elif metrics.avg_indoor_temp < 20.5:
             current_offset = metrics.curve_offset
             temp_deficit = 21.0 - metrics.avg_indoor_temp
             increase = round(min(2, temp_deficit * 1.5))  # Be more aggressive for comfort
