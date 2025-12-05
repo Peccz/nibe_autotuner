@@ -1311,75 +1311,96 @@ def settings_page():
 
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
-    """Get current settings"""
+    """Get current user settings from database"""
+    session = None
     try:
+        session = SessionMaker()
+
+        # Get the first device (or could be passed as parameter)
+        device = session.query(Device).first()
+
+        if not device:
+            return jsonify({
+                'success': False,
+                'error': 'No device found in database'
+            }), 404
+
         return jsonify({
             'success': True,
             'settings': {
-                'min_indoor_temp': settings.MIN_INDOOR_TEMP,
-                'target_indoor_temp_min': settings.TARGET_INDOOR_TEMP_MIN,
-                'target_indoor_temp_max': settings.TARGET_INDOOR_TEMP_MAX,
+                'min_indoor_temp': device.min_indoor_temp_user_setting,
+                'target_indoor_temp_min': device.target_indoor_temp_min,
+                'target_indoor_temp_max': device.target_indoor_temp_max,
             }
         })
     except Exception as e:
+        logger.error(f"Failed to get settings: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if session:
+            session.close()
 
 @app.route('/api/settings', methods=['POST'])
 def update_settings():
-    """Update settings"""
+    """Update user settings in database"""
+    session = None
     try:
         data = request.json
+        session = SessionMaker()
+
+        # Get the first device (or could be passed as parameter)
+        device = session.query(Device).first()
+
+        if not device:
+            return jsonify({
+                'success': False,
+                'error': 'No device found in database'
+            }), 404
 
         # Update MIN_INDOOR_TEMP if provided
         if 'min_indoor_temp' in data:
             new_min_temp = float(data['min_indoor_temp'])
 
             # Validate range (reasonable bounds)
-            if new_min_temp < 18.0 or new_min_temp > 23.0:
+            if new_min_temp < 18.0 or new_min_temp > 25.0:
                 return jsonify({
                     'success': False,
-                    'error': 'Min indoor temp must be between 18.0°C and 23.0°C'
+                    'error': 'Min indoor temp must be between 18.0°C and 25.0°C'
                 }), 400
 
-            # Update .env file
-            import os
-            env_path = '.env'
-            if os.path.exists(env_path):
-                with open(env_path, 'r') as f:
-                    lines = f.readlines()
+            device.min_indoor_temp_user_setting = new_min_temp
+            logger.info(f"Updated min_indoor_temp_user_setting to {new_min_temp}°C")
 
-                # Update or add MIN_INDOOR_TEMP line
-                found = False
-                for i, line in enumerate(lines):
-                    if line.startswith('MIN_INDOOR_TEMP='):
-                        lines[i] = f'MIN_INDOOR_TEMP={new_min_temp}\n'
-                        found = True
-                        break
+        # Update target range if provided
+        if 'target_indoor_temp_min' in data:
+            new_target_min = float(data['target_indoor_temp_min'])
+            if 18.0 <= new_target_min <= 25.0:
+                device.target_indoor_temp_min = new_target_min
+                logger.info(f"Updated target_indoor_temp_min to {new_target_min}°C")
 
-                if not found:
-                    lines.append(f'\n# Heat Pump Control Parameters\nMIN_INDOOR_TEMP={new_min_temp}\n')
+        if 'target_indoor_temp_max' in data:
+            new_target_max = float(data['target_indoor_temp_max'])
+            if 18.0 <= new_target_max <= 25.0:
+                device.target_indoor_temp_max = new_target_max
+                logger.info(f"Updated target_indoor_temp_max to {new_target_max}°C")
 
-                with open(env_path, 'w') as f:
-                    f.writelines(lines)
-            else:
-                # Create .env file
-                with open(env_path, 'w') as f:
-                    f.write(f'# Heat Pump Control Parameters\nMIN_INDOOR_TEMP={new_min_temp}\n')
+        # Commit changes
+        session.commit()
 
-            # Update in-memory settings (requires restart to take effect properly)
-            settings.MIN_INDOOR_TEMP = new_min_temp
-
-            return jsonify({
-                'success': True,
-                'message': f'Min indoor temp updated to {new_min_temp}°C. Restart services to apply.',
-                'restart_required': True
-            })
-
-        return jsonify({'success': False, 'error': 'No settings to update'}), 400
+        return jsonify({
+            'success': True,
+            'message': 'Settings updated successfully in database',
+            'restart_required': False  # No restart needed - read from DB on each use
+        })
 
     except Exception as e:
+        if session:
+            session.rollback()
         logger.error(f"Failed to update settings: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if session:
+            session.close()
 
 @app.route('/manifest.json')
 def manifest():

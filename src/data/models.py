@@ -1,9 +1,11 @@
 """
 Database models for Nibe Autotuner
+
+SQLAlchemy ORM models representing the database schema.
+Import Base from data.database for declarative base.
 """
 from datetime import datetime
 from sqlalchemy import (
-    create_engine,
     Column,
     Integer,
     String,
@@ -14,11 +16,11 @@ from sqlalchemy import (
     ForeignKey,
     Index
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
-Base = declarative_base()
+# Import Base from centralized database configuration
+from data.database import Base
 
 
 class System(Base):
@@ -53,6 +55,16 @@ class Device(Base):
     connection_state = Column(String(20))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # User Settings - Dynamic configuration stored per device
+    min_indoor_temp_user_setting = Column(Float, default=20.5, nullable=False)
+    """Minimum indoor temperature (°C) - user configurable safety threshold. Default: 20.5°C"""
+
+    target_indoor_temp_min = Column(Float, default=20.5, nullable=False)
+    """Target indoor temperature minimum (°C). Default: 20.5°C"""
+
+    target_indoor_temp_max = Column(Float, default=22.0, nullable=False)
+    """Target indoor temperature maximum (°C). Default: 22.0°C"""
 
     # Relationships
     system = relationship('System', back_populates='devices')
@@ -304,25 +316,12 @@ class AIDecisionLog(Base):
         return f"<AIDecision(id={self.id}, action={self.action}, applied={self.applied})>"
 
 
-# Database initialization
-def init_db(database_url='sqlite:///./data/nibe_autotuner.db'):
-    """Initialize the database"""
-    engine = create_engine(database_url, echo=False)
-    Base.metadata.create_all(engine)
-    return engine
-
-
-def get_session(engine):
-    """Get a database session"""
-    Session = sessionmaker(bind=engine)
-    return Session()
-
-
 if __name__ == '__main__':
-    # Test database creation
+    # Test database models
     from loguru import logger
+    from data.database import engine, init_db
 
     logger.info("Creating database...")
-    engine = init_db()
+    init_db()
     logger.info(f"✓ Database created successfully!")
     logger.info(f"✓ Tables: {', '.join(Base.metadata.tables.keys())}")

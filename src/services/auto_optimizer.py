@@ -123,11 +123,25 @@ class AutoOptimizer:
         Returns:
             List of OptimizationAction objects, sorted by priority
         """
+        from data.database import SessionLocal
+        from data.models import Device
+
         actions = []
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
 
+        # Get user settings from database
+        session = SessionLocal()
+        try:
+            device = session.query(Device).first()
+            min_temp = device.min_indoor_temp_user_setting if device else 20.5
+            target_min = device.target_indoor_temp_min if device else 20.5
+            target_max = device.target_indoor_temp_max if device else 22.0
+        finally:
+            session.close()
+
         logger.info(f"Analyzing system for optimization opportunities...")
         logger.info(f"Current metrics: COP={metrics.estimated_cop:.2f}, Delta T={metrics.delta_t_active:.1f}°C, Indoor={metrics.avg_indoor_temp:.1f}°C")
+        logger.info(f"User settings: Min={min_temp:.1f}°C, Target={target_min:.1f}-{target_max:.1f}°C")
 
         # Action 1: Low COP - Lower heating curve
         if metrics.estimated_cop and metrics.estimated_cop < 3.0:
@@ -158,9 +172,10 @@ class AutoOptimizer:
                     ))
 
         # Action 2: Indoor temperature too high - Lower offset
-        if metrics.avg_indoor_temp > 22.0:
+        if metrics.avg_indoor_temp > target_max:
             current_offset = metrics.curve_offset
-            temp_excess = metrics.avg_indoor_temp - 21.0
+            target_center = (target_min + target_max) / 2
+            temp_excess = metrics.avg_indoor_temp - target_center
             reduction = round(min(2, temp_excess))  # Max 2 steps
             new_offset = current_offset - reduction
 
@@ -183,9 +198,9 @@ class AutoOptimizer:
                 ))
 
         # Action 3: Indoor temperature too low - Raise offset
-        elif metrics.avg_indoor_temp < 20.5:
+        elif metrics.avg_indoor_temp < min_temp:
             current_offset = metrics.curve_offset
-            temp_deficit = 21.0 - metrics.avg_indoor_temp
+            temp_deficit = target_min - metrics.avg_indoor_temp
             increase = round(min(2, temp_deficit * 1.5))  # Be more aggressive for comfort
             new_offset = current_offset + increase
 

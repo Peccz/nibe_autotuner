@@ -233,12 +233,30 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         except Exception as e:
             logger.warning(f"HW Analyzer training failed: {e}")
 
-        # 1. Build Optimized Context
+        # 1. Get device settings from database
+        from data.database import SessionLocal
+        from data.models import Device
+
+        session = SessionLocal()
+        try:
+            device = session.query(Device).filter(Device.device_id == self.device_id).first()
+            if device:
+                min_temp = device.min_indoor_temp_user_setting
+                target_min = device.target_indoor_temp_min
+                target_max = device.target_indoor_temp_max
+            else:
+                # Fallback values if device not found
+                min_temp, target_min, target_max = 20.5, 20.5, 22.0
+                logger.warning(f"Device {self.device_id} not found, using fallback temps: {min_temp}-{target_max}°C")
+        finally:
+            session.close()
+
+        # 2. Build Optimized Context
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
         context = self._build_optimized_context(metrics)
 
-        # 2. Create Optimized Prompt
-        prompt = self._create_optimized_prompt(context)
+        # 3. Create Optimized Prompt with user settings
+        prompt = self._create_optimized_prompt(context, min_temp, target_min, target_max)
 
         # 3. Call AI with automatic fallback
         try:
@@ -286,6 +304,7 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         """
         Deterministic safety checks that override the AI.
         Uses centralized ParameterConfig for all bounds and limits.
+        Reads MIN_INDOOR_TEMP from database (device-specific user setting).
         """
         if decision.action != 'adjust':
             return True, ""
@@ -294,9 +313,24 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
             return False, "Missing required fields: parameter or suggested_value"
 
         # Rule 1: Minimum Indoor Temperature (Safety over Cost)
+        # Read from database - user-configurable per device
         if decision.parameter == 'room_temp':
-            if decision.suggested_value < settings.MIN_INDOOR_TEMP:
-                return False, f"Suggested room temp {decision.suggested_value}°C is below safety limit ({settings.MIN_INDOOR_TEMP}°C)"
+            from data.database import SessionLocal
+            from data.models import Device
+
+            session = SessionLocal()
+            try:
+                device = session.query(Device).filter(Device.device_id == self.device_id).first()
+                if device:
+                    min_temp = device.min_indoor_temp_user_setting
+                else:
+                    min_temp = 20.5  # Fallback if device not found
+                    logger.warning(f"Device {self.device_id} not found in DB, using fallback min_temp={min_temp}°C")
+
+                if decision.suggested_value < min_temp:
+                    return False, f"Suggested room temp {decision.suggested_value}°C is below safety limit ({min_temp}°C)"
+            finally:
+                session.close()
 
         # Rule 2: Parameter Bounds
         if decision.parameter in ParameterConfig.BOUNDS:
@@ -534,7 +568,7 @@ Curve:{metrics.heating_curve}/Offset:{metrics.curve_offset}
 {history_str}
 """
 
-    def _create_optimized_prompt(self, context: str) -> str:
+    def _create_optimized_prompt(self, context: str, min_temp: float, target_min: float, target_max: float) -> str:
         return f"""System: Nibe F730 HeatPump. Goal: Optimize COP, Comfort & COST.
 Context:
 {context}
@@ -542,14 +576,14 @@ Context:
 Output JSON only.
 Action: adjust|hold|investigate
 Params: heating_curve(1-15), curve_offset(-10-10), start_compressor(-DM), hot_water_demand(0-2), increased_ventilation(0-4)
-Rules: Indoor target 20.5-22C (MINIMUM 20.5°C). Max 1 change. Min conf 0.7.
+Rules: Indoor target {target_min:.1f}-{target_max:.1f}C (MINIMUM {min_temp:.1f}°C). Max 1 change. Min conf 0.7.
 
 IMPORTANT: DegMin is a START THRESHOLD (when compressor starts), NOT an indicator of overheating.
 - DegMin negative = compressor starts earlier
-- To check if heating too much: Compare Indoor temp vs target (20.5-22C)
-- ABSOLUTE MINIMUM: 20.5°C - never target below this
-- If Indoor > 22C AND price expensive: Lower curve_offset
-- If Indoor < 20.5C: Never lower heating, regardless of price
+- To check if heating too much: Compare Indoor temp vs target ({target_min:.1f}-{target_max:.1f}C)
+- ABSOLUTE MINIMUM: {min_temp:.1f}°C - never target below this (USER SETTING)
+- If Indoor > {target_max:.1f}C AND price expensive: Lower curve_offset
+- If Indoor < {min_temp:.1f}C: Never lower heating, regardless of price
 
 THERMAL LAG: House takes ~3h to respond to heating changes. BE PREDICTIVE!
 - If expensive prices coming in 2-4h: Act NOW (lower heating before price spike)
@@ -561,23 +595,23 @@ THERMAL LAG: House takes ~3h to respond to heating changes. BE PREDICTIVE!
 STRATEGY (PREDICTIVE) - Based on empirical data for outdoor temp 3-5°C:
 
 OFFSET TARGET VALUES (outdoor 3-5°C):
-- BASELINE: -3 (normal operation, gives indoor 20.5-22°C)
-- REDUCED: -5 (maximum reduction during expensive electricity, gives indoor 20.5-21°C)
-- BUFFERED: -1 (heat buffering before expensive period, gives indoor 21-23°C)
-- NEVER go below -5 at current outdoor temps (3-5°C) - provides NO additional savings and risks going below 20.5°C minimum
+- BASELINE: -3 (normal operation, gives indoor {target_min:.1f}-{target_max:.1f}°C)
+- REDUCED: -5 (maximum reduction during expensive electricity, gives indoor {min_temp:.1f}-{target_min+0.5:.1f}°C)
+- BUFFERED: -1 (heat buffering before expensive period, gives indoor {target_min+0.5:.1f}-{target_max+1:.1f}°C)
+- NEVER go below -5 at current outdoor temps (3-5°C) - provides NO additional savings and risks going below {min_temp:.1f}°C minimum
 
 Max change per decision: ±2 steps only.
 
-1. FORECAST EXPENSIVE (in 2-4h) + Indoor >= 21.0C:
+1. FORECAST EXPENSIVE (in 2-4h) + Indoor >= {min_temp+0.5:.1f}C:
    → Target offset -5 (move gradually from current, max -2 steps)
    → Set HotWater=Small(0) if HW_Usage_Risk LOW
-   → ONLY if indoor temp provides buffer above 20.5°C minimum
+   → ONLY if indoor temp provides buffer above {min_temp:.1f}°C minimum
 
-2. FORECAST CHEAP (in 2-4h) + Indoor <= 21.5C:
+2. FORECAST CHEAP (in 2-4h) + Indoor <= {target_max-0.5:.1f}C:
    → Target offset -1 (move gradually from current, max +2 steps)
    → Set HotWater=Large(2) if HW_Usage_Risk HIGH
 
-3. CURRENTLY CHEAP + Indoor in range (20.5-22C):
+3. CURRENTLY CHEAP + Indoor in range ({target_min:.1f}-{target_max:.1f}C):
    → Target offset -3 (baseline, comfortable and efficient)
 
 4. WEATHER COOLING (>2°C drop forecast):

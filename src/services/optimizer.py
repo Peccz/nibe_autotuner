@@ -333,15 +333,27 @@ class SmartOptimizer:
 
     def _generate_rule_based_suggestions(self, hours_back: int = 72) -> List[OptimizationSuggestion]:
         """Generate suggestions using rule-based system (fallback)"""
+        from data.database import SessionLocal
+        from data.models import Device
+
         suggestions = []
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
+
+        # Get user settings from database
+        session = SessionLocal()
+        try:
+            device = session.query(Device).first()
+            min_temp = device.min_indoor_temp_user_setting if device else 20.5
+            target_max = device.target_indoor_temp_max if device else 22.0
+        finally:
+            session.close()
 
         # Suggestion 1: COP too low - adjust room temp setpoint
         if metrics.estimated_cop and metrics.estimated_cop < 3.0:
             outdoor_temp = metrics.avg_outdoor_temp
 
             # If it's not extremely cold, we can improve by lowering target temp
-            if outdoor_temp > -10 and metrics.avg_indoor_temp > 20.5:
+            if outdoor_temp > -10 and metrics.avg_indoor_temp > min_temp:
                 current_setpoint = metrics.curve_offset if metrics.curve_offset else 21.0
                 suggested_setpoint = current_setpoint - 0.5
 
@@ -378,7 +390,7 @@ class SmartOptimizer:
             ))
 
         # Suggestion 5: Indoor temp too high
-        if metrics.avg_indoor_temp > 22.0:
+        if metrics.avg_indoor_temp > target_max:
             current_offset = metrics.curve_offset
             suggested_offset = current_offset - 1
 
@@ -397,7 +409,7 @@ class SmartOptimizer:
             ))
 
         # Suggestion 6: Indoor temp too low
-        elif metrics.avg_indoor_temp < 20.5:
+        elif metrics.avg_indoor_temp < min_temp:
             current_offset = metrics.curve_offset
             suggested_offset = current_offset + 1
 
