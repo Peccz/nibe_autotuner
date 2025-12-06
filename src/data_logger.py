@@ -9,8 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from integrations.auth import MyUplinkAuth
 from integrations.api_client import MyUplinkClient
 from core.config import settings
-from data.models import (get_session, System, Device, Parameter, ParameterReading)
-from data.database import init_db
+from data.models import (System, Device, Parameter, ParameterReading)
+from data.database import init_db, get_session
 
 
 class DataLogger:
