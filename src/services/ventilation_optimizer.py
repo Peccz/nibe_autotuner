@@ -336,7 +336,7 @@ class VentilationOptimizer:
 def main():
     """Test ventilation optimizer"""
     from data.models import Device
-from data.database import init_db
+    from data.database import init_db
     from sqlalchemy.orm import sessionmaker
 
     # Initialize
