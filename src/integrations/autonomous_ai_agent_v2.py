@@ -555,12 +555,23 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         # Fetch learning history
         history_str = self._get_recent_learning_history(hours_back=24)
 
+        # Format Time to Start
+        tts_str = "TimeToStart: N/A"
+        if metrics.estimated_time_to_start_minutes is not None:
+             hours = int(metrics.estimated_time_to_start_minutes / 60)
+             mins = int(metrics.estimated_time_to_start_minutes % 60)
+             tts_str = f"TimeToStart: {hours}h {mins}m"
+        elif metrics.degree_minutes is not None and metrics.degree_minutes < -60:
+             # Fallback if calculation failed but we are active
+             tts_str = "TimeToStart: Calculating..."
+
         return f"""DT:{datetime.now().strftime('%Y-%m-%d %H:%M')}
 METRICS(72h):
 Outdoor:{metrics.avg_outdoor_temp:.1f}C
 Indoor:{metrics.avg_indoor_temp:.1f}C
 COP:{metrics.estimated_cop:.2f}
 DegMin:{metrics.degree_minutes:.0f}
+{tts_str}
 Curve:{metrics.heating_curve}/Offset:{metrics.curve_offset}
 {price_str}
 {forecast_str}

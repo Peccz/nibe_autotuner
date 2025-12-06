@@ -59,6 +59,7 @@ class EfficiencyMetrics:
     heating_curve: float
     curve_offset: float
     estimated_cop: Optional[float] = None
+    estimated_time_to_start_minutes: Optional[float] = None
     compressor_runtime_hours: Optional[float] = None
     # New: Separate metrics for heating and hot water
     heating_metrics: Optional[HeatingMetrics] = None
@@ -93,6 +94,7 @@ class HeatPumpAnalyzer:
     PARAM_DM_HEATING_STOP = '48072'
     PARAM_DM_CURRENT = '40940'  # Current degree minutes value
     PARAM_COMPRESSOR_FREQUENCY = '41778'  # Current compressor frequency (Hz) - used to detect if running
+    PARAM_CALCULATED_SUPPLY_TEMP = '43009' # Calculated supply temperature
 
     # Nibe F730 Manufacturer Specifications
     # Source: docs/NIBE_F730_BASELINE.md
@@ -331,6 +333,9 @@ class HeatPumpAnalyzer:
             device, start_time, end_time
         )
 
+        # Calculate time to start (Degree Minute Analysis)
+        estimated_time_to_start = self._calculate_time_to_start(device)
+
         metrics = EfficiencyMetrics(
             period_start=start_time,
             period_end=end_time,
@@ -346,6 +351,7 @@ class HeatPumpAnalyzer:
             heating_curve=heating_curve or 0.0,
             curve_offset=curve_offset or 0.0,
             estimated_cop=estimated_cop,
+            estimated_time_to_start_minutes=estimated_time_to_start,
             compressor_runtime_hours=compressor_runtime,
             heating_metrics=heating_metrics,
             hot_water_metrics=hot_water_metrics
@@ -357,6 +363,65 @@ class HeatPumpAnalyzer:
         logger.info(f"Metrics calculated: COP={cop_str}, DM={dm_str}, Outdoor={outdoor_str}°C")
 
         return metrics
+
+    def _calculate_time_to_start(self, device: Device) -> Optional[float]:
+        """
+        Calculate estimated time until compressor start based on Degree Minutes (GM).
+
+        Formula: GM(t) = GM(t-1) + (ActualSupply - CalculatedSupply)/60
+        Rate of Change = (ActualSupply - CalculatedSupply) GM/minute
+
+        Returns:
+            Minutes until start (negative if already running or unknown), or None if cannot calculate.
+        """
+        try:
+            # 1. Get current Degree Minutes (GM)
+            current_dm = self.get_latest_value(device, self.PARAM_DM_CURRENT)
+            if current_dm is None:
+                return None
+
+            # 2. Get Start Threshold
+            start_threshold = self.get_latest_value(device, self.PARAM_DM_HEATING_START)
+            if start_threshold is None:
+                start_threshold = -60 # Default fallback
+
+            # If already below threshold, it should be running (or starting)
+            if current_dm <= start_threshold:
+                return 0.0
+
+            # 3. Get current temperatures to calculate rate of change
+            # Use 15-minute average to smooth out noise
+            end_time = datetime.utcnow()
+            start_time = end_time - timedelta(minutes=15)
+
+            avg_actual = self.calculate_average(device, self.PARAM_SUPPLY_TEMP, start_time, end_time)
+            avg_calculated = self.calculate_average(device, self.PARAM_CALCULATED_SUPPLY_TEMP, start_time, end_time)
+
+            if avg_actual is None or avg_calculated is None:
+                return None
+
+            # Rate of change (GM per minute)
+            # If Actual < Calculated, GM decreases (more negative) -> Approaching start
+            # If Actual > Calculated, GM increases (less negative) -> Moving away from start
+            dm_per_minute = avg_actual - avg_calculated
+
+            # If rate is positive (warming up) or zero, we will never reach the negative threshold
+            if dm_per_minute >= 0:
+                return None # Will not start under current conditions
+
+            # Calculate minutes to reach threshold
+            # Distance to cover: (Threshold - Current)  <-- This is negative number
+            # Rate: dm_per_minute <-- This is negative number
+            # Time = Distance / Rate
+            
+            distance_to_go = start_threshold - current_dm
+            minutes_to_start = distance_to_go / dm_per_minute
+
+            return max(0.0, minutes_to_start)
+
+        except Exception as e:
+            logger.warning(f"Failed to calculate time to start: {e}")
+            return None
 
     def _calculate_compressor_runtime(
         self,
