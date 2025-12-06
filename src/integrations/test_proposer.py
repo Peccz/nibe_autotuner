@@ -322,7 +322,7 @@ Now propose tests:"""
         """Store proposals in database"""
         session = self.analyzer.session
 
-        # Delete old pending proposals
+        # Delete old pending proposals (fresh start each time)
         session.query(PlannedTest).filter_by(status='pending').delete()
 
         # Add new proposals
@@ -339,6 +339,7 @@ Now propose tests:"""
                     hypothesis=prop.hypothesis,
                     expected_improvement=prop.expected_improvement,
                     priority=prop.priority,
+                    priority_score=prop.confidence * (3 if prop.priority == 'high' else 2 if prop.priority == 'medium' else 1),
                     confidence=prop.confidence,
                     reasoning=prop.reasoning,
                     status='pending',
@@ -349,17 +350,113 @@ Now propose tests:"""
         session.commit()
         logger.info(f"Stored {len(proposals)} proposals in database")
 
+    def schedule_tests(self):
+        """
+        Autonomously schedule/activate high-confidence tests.
+        
+        Criteria for activation:
+        1. No currently active tests.
+        2. Weather forecast is stable (no fronts).
+        3. Test has High priority or Very High confidence (>0.9).
+        4. Safe indoor temperature (>20.5°C).
+        """
+        logger.info("Checking for tests to schedule...")
+        session = self.analyzer.session
+        
+        # 1. Check for active tests
+        active_test = session.query(PlannedTest).filter_by(status='active').first()
+        if active_test:
+            logger.info(f"Test {active_test.id} is already active. Skipping scheduling.")
+            return
+
+        # 2. Check Weather Stability
+        weather_rec = self.weather_service.should_adjust_for_weather()
+        if weather_rec['needs_adjustment'] and weather_rec['urgency'] == 'high':
+            logger.warning(f"Weather unstable: {weather_rec['reason']}. Pausing new tests.")
+            return
+
+        # 3. Check Indoor Safety
+        # Get current indoor temp (using PARAM_INDOOR_TEMP '40033')
+        latest_indoor = self.analyzer.get_latest_value(
+            self.analyzer.get_device(), '40033'
+        )
+        if latest_indoor and latest_indoor < 20.5:
+            logger.warning(f"Indoor temp {latest_indoor}°C is too low for testing. Pausing.")
+            return
+
+        # 4. Select best candidate
+        # Priority order: priority_score desc
+        candidate = session.query(PlannedTest).filter_by(
+            status='pending'
+        ).order_by(PlannedTest.priority_score.desc()).first()
+
+        if not candidate:
+            logger.info("No pending tests to schedule.")
+            return
+
+        # 5. Validate candidate for autonomy
+        is_safe = False
+        if candidate.priority == 'high':
+            is_safe = True
+        elif candidate.confidence >= 0.9:
+            is_safe = True
+            
+        if is_safe:
+            logger.info(f"🚀 ACTIVATING TEST: {candidate.hypothesis}")
+            logger.info(f"   Parameter: {candidate.parameter.parameter_name}")
+            logger.info(f"   Value: {candidate.current_value} -> {candidate.proposed_value}")
+            
+            candidate.status = 'active'
+            candidate.started_at = datetime.utcnow()
+            
+            # APPLY THE CHANGE IMMEDIATELY (via API Client would be ideal, but here we just mark DB)
+            # In a real autonomous loop, we would call api_client.set_point_value here.
+            # For now, let's assume the 'active' status triggers the Agent or a runner to apply it.
+            
+            try:
+                # Attempt to apply via API
+                response = self.api_client.set_point_value(
+                    self.device_id, 
+                    candidate.parameter.parameter_id, 
+                    str(candidate.proposed_value)
+                )
+                logger.info(f"   ✓ API Response: {response}")
+                
+                # Log the change in ParameterChange table for tracking
+                change = ParameterChange(
+                    device_id=candidate.parameter.device_id if candidate.parameter.device_id else 1, # Fallback
+                    parameter_id=candidate.parameter_id,
+                    timestamp=datetime.utcnow(),
+                    old_value=candidate.current_value,
+                    new_value=candidate.proposed_value,
+                    reason=f"AUTONOMOUS TEST: {candidate.hypothesis}",
+                    applied_by="AutoScientist"
+                )
+                session.add(change)
+                
+            except Exception as e:
+                logger.error(f"   ✗ Failed to apply test setting: {e}")
+                candidate.status = 'pending' # Revert status
+                return
+
+            session.commit()
+            logger.info(f"Test {candidate.id} activated and applied!")
+        else:
+            logger.info(f"Top candidate {candidate.id} (Priority: {candidate.priority}) not confident enough for autonomy.")
+
 
 def main():
     """Run test proposer"""
     from data.models import Device
-from data.database import init_db
+    from data.database import init_db
     from sqlalchemy.orm import sessionmaker
 
     # Initialize
-    engine = init_db('sqlite:///./data/nibe_autotuner.db')
-    Session = sessionmaker(bind=engine)
-    session = Session()
+    # Using default db path from config/settings if possible, else fallback
+    init_db() # Uses settings.DATABASE_URL
+    from data.database import SessionLocal
+    session = SessionLocal()
+    
     device = session.query(Device).first()
 
     if not device:
@@ -367,7 +464,10 @@ from data.database import init_db
         return
 
     # Create proposer
-    api_client = MyUplinkClient()
+    from integrations.auth import MyUplinkAuth
+    auth = MyUplinkAuth() # Needs auth for API
+    api_client = MyUplinkClient(auth)
+    
     analyzer = HeatPumpAnalyzer()
     weather_service = SMHIWeatherService()
 
@@ -378,7 +478,7 @@ from data.database import init_db
         device_id=device.device_id
     )
 
-    # Propose tests
+    # 1. Propose new tests
     proposals = proposer.propose_tests(hours_back=24)
 
     logger.info("\n" + "="*80)
@@ -390,6 +490,12 @@ from data.database import init_db
         logger.info(f"   Hypothesis: {prop.hypothesis}")
         logger.info(f"   Expected: {prop.expected_improvement}")
         logger.info(f"   Confidence: {prop.confidence*100:.0f}%")
+        
+    # 2. Autonomously Schedule/Execute
+    logger.info("\n" + "="*80)
+    logger.info("AUTONOMOUS SCHEDULER")
+    logger.info("="*80)
+    proposer.schedule_tests()
 
 
 if __name__ == '__main__':
