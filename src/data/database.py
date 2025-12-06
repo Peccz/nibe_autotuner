@@ -69,17 +69,28 @@ def get_db() -> Generator[Session, None, None]:
 # ============================================================================
 
 def init_db():
+
     """
+
     Initialize database by creating all tables.
 
+
+
     Should be called once when the application starts.
+
     Note: In production, use a migration tool like Alembic instead.
+
     """
-        # Import all models to ensure they're registered with Base                                                                                                 
-        from data.models import (System, Device, Parameter, ParameterReading, ParameterChange, AIDecisionLog, Recommendation, PlannedTest, ABTestResult)           
-        from data.evaluation_model import AIEvaluation
-                                                                                                                                                                   
-        Base.metadata.create_all(bind=engine)
+
+    # Import all models to ensure they're registered with Base
+
+    from data.models import (System, Device, Parameter, ParameterReading, ParameterChange, AIDecisionLog, Recommendation, PlannedTest, ABTestResult)
+
+    from data.evaluation_model import AIEvaluation
+
+
+
+    Base.metadata.create_all(bind=engine)
 
 def get_session() -> Session:
     """
