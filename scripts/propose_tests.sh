@@ -45,77 +45,8 @@ fi
 # Run test proposer
 log "Analyzing system and proposing tests..."
 
-PYTHONPATH="$PROJECT_DIR/src" $PYTHON -c "
-import sys
-sys.path.insert(0, 'src')
-
-from test_proposer import TestProposer
-from services.analyzer import HeatPumpAnalyzer
-from api_client import MyUplinkClient
-from weather_service import SMHIWeatherService
-from data.models import Device, init_db
-from sqlalchemy.orm import sessionmaker
-from loguru import logger
-import os
-
-# Configure logger to also write to stdout
-logger.add(sys.stdout, format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}')
-
-logger.info('Initializing AI Test Proposer...')
-
-try:
-    # Initialize database
-    engine = init_db('sqlite:///./data/nibe_autotuner.db')
-    Session = sessionmaker(bind=engine)
-    session = Session()
-
-    # Get device
-    device = session.query(Device).first()
-    if not device:
-        logger.error('No device found in database')
-        sys.exit(1)
-
-    logger.info(f'Using device: {device.product_name} ({device.device_id})')
-
-    # Initialize components
-    api_client = MyUplinkClient()
-    analyzer = HeatPumpAnalyzer('data/nibe_autotuner.db')
-    weather_service = SMHIWeatherService()
-
-    # Create proposer
-    proposer = TestProposer(
-        analyzer=analyzer,
-        api_client=api_client,
-        weather_service=weather_service,
-        device_id=device.device_id,
-        anthropic_api_key=os.getenv('ANTHROPIC_API_KEY')
-    )
-
-    # Propose tests (analyzes last 24h)
-    logger.info('Analyzing last 24h of system performance...')
-    proposals = proposer.propose_tests(hours_back=24)
-
-    if proposals:
-        logger.success(f'✅ Generated {len(proposals)} test proposal(s):')
-        for i, prop in enumerate(proposals, 1):
-            logger.info(f'{i}. [{prop.priority.upper()}] {prop.parameter}: {prop.current_value} → {prop.proposed_value}')
-            logger.info(f'   Hypothesis: {prop.hypothesis}')
-            logger.info(f'   Expected: {prop.expected_improvement}')
-            logger.info(f'   Confidence: {prop.confidence*100:.0f}%')
-            logger.info('')
-    else:
-        logger.info('ℹ️ No test proposals generated (system may be optimal)')
-
-    logger.success('Test proposal completed successfully')
-    session.close()
-    sys.exit(0)
-
-except Exception as e:
-    logger.error(f'❌ Test proposal failed: {e}')
-    import traceback
-    logger.error(traceback.format_exc())
-    sys.exit(1)
-" 2>&1 | tee -a "$LOG_FILE"
+# Using module execution to leverage the main() function in test_proposer.py
+PYTHONPATH="$PROJECT_DIR/src" $PYTHON -m integrations.test_proposer 2>&1 | tee -a "$LOG_FILE"
 
 EXIT_CODE=${PIPESTATUS[0]}
 
