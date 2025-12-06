@@ -1430,10 +1430,14 @@ def manifest():
         'short_name': 'Nibe',
         'description': 'Nibe F730 Heat Pump Monitor & Optimizer',
         'start_url': '/',
+        'scope': '/',
         'display': 'standalone',
         'background_color': '#1e1e1e',
         'theme_color': '#2d5f8e',
         'orientation': 'portrait',
+        'lang': 'sv',
+        'id': '/',
+        'categories': ['utilities', 'smart home'],
         'icons': [
             {
                 'src': '/static/icons/icon-192.png',

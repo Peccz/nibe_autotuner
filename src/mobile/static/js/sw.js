@@ -1,12 +1,14 @@
 // Nibe Autotuner - Service Worker
-const CACHE_NAME = 'nibe-autotuner-v1';
+const CACHE_NAME = 'nibe-autotuner-v2';
 const URLS_TO_CACHE = [
     '/',
     '/static/css/mobile.css',
     '/static/js/app.js',
     '/changes',
     '/visualizations',
-    '/baseline'
+    '/baseline',
+    '/static/icons/icon-192.png',
+    '/static/icons/icon-512.png'
 ];
 
 // Install event - cache resources
