@@ -4,7 +4,7 @@ Uses Google Gemini API with fallback models and strict safety guardrails.
 """
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, Tuple, List
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, GoogleAPIError
