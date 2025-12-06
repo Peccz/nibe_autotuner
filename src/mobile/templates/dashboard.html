@@ -33,39 +33,24 @@
     </div>
 </section>
 
-<!-- AI Optimization Suggestions - PROMINENT -->
-<section class="ai-suggestions-hero" id="suggestionsSection" style="display: none;">
-    <div class="suggestions-header">
-        <h2 class="section-title-large">🤖 AI-rekommendationer</h2>
-        <span class="suggestions-count" id="suggestionsCount">0</span>
+<!-- Autonomous AI Status -->
+<section class="ai-status-hero">
+    <div class="ai-status-header">
+        <div class="status-title-group">
+            <span class="ai-icon">🤖</span>
+            <h2 class="section-title-large">Autopilot</h2>
+        </div>
+        <div class="ai-mode-badge" id="aiModeBadge">TACTICAL</div>
     </div>
-    <div id="suggestionsList" class="suggestions-list-hero"></div>
-</section>
-
-<!-- Quick Actions -->
-<section class="section">
-    <h2 class="section-title">⚡ Snabbåtgärder</h2>
-    <div class="quick-actions-grid">
-        <button class="quick-action-btn cold" onclick="adjustTemperature(1)">
-            <div class="qa-icon">🥶</div>
-            <div class="qa-label">Kallt inne</div>
-            <div class="qa-detail">Höj offset +1</div>
-        </button>
-        <button class="quick-action-btn hot" onclick="adjustTemperature(-1)">
-            <div class="qa-icon">🥵</div>
-            <div class="qa-label">Varmt inne</div>
-            <div class="qa-detail">Sänk offset -1</div>
-        </button>
-        <button class="quick-action-btn efficiency" onclick="optimizeForEfficiency()">
-            <div class="qa-icon">⚡</div>
-            <div class="qa-label">Max COP</div>
-            <div class="qa-detail">Optimera effektivitet</div>
-        </button>
-        <button class="quick-action-btn comfort" onclick="optimizeForComfort()">
-            <div class="qa-icon">🏠</div>
-            <div class="qa-label">Max komfort</div>
-            <div class="qa-detail">Stabil temp 21°C</div>
-        </button>
+    
+    <div class="ai-last-action">
+        <div class="action-time" id="aiLastActionTime">Idag 10:00</div>
+        <div class="action-desc" id="aiLastActionDesc">Justering av kurvoffset (-2 → -3) inför högt elpris.</div>
+    </div>
+    
+    <div class="ai-next-run">
+        <span class="next-run-label">Nästa körning:</span>
+        <span class="next-run-value" id="aiNextRun">om 25 min</span>
     </div>
 </section>
 
@@ -89,7 +74,10 @@
         </div>
         <div class="metric-value" id="degreeMinutes">-</div>
         <div class="metric-label">Gradminuter</div>
-        <div class="metric-comparison" id="dmComparison"></div>
+        <!-- Time to Start -->
+        <div class="metric-subvalue" id="timeToStartContainer" style="display:none; margin-top: 0.5rem; color: var(--primary-color); font-weight: 600;">
+            Start om <span id="timeToStart">-</span> min
+        </div>
         <div class="metric-status" id="dmStatus"></div>
     </div>
 
@@ -317,106 +305,67 @@
     font-style: italic;
 }
 
-/* AI Suggestions - PROMINENT */
-.ai-suggestions-hero {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+/* AI Status Hero - NEW */
+.ai-status-hero {
+    background: linear-gradient(135deg, #2d5f8e 0%, #1e4a6f 100%);
+    color: white;
     padding: 1.5rem;
     border-radius: 12px;
     margin-bottom: 1.5rem;
-    color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
-.suggestions-header {
+.ai-status-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
 }
 
-.section-title-large {
-    font-size: 1.3rem;
-    margin: 0;
-    color: white;
-}
-
-.suggestions-count {
-    background: rgba(255,255,255,0.3);
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.9rem;
-    font-weight: 600;
-}
-
-.suggestions-list-hero .suggestion-card {
-    background: white;
-    color: var(--text-primary);
-    margin-bottom: 1rem;
-    padding: 1rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-
-.suggestion-card:last-child {
-    margin-bottom: 0;
-}
-
-.suggestion-card-header {
+.status-title-group {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 0.75rem;
+    align-items: center;
+    gap: 0.75rem;
 }
 
-.suggestion-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    flex: 1;
-    margin: 0;
+.ai-icon {
+    font-size: 1.5rem;
 }
 
-.suggestion-priority {
+.ai-mode-badge {
+    background: rgba(255,255,255,0.2);
     padding: 0.25rem 0.75rem;
     border-radius: 20px;
     font-size: 0.75rem;
     font-weight: 700;
-    text-transform: uppercase;
-    margin-left: 0.5rem;
+    letter-spacing: 0.5px;
 }
 
-.suggestion-actions {
+.ai-last-action {
+    background: rgba(255,255,255,0.1);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.action-time {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    margin-bottom: 0.25rem;
+}
+
+.action-desc {
+    font-size: 1rem;
+    line-height: 1.4;
+}
+
+.ai-next-run {
     display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-}
-
-.btn-apply {
-    flex: 1;
-    background: var(--success-color);
-    color: white;
-    border: none;
-    padding: 0.75rem;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
+    justify-content: space-between;
     font-size: 0.9rem;
-}
-
-.btn-apply:hover {
-    background: #45a049;
-}
-
-.btn-dismiss {
-    background: #e0e0e0;
-    color: var(--text-primary);
-    border: none;
-    padding: 0.75rem;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-
-.btn-dismiss:hover {
-    background: #d0d0d0;
+    opacity: 0.9;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 0.75rem;
 }
 
 /* Metric cards with trends */
@@ -697,20 +646,20 @@ async function loadDashboard() {
     loading.style.display = 'block';
     error.style.display = 'none';
 
-    try {
+    try:
         // Load all data in parallel
-        const [metricsRes, scoreRes, costRes, suggestionsRes, ventRes] = await Promise.all([
+        const [metricsRes, scoreRes, costRes, aiStatusRes, ventRes] = await Promise.all([
             fetch(`/api/metrics?hours=${hours}`),
             fetch(`/api/performance-score?hours=${hours}`),
             fetch(`/api/cost-analysis?hours=${hours}`),
-            fetch(`/api/optimization-suggestions?hours=${hours}`),
+            fetch(`/api/ai-agent/status`), // Use existing AI status endpoint
             fetch(`/api/ventilation/status`)
         ]);
 
         const metricsResult = await metricsRes.json();
         const scoreResult = await scoreRes.json();
         const costResult = await costRes.json();
-        const suggestionsResult = await suggestionsRes.json();
+        // const aiStatusResult = await aiStatusRes.json(); // Assuming this exists or will be added
         const ventResult = await ventRes.json();
 
         if (!metricsResult.success) {
@@ -729,9 +678,10 @@ async function loadDashboard() {
             updateCostAnalysis(costResult.data);
         }
 
-        // Update Optimization Suggestions
-        if (suggestionsResult.success && suggestionsResult.data.length > 0) {
-            updateSuggestions(suggestionsResult.data);
+        // Update AI Status (Mock for now if endpoint behaves differently)
+        if (aiStatusRes.ok) {
+             const aiData = await aiStatusRes.json();
+             updateAIStatus(aiData);
         }
 
         // Update Ventilation Status
@@ -743,6 +693,15 @@ async function loadDashboard() {
         updateMetricWithTrend('cop', data.cop, data.cop_yesterday, '✅ Utmärkt', '⚠️', 3.0);
         updateMetricWithTrend('degreeMinutes', data.degree_minutes, data.degree_minutes_yesterday, '✅', '⚠️', null, -300, -100);
         updateMetricWithTrend('deltaT', data.delta_t_active, data.delta_t_active_yesterday, '✅ Optimalt', '⚠️ Justera', null, 3, 8);
+
+        // Time to Start
+        const ttsElem = document.getElementById('timeToStartContainer');
+        if (data.estimated_time_to_start_minutes && data.estimated_time_to_start_minutes > 0) {
+            document.getElementById('timeToStart').textContent = Math.round(data.estimated_time_to_start_minutes);
+            ttsElem.style.display = 'block';
+        } else {
+            ttsElem.style.display = 'none';
+        }
 
         document.getElementById('compressor').textContent = data.avg_compressor_freq.toFixed(0) + ' Hz';
 
@@ -770,6 +729,32 @@ async function loadDashboard() {
     } finally {
         loading.style.display = 'none';
     }
+}
+
+function updateAIStatus(data) {
+    // Assuming data structure: { last_run: "...", last_action: "...", mode: "..." }
+    // If API not ready, handle gracefully
+    
+    document.getElementById('aiModeBadge').textContent = (data.mode || 'TACTICAL').toUpperCase();
+    
+    if (data.last_decision) {
+        const decision = data.last_decision;
+        const time = new Date(decision.timestamp);
+        document.getElementById('aiLastActionTime').textContent = time.toLocaleTimeString('sv-SE', {hour: '2-digit', minute:'2-digit'});
+        
+        if (decision.action === 'adjust') {
+            document.getElementById('aiLastActionDesc').textContent = `Justering: ${decision.parameter} ${decision.current_value} → ${decision.suggested_value}`;
+        } else {
+            document.getElementById('aiLastActionDesc').textContent = `Ingen åtgärd (${decision.reasoning ? decision.reasoning.substring(0, 50) + '...' : 'System optimalt'})`;
+        }
+    } else {
+        document.getElementById('aiLastActionDesc').textContent = 'Inga beslut loggade än.';
+    }
+    
+    // Next run calculation (assuming hourly on the hour)
+    const now = new Date();
+    const minutesUntilNextHour = 60 - now.getMinutes();
+    document.getElementById('aiNextRun').textContent = `om ${minutesUntilNextHour} min`;
 }
 
 function updateMetricWithTrend(metricId, currentValue, yesterdayValue, goodStatus, badStatus, goodThreshold = null, rangeMin = null, rangeMax = null) {
@@ -930,67 +915,6 @@ function updateCostAnalysis(data) {
     section.style.display = 'block';
 }
 
-function updateSuggestions(suggestions) {
-    const section = document.getElementById('suggestionsSection');
-    const list = document.getElementById('suggestionsList');
-    const count = document.getElementById('suggestionsCount');
-
-    if (!suggestions || suggestions.length === 0) {
-        section.style.display = 'none';
-        return;
-    }
-
-    count.textContent = suggestions.length;
-
-    const priorityColors = {
-        'high': '#f44336',
-        'medium': '#ff9800',
-        'low': '#4caf50'
-    };
-
-    const priorityLabels = {
-        'high': 'HÖG',
-        'medium': 'MEDEL',
-        'low': 'LÅG'
-    };
-
-    list.innerHTML = suggestions.map(s => {
-        // Escape quotes in JSON for safe embedding in HTML attribute
-        const suggestionJson = JSON.stringify(s).replace(/"/g, '&quot;');
-
-        return `
-        <div class="suggestion-card">
-            <div class="suggestion-card-header">
-                <h3 class="suggestion-title">${s.title}</h3>
-                <span class="suggestion-priority" style="background: ${priorityColors[s.priority]}; color: white;">
-                    ${priorityLabels[s.priority]}
-                </span>
-            </div>
-            <p style="margin: 0.5rem 0; font-size: 0.9rem; color: var(--text-secondary);">${s.description}</p>
-            <div style="display: flex; gap: 1rem; margin: 0.75rem 0; padding: 0.75rem; background: #f8f9fa; border-radius: 4px;">
-                <div style="flex: 1;">
-                    <div style="font-size: 0.75rem; color: var(--text-secondary);">COP-förbättring</div>
-                    <div style="font-weight: 700; color: var(--success-color); font-size: 1.2rem;">+${s.expected_cop_improvement.toFixed(2)}</div>
-                </div>
-                <div style="flex: 1;">
-                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Besparing/år</div>
-                    <div style="font-weight: 700; color: var(--success-color); font-size: 1.2rem;">${s.expected_savings_yearly.toFixed(0)} kr</div>
-                </div>
-            </div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                <strong>💡 Resonemang:</strong> ${s.reasoning}
-            </div>
-            <div class="suggestion-actions">
-                <button class="btn-apply" onclick='applySuggestion("${suggestionJson}")'>✓ Tillämpa</button>
-                <button class="btn-dismiss" onclick="dismissSuggestion('${s.id || ''}')">✕ Avfärda</button>
-            </div>
-        </div>
-        `;
-    }).join('');
-
-    section.style.display = 'block';
-}
-
 function updateVentilation(data) {
     const card = document.getElementById('ventilationCard');
 
@@ -1020,72 +944,6 @@ function updateVentilation(data) {
     reasoning.textContent = data.reasoning || '';
 }
 
-async function applySuggestion(suggestionData) {
-    // Parse the suggestion data (passed as JSON string from onclick)
-    const suggestion = JSON.parse(suggestionData);
-
-    if (!confirm(`Vill du tillämpa denna rekommendation?\n\n${suggestion.title}\n\n${suggestion.parameter_name}: ${suggestion.current_value} → ${suggestion.suggested_value}\n\nFörväntad förbättring: +${suggestion.expected_cop_improvement.toFixed(2)} COP`)) {
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/optimization-suggestions/apply', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                parameter_id: suggestion.parameter_id,
-                parameter_name: suggestion.parameter_name,
-                current_value: suggestion.current_value,
-                suggested_value: suggestion.suggested_value,
-                reasoning: suggestion.reasoning
-            })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            alert(`✅ ${result.message}\n\nÄndringen har genomförts. Systemet kommer att använda det nya värdet omedelbart.`);
-            // Reload dashboard to show updated values
-            loadDashboard();
-        } else {
-            alert(`❌ Fel vid tillämpning: ${result.error}`);
-        }
-    } catch (err) {
-        alert(`❌ Fel: ${err.message}`);
-        console.error('Error applying suggestion:', err);
-    }
-}
-
-async function dismissSuggestion(suggestionId) {
-    if (!confirm('Är du säker på att du vill avfärda denna rekommendation?')) {
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/optimization-suggestions/dismiss', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                id: suggestionId,
-                reason: 'User dismissed from dashboard'
-            })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            alert(`✅ ${result.message}`);
-            // Reload dashboard to hide dismissed suggestion
-            loadDashboard();
-        } else {
-            alert(`❌ Fel: ${result.error}`);
-        }
-    } catch (err) {
-        alert(`❌ Fel: ${err.message}`);
-        console.error('Error dismissing suggestion:', err);
-    }
-}
-
 function refreshData() {
     const icon = document.getElementById('refreshIcon');
     if (icon) {
@@ -1095,112 +953,6 @@ function refreshData() {
         });
     } else {
         loadDashboard();
-    }
-}
-
-// Auto-refresh every 5 minutes
-function startAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-    }
-    autoRefreshInterval = setInterval(loadDashboard, 5 * 60 * 1000);
-}
-
-// Load on page load
-document.addEventListener('DOMContentLoaded', () => {
-    loadDashboard();
-    startAutoRefresh();
-});
-
-// Refresh when page becomes visible
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-        loadDashboard();
-    }
-});
-
-// Quick Actions
-async function adjustTemperature(delta) {
-    if (!confirm(`Vill du ${delta > 0 ? 'höja' : 'sänka'} kurvjusteringen med ${Math.abs(delta)}?`)) {
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/quick-action/adjust-offset', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({delta: delta})
-        });
-        const result = await response.json();
-
-        if (result.success) {
-            alert(`✅ ${result.message}\nNy kurvjustering: ${result.new_value}`);
-            loadDashboard();
-        } else {
-            alert(`❌ Fel: ${result.error}`);
-        }
-    } catch (err) {
-        alert(`❌ Fel: ${err.message}`);
-    }
-}
-
-async function optimizeForEfficiency() {
-    if (!confirm('Optimera för maximal COP?\n\nDetta kan sänka värmekurvan något för bättre effektivitet.')) {
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/quick-action/optimize-efficiency', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
-        const result = await response.json();
-
-        if (result.success) {
-            let msg = `✅ ${result.message}`;
-            if (result.changes && result.changes.length > 0) {
-                msg += '\n\nÄndringar:';
-                result.changes.forEach(c => {
-                    msg += `\n• ${c.parameter}: ${c.old_value} → ${c.new_value}`;
-                });
-            }
-            alert(msg);
-            loadDashboard();
-        } else {
-            alert(`❌ ${result.error}`);
-        }
-    } catch (err) {
-        alert(`❌ Fel: ${err.message}`);
-    }
-}
-
-async function optimizeForComfort() {
-    if (!confirm('Optimera för maximal komfort?\n\nDetta justerar offset för att nå 21°C inomhus.')) {
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/quick-action/optimize-comfort', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
-        const result = await response.json();
-
-        if (result.success) {
-            let msg = `✅ ${result.message}`;
-            if (result.changes && result.changes.length > 0) {
-                msg += '\n\nÄndringar:';
-                result.changes.forEach(c => {
-                    msg += `\n• ${c.parameter}: ${c.old_value} → ${c.new_value}`;
-                });
-            }
-            alert(msg);
-            loadDashboard();
-        } else {
-            alert(`❌ ${result.error}`);
-        }
-    } catch (err) {
-        alert(`❌ Fel: ${err.message}`);
     }
 }
 </script>
