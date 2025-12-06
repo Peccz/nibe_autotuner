@@ -178,13 +178,16 @@ class MyUplinkClient:
         logger.info(f"Setting point {point_id} on device {device_id} to {value}...")
 
         # Premium Manage uses PATCH /v2/devices/{device_id}/points with format {parameter_id: value}
-        payload = {point_id: value}
+        payload = {str(point_id): str(value)} # Ensure strings as per some API examples
+        logger.info(f"Sending PATCH payload: {payload}")
 
-        return self._make_request(
+        response = self._make_request(
             'PATCH',
             f'/v2/devices/{device_id}/points',
             json=payload
         )
+        logger.info(f"API Response: {response}")
+        return response
 
     def get_notifications(self, system_id: str) -> List[Dict]:
         """
