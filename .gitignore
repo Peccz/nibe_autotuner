@@ -1,70 +1,7 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-venv/
-ENV/
-env/
-.venv
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Environment variables
 .env
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-data/
-data/*.db
-data/*.sqlite
-
-# Logs
-*.log
-logs/
-
-# CSV data files
-data_input/
-data/*.csv
-*.csv
-
-# OAuth tokens
-tokens.json
-.tokens/
-
-# OS
+__pycache__/
+*.pyc
+venv/
 .DS_Store
-Thumbs.db
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# MyUplink specific
-myuplink_tokens/
+data/nibe_autotuner.db
+*.log

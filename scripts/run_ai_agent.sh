@@ -1,16 +1,18 @@
 #!/bin/bash
 #
-# Autonomous AI Agent Runner
-# Uses Claude API to analyze system and make intelligent decisions
-#
-# This script runs the AI agent in LIVE mode (applies changes)
-# For dry-run testing, modify the Python command below
+# Autonomous AI Agent Runner - PORTABLE VERSION
+# Auto-detects git repository root - works anywhere!
 #
 
-set -e  # Exit on error
+set -e
 
-# Change to project directory
-cd /home/peccz/AI/nibe_autotuner
+# Auto-detect git repository root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.."
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$PROJECT_ROOT"
+
+echo "Project root: $PROJECT_ROOT"
 
 # Load environment variables (includes GOOGLE_API_KEY for Gemini)
 set -a
@@ -40,13 +42,13 @@ from integrations.autonomous_ai_agent_v2 import AutonomousAIAgentV2
 from services.analyzer import HeatPumpAnalyzer
 from integrations.api_client import MyUplinkClient
 from services.weather_service import SMHIWeatherService
-from data.models import Device, init_db
+from data.models import Device; from data.database import engine
 from sqlalchemy.orm import sessionmaker
 import sys
 
 try:
     # Initialize database
-    engine = init_db('sqlite:///./data/nibe_autotuner.db')
+    pass
     Session = sessionmaker(bind=engine)
     session = Session()
 

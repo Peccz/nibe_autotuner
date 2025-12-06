@@ -1,3 +1,5 @@
+from data.database import SessionLocal, init_db
+init_db()
 """
 Nibe Autotuner - Mobile PWA
 Lightweight Flask app optimized for mobile devices
@@ -36,7 +38,7 @@ app = Flask(__name__,
 # The systemd service sets WorkingDirectory to the project root
 analyzer = HeatPumpAnalyzer('data/nibe_autotuner.db')
 engine = analyzer.engine
-SessionMaker = sessionmaker(bind=engine)
+SessionLocal = sessionmaker(bind=engine)
 ab_tester = ABTester(analyzer)
 optimizer = SmartOptimizer(analyzer)
 
@@ -47,7 +49,7 @@ api_client = MyUplinkClient(auth)
 # Initialize auto optimizer
 def get_auto_optimizer():
     """Get AutoOptimizer instance"""
-    device = SessionMaker().query(Device).first()
+    device = SessionLocal().query(Device).first()
     if not device:
         return None
     return AutoOptimizer(
@@ -246,7 +248,7 @@ def changes():
 @app.route('/api/changes', methods=['GET', 'POST'])
 def handle_changes():
     """Get or create parameter changes"""
-    session = SessionMaker()
+    session = SessionLocal()
 
     try:
         if request.method == 'POST':
@@ -327,7 +329,7 @@ def ab_testing():
 @app.route('/api/ab-tests')
 def get_ab_tests():
     """Get all A/B test results"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         limit = request.args.get('limit', 20, type=int)
 
@@ -376,7 +378,7 @@ def get_ab_tests():
 @app.route('/api/ab-test/<int:change_id>')
 def get_ab_test_detail(change_id):
     """Get detailed A/B test result for a specific change"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         result = session.query(ABTestResult)\
             .filter_by(parameter_change_id=change_id)\
@@ -685,7 +687,7 @@ def gemini_analyze():
             metrics_dict['degree_minutes_yesterday'] = float(yesterday_metrics.degree_minutes)
 
         # Get recent changes
-        session = SessionMaker()
+        session = SessionLocal()
         recent_changes = []
         try:
             changes = session.query(ParameterChange).order_by(
@@ -735,7 +737,7 @@ def gemini_analyze():
 
 def get_device_id():
     """Helper to get device ID from database"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         device = session.query(Device).first()
         return device.device_id if device else None
@@ -751,7 +753,7 @@ def log_parameter_change(device_id: str, parameter_id: str, parameter_name: str,
     logger.info(f"Parameter change: {parameter_name} ({parameter_id}) on {device_id}: {old_value} → {new_value}. Reason: {reason}")
 
     # Save to database for A/B testing
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         # Get device from database
         device = session.query(Device).filter_by(device_id=device_id).first()
@@ -1007,7 +1009,7 @@ def auto_optimize_run():
 @app.route('/api/ventilation/status')
 def get_ventilation_status():
     """Get current ventilation status and strategy"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         from services.ventilation_optimizer import VentilationOptimizer
 
@@ -1067,7 +1069,7 @@ def ai_agent():
 @app.route('/api/ai-agent/status')
 def get_ai_agent_status():
     """Get AI agent status"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         from data.models import AIDecisionLog
         
@@ -1102,7 +1104,7 @@ def get_ai_agent_status():
 @app.route('/api/ai-agent/latest-decision')
 def get_latest_ai_decision():
     """Get latest AI decision"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         from data.models import AIDecisionLog, Parameter
 
@@ -1135,7 +1137,7 @@ def get_latest_ai_decision():
 @app.route('/api/ai-agent/planned-tests')
 def get_planned_tests():
     """Get planned tests"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         from data.models import PlannedTest
 
@@ -1171,7 +1173,7 @@ def get_planned_tests():
 @app.route('/api/ai-agent/active-tests')
 def get_active_tests():
     """Get active tests"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         from data.models import PlannedTest
 
@@ -1208,7 +1210,7 @@ def get_active_tests():
 @app.route('/api/ai-agent/completed-tests')
 def get_completed_tests():
     """Get completed tests with results"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         from data.models import PlannedTest, ABTestResult
 
@@ -1247,7 +1249,7 @@ def get_completed_tests():
 @app.route('/api/ai-agent/learning-stats')
 def get_learning_stats():
     """Get learning statistics"""
-    session = SessionMaker()
+    session = SessionLocal()
     try:
         from data.models import PlannedTest, ABTestResult
 
@@ -1315,7 +1317,7 @@ def get_settings():
     """Get current user settings from database"""
     session = None
     try:
-        session = SessionMaker()
+        session = SessionLocal()
 
         # Get the first device (or could be passed as parameter)
         device = session.query(Device).first()
@@ -1347,7 +1349,7 @@ def update_settings():
     session = None
     try:
         data = request.json
-        session = SessionMaker()
+        session = SessionLocal()
 
         # Get the first device (or could be passed as parameter)
         device = session.query(Device).first()

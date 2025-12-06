@@ -325,3 +325,35 @@ if __name__ == '__main__':
     init_db()
     logger.info(f"✓ Database created successfully!")
     logger.info(f"✓ Tables: {', '.join(Base.metadata.tables.keys())}")
+
+# --- TILLAGDA FÖR ATT MATCHA NYA ROUTERS ---
+
+class AIDecision(Base):
+    """Unified AI Decision model matching the new router"""
+    __tablename__ = 'ai_decisions'
+    
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    model_used = Column(String(50))
+    action = Column(String(50))
+    parameter_id = Column(Integer, ForeignKey('parameters.id'))
+    current_value = Column(Float)
+    suggested_value = Column(Float)
+    reasoning = Column(Text)
+    confidence = Column(Float)
+    
+    # Relationships
+    parameter = relationship('Parameter')
+
+class ABTest(Base):
+    """A/B Test definition"""
+    __tablename__ = 'ab_tests'
+    
+    id = Column(Integer, primary_key=True)
+    parameter_id = Column(Integer, ForeignKey('parameters.id'))
+    start_time = Column(DateTime, default=datetime.utcnow)
+    end_time = Column(DateTime)
+    status = Column(String(20))
+    
+    # Relationships
+    parameter = relationship('Parameter')
