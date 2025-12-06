@@ -17,22 +17,22 @@ if [ -f .env ]; then
 fi
 
 # Check if API key is set
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "ERROR: ANTHROPIC_API_KEY not set!"
+if [ -z "$GOOGLE_API_KEY" ]; then
+    echo "ERROR: GOOGLE_API_KEY not set!"
     echo "Please set it in .env file or environment"
     exit 1
 fi
 
 # Log start
 echo "=================================================="
-echo "Autonomous AI Agent (DRY RUN) - $(date)"
+echo "Autonomous AI Agent V2 (DRY RUN) - $(date)"
 echo "=================================================="
 echo "NOTE: This is a DRY RUN - no changes will be applied"
 echo "=================================================="
 
 # Run AI agent (dry_run=True means it will NOT apply changes)
 PYTHONPATH=./src ./venv/bin/python -c "
-from integrations.autonomous_ai_agent import AutonomousAIAgent
+from integrations.autonomous_ai_agent_v2 import AutonomousAIAgentV2
 from services.analyzer import HeatPumpAnalyzer
 from api_client import MyUplinkClient
 from weather_service import SMHIWeatherService
@@ -42,9 +42,9 @@ import sys
 
 try:
     # Initialize database
-    engine = init_db('sqlite:///./data/nibe_autotuner.db')
-    Session = sessionmaker(bind=engine)
-    session = Session()
+    # init_db() handled internally usually but good to have
+    from data.database import SessionLocal
+    session = SessionLocal()
 
     # Get device
     device = session.query(Device).first()
@@ -57,8 +57,8 @@ try:
     analyzer = HeatPumpAnalyzer()
     weather_service = SMHIWeatherService()
 
-    # Create AI agent
-    agent = AutonomousAIAgent(
+    # Create AI agent V2
+    agent = AutonomousAIAgentV2(
         analyzer=analyzer,
         api_client=api_client,
         weather_service=weather_service,
@@ -66,7 +66,7 @@ try:
     )
 
     # Analyze and decide (DRY RUN - does NOT apply changes!)
-    decision = agent.analyze_and_decide(hours_back=72, dry_run=True)
+    decision = agent.analyze_and_decide(hours_back=72, dry_run=True, mode='tactical')
 
     print()
     print('='*80)
