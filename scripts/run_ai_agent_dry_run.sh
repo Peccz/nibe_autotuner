@@ -9,7 +9,7 @@
 set -e  # Exit on error
 
 # Change to project directory
-cd /home/peccz/AI/nibe_autotuner
+cd /home/peccz/nibe_autotuner
 
 # Load environment variables (includes ANTHROPIC_API_KEY)
 if [ -f .env ]; then
