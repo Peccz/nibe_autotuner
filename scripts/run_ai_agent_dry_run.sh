@@ -34,8 +34,8 @@ echo "=================================================="
 PYTHONPATH=./src ./venv/bin/python -c "
 from integrations.autonomous_ai_agent_v2 import AutonomousAIAgentV2
 from services.analyzer import HeatPumpAnalyzer
-from api_client import MyUplinkClient
-from weather_service import SMHIWeatherService
+from integrations.api_client import MyUplinkClient
+from services.weather_service import SMHIWeatherService
 from data.models import Device, init_db
 from sqlalchemy.orm import sessionmaker
 import sys
