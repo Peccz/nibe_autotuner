@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, ValidationError, ConfigDict
 from integrations.autonomous_ai_agent import AIDecision, AutonomousAIAgent
 from core.config import settings
 from data.models import AIDecisionLog, Parameter, ParameterChange, PlannedTest, ABTestResult
+from data.evaluation_model import AIEvaluation
 from services.price_service import ElectricityPriceService
 from services.hw_analyzer import HotWaterPatternAnalyzer
 from services.scientific_analyzer import ScientificTestAnalyzer
@@ -531,6 +532,59 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
             logger.warning(f"Could not get combined forecast: {e}")
             return "FORECAST: Error"
 
+    def _get_verified_facts(self) -> str:
+        """Fetch insights from successful scientific tests"""
+        try:
+            # Get successful tests that led to a recommendation or conclusion
+            completed_tests = self.analyzer.session.query(ABTestResult).order_by(
+                ABTestResult.created_at.desc()
+            ).limit(5).all()
+            
+            if not completed_tests:
+                return "FACTS: No scientific tests completed yet."
+                
+            facts = []
+            for test in completed_tests:
+                if test.recommendation and "Keep" in test.recommendation:
+                     # Get parameter name via change relation
+                     change = self.analyzer.session.query(ParameterChange).filter_by(id=test.parameter_change_id).first()
+                     if change:
+                         param = self.analyzer.session.query(Parameter).filter_by(id=change.parameter_id).first()
+                         facts.append(f"Confirmed: {param.parameter_name} change was beneficial ({test.recommendation})")
+            
+            return "FACTS:\n" + "\n".join(facts) if facts else "FACTS: No conclusive tests yet."
+        except Exception as e:
+            logger.warning(f"Could not fetch verified facts: {e}")
+            return "FACTS: Unavailable"
+
+    def _get_performance_summary(self) -> str:
+        """Fetch summary of recent AI performance evaluations"""
+        try:
+            from sqlalchemy import func
+            
+            # Get evaluations from last 7 days
+            week_ago = datetime.utcnow() - timedelta(days=7)
+            
+            stats = self.analyzer.session.query(
+                AIEvaluation.verdict, func.count(AIEvaluation.id)
+            ).filter(
+                AIEvaluation.created_at >= week_ago
+            ).group_by(AIEvaluation.verdict).all()
+            
+            if not stats:
+                return "AI_PERFORMANCE: No data yet"
+                
+            summary = []
+            total = 0
+            for verdict, count in stats:
+                summary.append(f"{verdict}: {count}")
+                total += count
+                
+            return f"AI_PERFORMANCE(7d): {', '.join(summary)} (Total: {total})"
+        except Exception as e:
+            logger.warning(f"Could not fetch performance summary: {e}")
+            return "AI_PERFORMANCE: Unavailable"
+
     def _build_optimized_context(self, metrics) -> str:
         """Compact context to save tokens"""
 
@@ -554,6 +608,10 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
 
         # Fetch learning history
         history_str = self._get_recent_learning_history(hours_back=24)
+        
+        # Fetch Consolidated Insights (NEW)
+        facts_str = self._get_verified_facts()
+        perf_str = self._get_performance_summary()
 
         # Format Time to Start
         tts_str = "TimeToStart: N/A"
@@ -577,6 +635,8 @@ Curve:{metrics.heating_curve}/Offset:{metrics.curve_offset}
 {forecast_str}
 {hw_str}
 
+{facts_str}
+{perf_str}
 {history_str}
 """
 
