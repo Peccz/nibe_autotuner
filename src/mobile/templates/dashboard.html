@@ -638,23 +638,41 @@
 <script>
 let autoRefreshInterval = null;
 
+async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = 10000 } = options;
+    
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+  
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal  
+    });
+    clearTimeout(id);
+  
+    return response;
+}
+
 async function loadDashboard() {
     const loading = document.getElementById('loading');
     const error = document.getElementById('error');
     const hours = document.getElementById('timePeriod').value;
 
+    console.log('Loading dashboard...');
     loading.style.display = 'block';
     error.style.display = 'none';
 
-    try:
+    try {
         // Load all data in parallel
+        console.log('Fetching data...');
         const [metricsRes, scoreRes, costRes, aiStatusRes, ventRes] = await Promise.all([
-            fetch(`/api/metrics?hours=${hours}`),
-            fetch(`/api/performance-score?hours=${hours}`),
-            fetch(`/api/cost-analysis?hours=${hours}`),
-            fetch(`/api/ai-agent/status`), // Use existing AI status endpoint
-            fetch(`/api/ventilation/status`)
+            fetchWithTimeout(`/api/metrics?hours=${hours}`),
+            fetchWithTimeout(`/api/performance-score?hours=${hours}`),
+            fetchWithTimeout(`/api/cost-analysis?hours=${hours}`),
+            fetchWithTimeout(`/api/ai-agent/status`), 
+            fetchWithTimeout(`/api/ventilation/status`)
         ]);
+        console.log('Data fetched, parsing JSON...');
 
         const metricsResult = await metricsRes.json();
         const scoreResult = await scoreRes.json();
