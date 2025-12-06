@@ -23,9 +23,9 @@ class DataLogger:
         Args:
             database_url: Database connection URL. If None, uses settings.DATABASE_URL
         """
-        db_url = database_url or settings.DATABASE_URL
-        self.engine = init_db(db_url)
-        self.session = get_session(self.engine)
+        # db_url = database_url or settings.DATABASE_URL
+        init_db()
+        self.session = get_session()
         self.auth = MyUplinkAuth()
         self.client = MyUplinkClient(self.auth)
 
