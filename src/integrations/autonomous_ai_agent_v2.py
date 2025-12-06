@@ -206,9 +206,9 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         logger.error(error_msg)
         raise Exception(error_msg)
 
-    def analyze_and_decide(self, hours_back: int = 72, dry_run: bool = True) -> AIDecision:
+    def analyze_and_decide(self, hours_back: int = 72, dry_run: bool = True, mode: str = "tactical") -> AIDecision:
         logger.info("="*80)
-        logger.info("AUTONOMOUS AI AGENT V2 (GEMINI) - Analysis")
+        logger.info(f"AUTONOMOUS AI AGENT V2 (GEMINI) - Analysis [Mode: {mode.upper()}]")
         logger.info("="*80)
 
         # Check if any PlannedTest is currently active and blocking optimization
@@ -256,8 +256,8 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
         context = self._build_optimized_context(metrics)
 
-        # 3. Create Optimized Prompt with user settings
-        prompt = self._create_optimized_prompt(context, min_temp, target_min, target_max)
+        # 3. Create Optimized Prompt with user settings and MODE restriction
+        prompt = self._create_optimized_prompt(context, min_temp, target_min, target_max, mode)
 
         # 3. Call AI with automatic fallback
         try:
@@ -580,15 +580,27 @@ Curve:{metrics.heating_curve}/Offset:{metrics.curve_offset}
 {history_str}
 """
 
-    def _create_optimized_prompt(self, context: str, min_temp: float, target_min: float, target_max: float) -> str:
+    def _create_optimized_prompt(self, context: str, min_temp: float, target_min: float, target_max: float, mode: str = "tactical") -> str:
+        
+        # Define allowed parameters based on mode
+        if mode == "strategic":
+            # Full control including slope and compressor limits
+            allowed_params = "heating_curve(1-15), curve_offset(-10-10), start_compressor(-DM), hot_water_demand(0-2), increased_ventilation(0-4)"
+            mode_instruction = "MODE: STRATEGIC. You may adjust base Heating Curve (slope) if long-term trends require it."
+        else:
+            # Tactical control only (Offset & HW)
+            allowed_params = "curve_offset(-10-10), hot_water_demand(0-2), increased_ventilation(0-4)"
+            mode_instruction = "MODE: TACTICAL. Focus on curve_offset and hot_water only. Do NOT touch base heating_curve."
+
         return f"""System: Nibe F730 HeatPump. Goal: Optimize COP, Comfort & COST.
 Context:
 {context}
 
 Output JSON only.
 Action: adjust|hold|investigate
-Params: heating_curve(1-15), curve_offset(-10-10), start_compressor(-DM), hot_water_demand(0-2), increased_ventilation(0-4)
+Params: {allowed_params}
 Rules: Indoor target {target_min:.1f}-{target_max:.1f}C (MINIMUM {min_temp:.1f}°C). Max 1 change. Min conf 0.7.
+{mode_instruction}
 
 IMPORTANT: DegMin is a START THRESHOLD (when compressor starts), NOT an indicator of overheating.
 - DegMin negative = compressor starts earlier
