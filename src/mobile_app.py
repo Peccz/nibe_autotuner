@@ -59,6 +59,72 @@ def get_auto_optimizer():
         dry_run=False  # Live mode
     )
 
+@app.route('/api/ventilation/status')
+def get_ventilation_status():
+    """Get current ventilation status and strategy"""
+    session = SessionLocal()
+    try:
+        from services.ventilation_optimizer import VentilationOptimizer
+
+        device = session.query(Device).first()
+        if not device:
+            return jsonify({'success': False, 'error': 'No device found'}), 404
+
+        # Create ventilation optimizer
+        vent_optimizer = VentilationOptimizer(
+            api_client=api_client,
+            analyzer=analyzer,
+            device_id=device.device_id
+        )
+
+        # Get current status
+        analysis = vent_optimizer.analyze_current_status()
+
+        # Format response
+        current = analysis['current_settings']
+        recommended = analysis['recommended_settings']
+
+        data = {
+            'outdoor_temp': analysis['outdoor_temp'],
+            'indoor_temp': analysis['indoor_temp'],
+            'exhaust_temp': analysis['exhaust_temp'],
+            'fan_speed_pct': analysis['fan_speed_pct'],
+            'current_strategy': analysis['recommended_strategy'],
+            'needs_adjustment': analysis['needs_adjustment'],
+            'reasoning': analysis['reasoning'],
+            'current_settings': {
+                'increased_ventilation': current.increased_ventilation,
+                'start_temp_exhaust': current.start_temp_exhaust,
+                'min_diff_outdoor_exhaust': current.min_diff_outdoor_exhaust
+            },
+            'recommended_settings': {
+                'increased_ventilation': recommended.increased_ventilation,
+                'start_temp_exhaust': recommended.start_temp_exhaust,
+                'min_diff_outdoor_exhaust': recommended.min_diff_outdoor_exhaust
+            },
+            'estimated_rh_drop_pct': analysis['estimated_rh_drop_pct'],
+            'temp_lift': analysis['temp_lift']
+        }
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        logger.error(f"Ventilation status error: {e}")
+        # Return mock data on error to prevent dashboard hang
+        return jsonify({
+            'success': True, 
+            'data': {
+                'current_strategy': 'NORMAL', 
+                'needs_adjustment': False, 
+                'exhaust_temp': 0, 
+                'fan_speed_pct': 0, 
+                'estimated_rh_drop_pct': 0, 
+                'reasoning': f"Data unavailable: {str(e)}"
+            }
+        })
+    finally:
+        session.close()
+
 @app.route('/')
 def index():
     """Main dashboard"""
@@ -86,6 +152,7 @@ def get_metrics():
         data = {
             'cop': float(metrics.estimated_cop) if metrics.estimated_cop else None,
             'degree_minutes': float(metrics.degree_minutes),
+            'estimated_time_to_start_minutes': float(metrics.estimated_time_to_start_minutes) if metrics.estimated_time_to_start_minutes is not None else None,
             'delta_t_active': float(metrics.delta_t_active) if metrics.delta_t_active else None,
             'delta_t_hot_water': float(metrics.delta_t_hot_water) if metrics.delta_t_hot_water else None,
             'avg_compressor_freq': float(metrics.avg_compressor_freq),
@@ -1082,12 +1149,26 @@ def get_ai_agent_status():
             AIDecisionLog.timestamp.desc()
         ).first()
 
+        # Format last decision
+        last_decision_data = None
+        if last_decision:
+            last_decision_data = {
+                'timestamp': last_decision.timestamp.isoformat(),
+                'action': last_decision.action,
+                'parameter': last_decision.parameter.parameter_name if last_decision.parameter else None,
+                'current_value': last_decision.current_value,
+                'suggested_value': last_decision.suggested_value,
+                'reasoning': last_decision.reasoning
+            }
+
         # Estimate monthly cost (assuming 60 analyses/month at ~0.10 kr each)
         monthly_cost_sek = total_analyses * 0.10 / max(1, total_analyses / 60)
 
         status = {
             'enabled': settings.GOOGLE_API_KEY is not None,
+            'mode': 'TACTICAL', # Currently hardcoded, could be read from config/state
             'last_run': last_decision.timestamp.isoformat() if last_decision else None,
+            'last_decision': last_decision_data,
             'next_run': 'Schemalagd via auto_optimizer cron',
             'total_analyses': total_analyses,
             'total_adjustments': total_adjustments,
