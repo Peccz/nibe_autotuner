@@ -18,6 +18,11 @@ logging.basicConfig(level=logging.INFO)
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Define paths relative to this file (src/mobile_app.py)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_DIR = os.path.join(BASE_DIR, 'mobile', 'templates')
+STATIC_DIR = os.path.join(BASE_DIR, 'mobile', 'static')
+
 from services.analyzer import HeatPumpAnalyzer
 from data.models import ParameterChange, Device, Parameter, ABTestResult, PlannedTest
 from data.database import init_db
@@ -30,8 +35,8 @@ from services.auto_optimizer import AutoOptimizer
 from core.config import settings
 
 app = Flask(__name__,
-            template_folder='mobile/templates',
-            static_folder='mobile/static')
+            template_folder=TEMPLATE_DIR,
+            static_folder=STATIC_DIR)
 
 # Initialize database and analyzer
 # HeatPumpAnalyzer expects a relative path from working directory
