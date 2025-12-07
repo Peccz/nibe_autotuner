@@ -1,0 +1,2723 @@
+[
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40004",
+    "parameterName": "Outdoor temperature",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:05:24+00:00",
+    "value": 5.5,
+    "strVal": "5.5\u00b0C",
+    "smartHomeCategories": [
+      "sh-outdoorTemp"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40008",
+    "parameterName": "Supply line (BT2)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:14:44+00:00",
+    "value": 26.8,
+    "strVal": "26.8\u00b0C",
+    "smartHomeCategories": [
+      "sh-supplyTemp"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40012",
+    "parameterName": "Return line (BT3)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:12:47+00:00",
+    "value": 23.0,
+    "strVal": "23\u00b0C",
+    "smartHomeCategories": [
+      "sh-returnTemp"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40013",
+    "parameterName": "Hot water top (BT7)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:03:56+00:00",
+    "value": 49.0,
+    "strVal": "49\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40014",
+    "parameterName": "Hot water char\u00adging (BT6)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:16:48+00:00",
+    "value": 44.3,
+    "strVal": "44.3\u00b0C",
+    "smartHomeCategories": [
+      "sh-hwTemp"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40017",
+    "parameterName": "Con\u00addenser (BT12)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:15:35+00:00",
+    "value": 27.0,
+    "strVal": "27\u00b0C",
+    "smartHomeCategories": [
+      "sh-supplyTemp"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40018",
+    "parameterName": "Dis\u00adcharge (BT14)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:16:15+00:00",
+    "value": 59.0,
+    "strVal": "59\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40019",
+    "parameterName": "Liquid line (BT15)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:14:03+00:00",
+    "value": 23.6,
+    "strVal": "23.6\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40020",
+    "parameterName": "Evap\u00adorator (BT16)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:07:41+00:00",
+    "value": 1.0,
+    "strVal": "1\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40022",
+    "parameterName": "Suction gas (BT17)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:08:29+00:00",
+    "value": 15.4,
+    "strVal": "15.4\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40025",
+    "parameterName": "Exhaust air (AZ30-BT20)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T09:03:34+00:00",
+    "value": 22.5,
+    "strVal": "22.5\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40026",
+    "parameterName": "Extract air (AZ30-BT21)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:04:19+00:00",
+    "value": 4.0,
+    "strVal": "4\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40033",
+    "parameterName": "Room temp\u00aderature (BT50)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-06T22:29:34+00:00",
+    "value": 20.6,
+    "strVal": "20.6\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40067",
+    "parameterName": "Average outdoor temp (BT1)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T09:42:29+00:00",
+    "value": 4.9,
+    "strVal": "4.9\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40079",
+    "parameterName": "Current (BE3)",
+    "parameterUnit": "A",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "0A",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40081",
+    "parameterName": "Current (BE2)",
+    "parameterUnit": "A",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "0A",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40083",
+    "parameterName": "Current (BE1)",
+    "parameterUnit": "A",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "0A",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40145",
+    "parameterName": "Oil temp\u00aderature (EP15-BT29)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "0\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40146",
+    "parameterName": "Oil temp\u00aderature (BT29)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "0\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40940",
+    "parameterName": "current value",
+    "parameterUnit": "DM",
+    "writable": true,
+    "timestamp": "2025-12-07T10:16:42+00:00",
+    "value": -223.0,
+    "strVal": "-223DM",
+    "smartHomeCategories": [],
+    "minValue": -30000.0,
+    "maxValue": 30000.0,
+    "stepValue": 100.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "40941",
+    "parameterName": "Degree minutes",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-07T10:16:42+00:00",
+    "value": -223.0,
+    "strVal": "-223",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "41778",
+    "parameterName": "Current com\u00adpressor fre\u00adquency",
+    "parameterUnit": "Hz",
+    "writable": false,
+    "timestamp": "2025-12-07T10:14:44+00:00",
+    "value": 21.0,
+    "strVal": "21Hz",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "41929",
+    "parameterName": "Mode (Smart Price Adaption)",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-07T07:00:00+00:00",
+    "value": 2.0,
+    "strVal": "Normal",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "Unknown",
+        "icon": ""
+      },
+      {
+        "value": "1",
+        "text": "Low",
+        "icon": ""
+      },
+      {
+        "value": "2",
+        "text": "Normal",
+        "icon": ""
+      },
+      {
+        "value": "3",
+        "text": "High",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "42782",
+    "parameterName": "Value, air veloc\u00adity sensor (BS1)",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-07T10:12:29+00:00",
+    "value": 194.3,
+    "strVal": "194.3",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43009",
+    "parameterName": "Calcu\u00adlated supply climate system 1",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:02:25+00:00",
+    "value": 27.6,
+    "strVal": "27.6\u00b0C",
+    "smartHomeCategories": [
+      "sh-supplyTemp"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43066",
+    "parameterName": "Defrost\u00ading time",
+    "parameterUnit": "s",
+    "writable": false,
+    "timestamp": "2025-12-07T05:39:15+00:00",
+    "value": 0.0,
+    "strVal": "0s",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43081",
+    "parameterName": "Time factor add heat",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 230.5,
+    "strVal": "230.5",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43084",
+    "parameterName": "Power inter\u00adnal add. heat",
+    "parameterUnit": "kW",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "0kW",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.01",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43108",
+    "parameterName": "Current fan mode",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43109",
+    "parameterName": "Current hot water mode",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-07T07:59:58+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43116",
+    "parameterName": "Hot water: charge current value ((BT12 | BT63))",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "0\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43122",
+    "parameterName": "Min com\u00adpressor fre\u00adquency",
+    "parameterUnit": "Hz",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 20.0,
+    "strVal": "20Hz",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43123",
+    "parameterName": "Max com\u00adpressor fre\u00adquency",
+    "parameterUnit": "Hz",
+    "writable": false,
+    "timestamp": "2025-12-07T09:58:00+00:00",
+    "value": 120.0,
+    "strVal": "120Hz",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43124",
+    "parameterName": "Refer\u00adence, air speed sensor",
+    "parameterUnit": "m3/h",
+    "writable": false,
+    "timestamp": "2025-12-07T09:07:15+00:00",
+    "value": 195.8,
+    "strVal": "195.8m3/h",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43125",
+    "parameterName": "De\u00adcrease from refer\u00adence value",
+    "parameterUnit": "%",
+    "writable": false,
+    "timestamp": "2025-12-07T10:10:41+00:00",
+    "value": 1.0,
+    "strVal": "1%",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43140",
+    "parameterName": "Invert\u00ader temp\u00aderature",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:16:42+00:00",
+    "value": 29.0,
+    "strVal": "29\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43146",
+    "parameterName": "dT Invert\u00ader - exh air (BT20)",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:07:55+00:00",
+    "value": 7.1,
+    "strVal": "7.1\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43161",
+    "parameterName": "Extern. adjust\u00adment climate system 1",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "Off",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "Off",
+        "icon": ""
+      },
+      {
+        "value": "1",
+        "text": "On",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43239",
+    "parameterName": "- of which hot water:",
+    "parameterUnit": "hrs",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:18+00:00",
+    "value": 145.0,
+    "strVal": "145hrs",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43416",
+    "parameterName": "Number of compressor starts",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-07T09:02:13+00:00",
+    "value": 6119.0,
+    "strVal": "6119",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43420",
+    "parameterName": "Oper. time",
+    "parameterUnit": "h",
+    "writable": false,
+    "timestamp": "2025-12-07T10:04:49+00:00",
+    "value": 12190.0,
+    "strVal": "12190h",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43424",
+    "parameterName": "Oper. time hot water",
+    "parameterUnit": "h",
+    "writable": false,
+    "timestamp": "2025-12-07T09:25:56+00:00",
+    "value": 2819.0,
+    "strVal": "2819h",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43427",
+    "parameterName": "Status com\u00adpressor",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-07T09:02:13+00:00",
+    "value": 60.0,
+    "strVal": "Operating",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "20",
+        "text": "Off",
+        "icon": ""
+      },
+      {
+        "value": "40",
+        "text": "Starting",
+        "icon": ""
+      },
+      {
+        "value": "60",
+        "text": "Operating",
+        "icon": ""
+      },
+      {
+        "value": "100",
+        "text": "Stopping",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "43437",
+    "parameterName": "Heating medium pump speed (GP1)",
+    "parameterUnit": "%",
+    "writable": false,
+    "timestamp": "2025-12-07T09:56:26+00:00",
+    "value": 50.0,
+    "strVal": "50%",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "44896",
+    "parameterName": "Heating offset (Smart Price Adaption)",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-06T10:26:40+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "44898",
+    "parameterName": "Pool offset (Smart Price Adaption)",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-06T10:26:40+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "44899",
+    "parameterName": "Cooling offset (Smart Price Adaption)",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-06T10:26:40+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "44908",
+    "parameterName": "Status (Smart Price Adaption)",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-07T00:27:24+00:00",
+    "value": 30.0,
+    "strVal": "30",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47007",
+    "parameterName": "heating curve",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 7.0,
+    "strVal": "7",
+    "smartHomeCategories": [],
+    "minValue": 0.0,
+    "maxValue": 15.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47011",
+    "parameterName": "Offset",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-07T09:59:41+00:00",
+    "value": -3.0,
+    "strVal": "-3",
+    "smartHomeCategories": [],
+    "minValue": -10.0,
+    "maxValue": 10.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47015",
+    "parameterName": "climate system",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 20.0,
+    "strVal": "20\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 200.0,
+    "maxValue": 700.0,
+    "stepValue": 10.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47020",
+    "parameterName": "flow line temp. at 30 \u00b0C",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 15.0,
+    "strVal": "15\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 5.0,
+    "maxValue": 80.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47021",
+    "parameterName": "flow line temp. at 20 \u00b0C",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 15.0,
+    "strVal": "15\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 5.0,
+    "maxValue": 80.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47022",
+    "parameterName": "flow line temp. at 10 \u00b0C",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 26.0,
+    "strVal": "26\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 5.0,
+    "maxValue": 80.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47023",
+    "parameterName": "flow line temp. at 0 \u00b0C",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 32.0,
+    "strVal": "32\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 5.0,
+    "maxValue": 80.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47024",
+    "parameterName": "flow line temp. at -10 \u00b0C",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 35.0,
+    "strVal": "35\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 5.0,
+    "maxValue": 80.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47025",
+    "parameterName": "flow line temp. at -20 \u00b0C",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 40.0,
+    "strVal": "40\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 5.0,
+    "maxValue": 80.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47026",
+    "parameterName": "flow line temp. at -30 \u00b0C",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 45.0,
+    "strVal": "45\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 5.0,
+    "maxValue": 80.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47027",
+    "parameterName": "outdoor temp. point",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 0.0,
+    "strVal": "0\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": -40.0,
+    "maxValue": 30.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47028",
+    "parameterName": "change in curve",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 0.0,
+    "strVal": "0\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": -10.0,
+    "maxValue": 10.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47032",
+    "parameterName": "climate system",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": -10.0,
+    "maxValue": 10.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47041",
+    "parameterName": "Hot water demand",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-07T07:59:58+00:00",
+    "value": 0.0,
+    "strVal": "Economy",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "Economy",
+        "icon": ""
+      },
+      {
+        "value": "1",
+        "text": "Normal",
+        "icon": ""
+      },
+      {
+        "value": "2",
+        "text": "Lux",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47050",
+    "parameterName": "activated",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 1.0,
+    "strVal": "1",
+    "smartHomeCategories": [],
+    "minValue": 0.0,
+    "maxValue": 1.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47051",
+    "parameterName": "period",
+    "parameterUnit": "days",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 14.0,
+    "strVal": "14days",
+    "smartHomeCategories": [],
+    "minValue": 1.0,
+    "maxValue": 90.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47137",
+    "parameterName": "op. mode",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:20+00:00",
+    "value": 0.0,
+    "strVal": "auto",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "auto",
+        "icon": ""
+      },
+      {
+        "value": "1",
+        "text": "manual",
+        "icon": ""
+      },
+      {
+        "value": "2",
+        "text": "add. heat only",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47206",
+    "parameterName": "start compressor",
+    "parameterUnit": "DM",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": -200.0,
+    "strVal": "-200DM",
+    "smartHomeCategories": [],
+    "minValue": -1000.0,
+    "maxValue": -30.0,
+    "stepValue": 10.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47209",
+    "parameterName": "diff. between additional steps",
+    "parameterUnit": "DM",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 100.0,
+    "strVal": "100DM",
+    "smartHomeCategories": [],
+    "minValue": 10.0,
+    "maxValue": 1000.0,
+    "stepValue": 10.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47212",
+    "parameterName": "set max electrical add.",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:20+00:00",
+    "value": 650.0,
+    "strVal": "6.50 kW",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "0.0 kW",
+        "icon": ""
+      },
+      {
+        "value": "50",
+        "text": "0.50 kW",
+        "icon": ""
+      },
+      {
+        "value": "100",
+        "text": "1.0 kW",
+        "icon": ""
+      },
+      {
+        "value": "150",
+        "text": "1.50 kW",
+        "icon": ""
+      },
+      {
+        "value": "200",
+        "text": "2.0 kW",
+        "icon": ""
+      },
+      {
+        "value": "250",
+        "text": "2.50 kW",
+        "icon": ""
+      },
+      {
+        "value": "300",
+        "text": "3.0 kW",
+        "icon": ""
+      },
+      {
+        "value": "350",
+        "text": "3.50 kW",
+        "icon": ""
+      },
+      {
+        "value": "400",
+        "text": "4.0 kW",
+        "icon": ""
+      },
+      {
+        "value": "450",
+        "text": "4.50 kW",
+        "icon": ""
+      },
+      {
+        "value": "500",
+        "text": "5.0 kW",
+        "icon": ""
+      },
+      {
+        "value": "550",
+        "text": "5.50 kW",
+        "icon": ""
+      },
+      {
+        "value": "600",
+        "text": "6.0 kW",
+        "icon": ""
+      },
+      {
+        "value": "650",
+        "text": "6.50 kW",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47271",
+    "parameterName": "speed 4",
+    "parameterUnit": "hrs",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 4.0,
+    "strVal": "4hrs",
+    "smartHomeCategories": [],
+    "minValue": 1.0,
+    "maxValue": 99.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47272",
+    "parameterName": "speed 3",
+    "parameterUnit": "hrs",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 4.0,
+    "strVal": "4hrs",
+    "smartHomeCategories": [],
+    "minValue": 1.0,
+    "maxValue": 99.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47273",
+    "parameterName": "speed 2",
+    "parameterUnit": "hrs",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 4.0,
+    "strVal": "4hrs",
+    "smartHomeCategories": [],
+    "minValue": 1.0,
+    "maxValue": 99.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47274",
+    "parameterName": "speed 1",
+    "parameterUnit": "hrs",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 4.0,
+    "strVal": "4hrs",
+    "smartHomeCategories": [],
+    "minValue": 1.0,
+    "maxValue": 99.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47375",
+    "parameterName": "stop heating",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 13.0,
+    "strVal": "13\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": -200.0,
+    "maxValue": 400.0,
+    "stepValue": 10.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47376",
+    "parameterName": "stop additional heat",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 1.0,
+    "strVal": "1\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": -250.0,
+    "maxValue": 400.0,
+    "stepValue": 10.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47377",
+    "parameterName": "filtering time",
+    "parameterUnit": "hrs",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 8.0,
+    "strVal": "8hrs",
+    "smartHomeCategories": [],
+    "minValue": 0.0,
+    "maxValue": 48.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47394",
+    "parameterName": "control room sensor syst",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": 0.0,
+    "maxValue": 1.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47537",
+    "parameterName": "night cooling",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": 0.0,
+    "maxValue": 1.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47538",
+    "parameterName": "start temp. exhaust air",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 24.0,
+    "strVal": "24\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 20.0,
+    "maxValue": 30.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "47539",
+    "parameterName": "min diff. outdoor-exhaust",
+    "parameterUnit": "\u00b0C",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 7.0,
+    "strVal": "7\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": 3.0,
+    "maxValue": 10.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "48072",
+    "parameterName": "start diff additional heat",
+    "parameterUnit": "DM",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 1500.0,
+    "strVal": "1500DM",
+    "smartHomeCategories": [],
+    "minValue": 100.0,
+    "maxValue": 2000.0,
+    "stepValue": 10.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "48132",
+    "parameterName": "Hot water boost",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-06T19:21:24+00:00",
+    "value": 0.0,
+    "strVal": "Off",
+    "smartHomeCategories": [
+      "sh-hwBoost"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "Off",
+        "icon": ""
+      },
+      {
+        "value": "4",
+        "text": "One-time incr.",
+        "icon": ""
+      },
+      {
+        "value": "1",
+        "text": "3 hr",
+        "icon": ""
+      },
+      {
+        "value": "2",
+        "text": "6 hr",
+        "icon": ""
+      },
+      {
+        "value": "3",
+        "text": "12 hr",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "48442",
+    "parameterName": "activated",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-06T10:25:46+00:00",
+    "value": 1.0,
+    "strVal": "1",
+    "smartHomeCategories": [],
+    "minValue": 0.0,
+    "maxValue": 1.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "48443",
+    "parameterName": "affect room temperature",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-06T10:26:40+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": 0.0,
+    "maxValue": 1.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "48445",
+    "parameterName": "affect hot water",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-06T10:26:40+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": 0.0,
+    "maxValue": 1.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "49909",
+    "parameterName": "start time",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 3.0,
+    "strVal": "3",
+    "smartHomeCategories": [],
+    "minValue": 0.0,
+    "maxValue": 23.0,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "49993",
+    "parameterName": "Int elec add heat",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-05T17:55:04+00:00",
+    "value": 4.0,
+    "strVal": "Blocked",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "Alarm",
+        "icon": ""
+      },
+      {
+        "value": "1",
+        "text": "Alarm",
+        "icon": ""
+      },
+      {
+        "value": "2",
+        "text": "Active",
+        "icon": ""
+      },
+      {
+        "value": "3",
+        "text": "Off",
+        "icon": ""
+      },
+      {
+        "value": "4",
+        "text": "Blocked",
+        "icon": ""
+      },
+      {
+        "value": "5",
+        "text": "Off",
+        "icon": ""
+      },
+      {
+        "value": "6",
+        "text": "Active",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "49994",
+    "parameterName": "Prior\u00adity",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-07T09:58:01+00:00",
+    "value": 30.0,
+    "strVal": "Heating",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "10",
+        "text": "Off",
+        "icon": ""
+      },
+      {
+        "value": "20",
+        "text": "Hot water",
+        "icon": ""
+      },
+      {
+        "value": "30",
+        "text": "Heating",
+        "icon": ""
+      },
+      {
+        "value": "40",
+        "text": "Pool",
+        "icon": ""
+      },
+      {
+        "value": "41",
+        "text": "Pool 2",
+        "icon": ""
+      },
+      {
+        "value": "50",
+        "text": "Trans\u00adfer",
+        "icon": ""
+      },
+      {
+        "value": "60",
+        "text": "Cooling",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "49995",
+    "parameterName": "Pump: Heating medium (GP1)",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 1.0,
+    "strVal": "On",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "Off",
+        "icon": ""
+      },
+      {
+        "value": "1",
+        "text": "On",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50004",
+    "parameterName": "Tempo\u00adrary lux",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-06T11:02:42+00:00",
+    "value": 0.0,
+    "strVal": "off",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "off",
+        "icon": ""
+      },
+      {
+        "value": "1",
+        "text": "on",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50005",
+    "parameterName": "In\u00adcreased venti\u00adlation",
+    "parameterUnit": "",
+    "writable": true,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "off",
+    "smartHomeCategories": [
+      "sh-ventBoost"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "0",
+        "text": "off",
+        "icon": ""
+      },
+      {
+        "value": "1",
+        "text": "on",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50095",
+    "parameterName": "status:",
+    "parameterUnit": "min",
+    "writable": false,
+    "timestamp": "2025-12-07T09:57:51+00:00",
+    "value": 15005.0,
+    "strVal": "15005min",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "15000",
+        "text": "Starting",
+        "icon": ""
+      },
+      {
+        "value": "15001",
+        "text": "Operating",
+        "icon": ""
+      },
+      {
+        "value": "15002",
+        "text": "Stopping",
+        "icon": ""
+      },
+      {
+        "value": "15003",
+        "text": "Off",
+        "icon": ""
+      },
+      {
+        "value": "15004",
+        "text": "Hot water",
+        "icon": ""
+      },
+      {
+        "value": "15005",
+        "text": "Heating",
+        "icon": ""
+      },
+      {
+        "value": "15006",
+        "text": "Pool",
+        "icon": ""
+      },
+      {
+        "value": "15007",
+        "text": "Cooling",
+        "icon": ""
+      },
+      {
+        "value": "15008",
+        "text": "Trans\u00adfer",
+        "icon": ""
+      },
+      {
+        "value": "10480",
+        "text": "incomp. hp",
+        "icon": ""
+      },
+      {
+        "value": "10065",
+        "text": "Comm.fault In",
+        "icon": ""
+      },
+      {
+        "value": "10066",
+        "text": "Communication fault with PCA Input.",
+        "icon": ""
+      },
+      {
+        "value": "10067",
+        "text": "Communication fault with PCA Input.",
+        "icon": ""
+      },
+      {
+        "value": "10068",
+        "text": "Com.flt Base",
+        "icon": ""
+      },
+      {
+        "value": "10069",
+        "text": "Communication fault with PCA Base.",
+        "icon": ""
+      },
+      {
+        "value": "10070",
+        "text": "Communication fault with PCA Base.",
+        "icon": ""
+      },
+      {
+        "value": "10162",
+        "text": "Sens flt:BT18",
+        "icon": ""
+      },
+      {
+        "value": "15971",
+        "text": "incomp. inv.",
+        "icon": ""
+      },
+      {
+        "value": "10177",
+        "text": "Sens flt:BT14",
+        "icon": ""
+      },
+      {
+        "value": "10071",
+        "text": "HP alarm",
+        "icon": ""
+      },
+      {
+        "value": "10072",
+        "text": "High pressure alarm",
+        "icon": ""
+      },
+      {
+        "value": "10073",
+        "text": "High pressure alarm",
+        "icon": ""
+      },
+      {
+        "value": "10074",
+        "text": "LP alarm",
+        "icon": ""
+      },
+      {
+        "value": "10075",
+        "text": "Low pressure alarm",
+        "icon": ""
+      },
+      {
+        "value": "10076",
+        "text": "Low pressure alarm",
+        "icon": ""
+      },
+      {
+        "value": "10077",
+        "text": "Comm.flt MC",
+        "icon": ""
+      },
+      {
+        "value": "10078",
+        "text": "Comm.flt with PCA Motor Controller",
+        "icon": ""
+      },
+      {
+        "value": "10079",
+        "text": "Communication fault with PCA Motor Controller.",
+        "icon": ""
+      },
+      {
+        "value": "10080",
+        "text": "MP alarm",
+        "icon": ""
+      },
+      {
+        "value": "10081",
+        "text": "Motor protection alarm",
+        "icon": ""
+      },
+      {
+        "value": "10082",
+        "text": "Motor protection alarm",
+        "icon": ""
+      },
+      {
+        "value": "10083",
+        "text": "Sensor flt:BT1",
+        "icon": ""
+      },
+      {
+        "value": "10084",
+        "text": "Sensor fault: BT1 outdoor sensor",
+        "icon": ""
+      },
+      {
+        "value": "10085",
+        "text": "Sensor fault: BT1 outdoor sensor",
+        "icon": ""
+      },
+      {
+        "value": "10086",
+        "text": "Sensor flt:BT2",
+        "icon": ""
+      },
+      {
+        "value": "10087",
+        "text": "Sensor fault: BT2 flow line sensor 1",
+        "icon": ""
+      },
+      {
+        "value": "10088",
+        "text": "Sensor fault: BT2 flow line sensor 1",
+        "icon": ""
+      },
+      {
+        "value": "10089",
+        "text": "Sens flt:BT12",
+        "icon": ""
+      },
+      {
+        "value": "10090",
+        "text": "Sensor fault: BT12 condenser out",
+        "icon": ""
+      },
+      {
+        "value": "10091",
+        "text": "Sensor fault: BT12 condenser out",
+        "icon": ""
+      },
+      {
+        "value": "10092",
+        "text": "Sensor flt:BT3",
+        "icon": ""
+      },
+      {
+        "value": "10095",
+        "text": "Sensor flt:BT6",
+        "icon": ""
+      },
+      {
+        "value": "10154",
+        "text": "internal electrical addition",
+        "icon": ""
+      },
+      {
+        "value": "10183",
+        "text": "L exh.temp",
+        "icon": ""
+      },
+      {
+        "value": "10203",
+        "text": "Sensor flt:BT7",
+        "icon": ""
+      },
+      {
+        "value": "10187",
+        "text": "Defrosting",
+        "icon": ""
+      },
+      {
+        "value": "15117",
+        "text": "blocked",
+        "icon": ""
+      },
+      {
+        "value": "16528",
+        "text": "Inverter fault",
+        "icon": ""
+      },
+      {
+        "value": "10068",
+        "text": "Com.flt Base",
+        "icon": ""
+      },
+      {
+        "value": "10311",
+        "text": "Inverter I",
+        "icon": ""
+      },
+      {
+        "value": "10314",
+        "text": "Inverter II",
+        "icon": ""
+      },
+      {
+        "value": "10317",
+        "text": "Inverter III",
+        "icon": ""
+      },
+      {
+        "value": "10110",
+        "text": "Hot gas alarm",
+        "icon": ""
+      },
+      {
+        "value": "10116",
+        "text": "TB alarm",
+        "icon": ""
+      },
+      {
+        "value": "10122",
+        "text": "Hi cond. out",
+        "icon": ""
+      },
+      {
+        "value": "10276",
+        "text": "Err: BT63",
+        "icon": ""
+      },
+      {
+        "value": "10293",
+        "text": "serial no",
+        "icon": ""
+      },
+      {
+        "value": "10296",
+        "text": "software",
+        "icon": ""
+      },
+      {
+        "value": "11176",
+        "text": "comm.err hp",
+        "icon": ""
+      },
+      {
+        "value": "15117",
+        "text": "blocked",
+        "icon": ""
+      },
+      {
+        "value": "15629",
+        "text": "ext control",
+        "icon": ""
+      },
+      {
+        "value": "15701",
+        "text": "Preheat",
+        "icon": ""
+      },
+      {
+        "value": "15966",
+        "text": "Pres.alarm",
+        "icon": ""
+      },
+      {
+        "value": "15971",
+        "text": "incomp. inv.",
+        "icon": ""
+      },
+      {
+        "value": "16537",
+        "text": "Soft-start flt",
+        "icon": ""
+      },
+      {
+        "value": "16659",
+        "text": "Acc. block.",
+        "icon": ""
+      },
+      {
+        "value": "15468",
+        "text": "initiating",
+        "icon": ""
+      },
+      {
+        "value": "11165",
+        "text": "pool 2",
+        "icon": ""
+      },
+      {
+        "value": "11174",
+        "text": "com.err.slave",
+        "icon": ""
+      },
+      {
+        "value": "15985",
+        "text": "Com.flt GP12",
+        "icon": ""
+      },
+      {
+        "value": "16541",
+        "text": "not docked",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50113",
+    "parameterName": "status:",
+    "parameterUnit": "kW",
+    "writable": false,
+    "timestamp": "2025-12-05T17:56:20+00:00",
+    "value": 1512.0,
+    "strVal": "1512kW",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [
+      {
+        "value": "15000",
+        "text": "Starting",
+        "icon": ""
+      },
+      {
+        "value": "15001",
+        "text": "Operating",
+        "icon": ""
+      },
+      {
+        "value": "15002",
+        "text": "Stopping",
+        "icon": ""
+      },
+      {
+        "value": "15003",
+        "text": "Off",
+        "icon": ""
+      },
+      {
+        "value": "15004",
+        "text": "Hot water",
+        "icon": ""
+      },
+      {
+        "value": "15005",
+        "text": "Heating",
+        "icon": ""
+      },
+      {
+        "value": "15006",
+        "text": "Pool",
+        "icon": ""
+      },
+      {
+        "value": "15007",
+        "text": "Cooling",
+        "icon": ""
+      },
+      {
+        "value": "15008",
+        "text": "Trans\u00adfer",
+        "icon": ""
+      },
+      {
+        "value": "10480",
+        "text": "incomp. hp",
+        "icon": ""
+      },
+      {
+        "value": "10065",
+        "text": "Comm.fault In",
+        "icon": ""
+      },
+      {
+        "value": "10066",
+        "text": "Communication fault with PCA Input.",
+        "icon": ""
+      },
+      {
+        "value": "10067",
+        "text": "Communication fault with PCA Input.",
+        "icon": ""
+      },
+      {
+        "value": "10068",
+        "text": "Com.flt Base",
+        "icon": ""
+      },
+      {
+        "value": "10069",
+        "text": "Communication fault with PCA Base.",
+        "icon": ""
+      },
+      {
+        "value": "10070",
+        "text": "Communication fault with PCA Base.",
+        "icon": ""
+      },
+      {
+        "value": "10162",
+        "text": "Sens flt:BT18",
+        "icon": ""
+      },
+      {
+        "value": "15971",
+        "text": "incomp. inv.",
+        "icon": ""
+      },
+      {
+        "value": "10177",
+        "text": "Sens flt:BT14",
+        "icon": ""
+      },
+      {
+        "value": "10071",
+        "text": "HP alarm",
+        "icon": ""
+      },
+      {
+        "value": "10072",
+        "text": "High pressure alarm",
+        "icon": ""
+      },
+      {
+        "value": "10073",
+        "text": "High pressure alarm",
+        "icon": ""
+      },
+      {
+        "value": "10074",
+        "text": "LP alarm",
+        "icon": ""
+      },
+      {
+        "value": "10075",
+        "text": "Low pressure alarm",
+        "icon": ""
+      },
+      {
+        "value": "10076",
+        "text": "Low pressure alarm",
+        "icon": ""
+      },
+      {
+        "value": "10077",
+        "text": "Comm.flt MC",
+        "icon": ""
+      },
+      {
+        "value": "10078",
+        "text": "Comm.flt with PCA Motor Controller",
+        "icon": ""
+      },
+      {
+        "value": "10079",
+        "text": "Communication fault with PCA Motor Controller.",
+        "icon": ""
+      },
+      {
+        "value": "10080",
+        "text": "MP alarm",
+        "icon": ""
+      },
+      {
+        "value": "10081",
+        "text": "Motor protection alarm",
+        "icon": ""
+      },
+      {
+        "value": "10082",
+        "text": "Motor protection alarm",
+        "icon": ""
+      },
+      {
+        "value": "10083",
+        "text": "Sensor flt:BT1",
+        "icon": ""
+      },
+      {
+        "value": "10084",
+        "text": "Sensor fault: BT1 outdoor sensor",
+        "icon": ""
+      },
+      {
+        "value": "10085",
+        "text": "Sensor fault: BT1 outdoor sensor",
+        "icon": ""
+      },
+      {
+        "value": "10086",
+        "text": "Sensor flt:BT2",
+        "icon": ""
+      },
+      {
+        "value": "10087",
+        "text": "Sensor fault: BT2 flow line sensor 1",
+        "icon": ""
+      },
+      {
+        "value": "10088",
+        "text": "Sensor fault: BT2 flow line sensor 1",
+        "icon": ""
+      },
+      {
+        "value": "10089",
+        "text": "Sens flt:BT12",
+        "icon": ""
+      },
+      {
+        "value": "10090",
+        "text": "Sensor fault: BT12 condenser out",
+        "icon": ""
+      },
+      {
+        "value": "10091",
+        "text": "Sensor fault: BT12 condenser out",
+        "icon": ""
+      },
+      {
+        "value": "10092",
+        "text": "Sensor flt:BT3",
+        "icon": ""
+      },
+      {
+        "value": "10095",
+        "text": "Sensor flt:BT6",
+        "icon": ""
+      },
+      {
+        "value": "10154",
+        "text": "internal electrical addition",
+        "icon": ""
+      },
+      {
+        "value": "10183",
+        "text": "L exh.temp",
+        "icon": ""
+      },
+      {
+        "value": "10203",
+        "text": "Sensor flt:BT7",
+        "icon": ""
+      },
+      {
+        "value": "10187",
+        "text": "Defrosting",
+        "icon": ""
+      },
+      {
+        "value": "15117",
+        "text": "blocked",
+        "icon": ""
+      },
+      {
+        "value": "16528",
+        "text": "Inverter fault",
+        "icon": ""
+      },
+      {
+        "value": "10068",
+        "text": "Com.flt Base",
+        "icon": ""
+      },
+      {
+        "value": "10311",
+        "text": "Inverter I",
+        "icon": ""
+      },
+      {
+        "value": "10314",
+        "text": "Inverter II",
+        "icon": ""
+      },
+      {
+        "value": "10317",
+        "text": "Inverter III",
+        "icon": ""
+      },
+      {
+        "value": "10110",
+        "text": "Hot gas alarm",
+        "icon": ""
+      },
+      {
+        "value": "10116",
+        "text": "TB alarm",
+        "icon": ""
+      },
+      {
+        "value": "10122",
+        "text": "Hi cond. out",
+        "icon": ""
+      },
+      {
+        "value": "10276",
+        "text": "Err: BT63",
+        "icon": ""
+      },
+      {
+        "value": "10293",
+        "text": "serial no",
+        "icon": ""
+      },
+      {
+        "value": "10296",
+        "text": "software",
+        "icon": ""
+      },
+      {
+        "value": "11176",
+        "text": "comm.err hp",
+        "icon": ""
+      },
+      {
+        "value": "15117",
+        "text": "blocked",
+        "icon": ""
+      },
+      {
+        "value": "15629",
+        "text": "ext control",
+        "icon": ""
+      },
+      {
+        "value": "15701",
+        "text": "Preheat",
+        "icon": ""
+      },
+      {
+        "value": "15966",
+        "text": "Pres.alarm",
+        "icon": ""
+      },
+      {
+        "value": "15971",
+        "text": "incomp. inv.",
+        "icon": ""
+      },
+      {
+        "value": "16537",
+        "text": "Soft-start flt",
+        "icon": ""
+      },
+      {
+        "value": "16659",
+        "text": "Acc. block.",
+        "icon": ""
+      },
+      {
+        "value": "15468",
+        "text": "initiating",
+        "icon": ""
+      },
+      {
+        "value": "11165",
+        "text": "pool 2",
+        "icon": ""
+      },
+      {
+        "value": "11174",
+        "text": "com.err.slave",
+        "icon": ""
+      },
+      {
+        "value": "15985",
+        "text": "Com.flt GP12",
+        "icon": ""
+      },
+      {
+        "value": "16541",
+        "text": "not docked",
+        "icon": ""
+      }
+    ],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50221",
+    "parameterName": "fan speed exhaust air",
+    "parameterUnit": "%",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 50.0,
+    "strVal": "50%",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50225",
+    "parameterName": "Current temp\u00aderature system 1",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": -32768.0,
+    "strVal": "-32768\u00b0C",
+    "smartHomeCategories": [
+      "sh-indoorTempOverride"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50233",
+    "parameterName": "Set point value temp system 1, heat",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": -32768.0,
+    "strVal": "-32768\u00b0C",
+    "smartHomeCategories": [
+      "sh-indoorSpHeatOverride"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50241",
+    "parameterName": "Set point value temp system 1, cooling",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:17+00:00",
+    "value": 0.0,
+    "strVal": "0\u00b0C",
+    "smartHomeCategories": [
+      "sh-indoorSpCoolOverride"
+    ],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50249",
+    "parameterName": "Next periodic increase: 2025 - 12 - 15",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:18+00:00",
+    "value": 3.0,
+    "strVal": "3",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50325",
+    "parameterName": "Hot water temp.",
+    "parameterUnit": "\u00b0C",
+    "writable": false,
+    "timestamp": "2025-12-07T10:14:36+00:00",
+    "value": 49.0,
+    "strVal": "49\u00b0C",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "0.1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "50345",
+    "parameterName": "Hot water amount",
+    "parameterUnit": "min",
+    "writable": false,
+    "timestamp": "2025-12-07T09:49:46+00:00",
+    "value": 22.0,
+    "strVal": "22min",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  },
+  {
+    "category": "F730 CU 3x400V",
+    "parameterId": "65535",
+    "parameterName": "Text not found: id[], fw[nibe-e11], lang[en-US]",
+    "parameterUnit": "",
+    "writable": false,
+    "timestamp": "2025-12-05T17:54:16+00:00",
+    "value": 0.0,
+    "strVal": "0",
+    "smartHomeCategories": [],
+    "minValue": null,
+    "maxValue": null,
+    "stepValue": 1.0,
+    "enumValues": [],
+    "scaleValue": "1",
+    "zoneId": null
+  }
+]

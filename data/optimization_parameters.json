@@ -1,0 +1,688 @@
+{
+  "writable_parameters": [
+    {
+      "id": "40940",
+      "name": "current value",
+      "value": -210.0,
+      "unit": "DM",
+      "writable": true,
+      "minValue": -30000.0,
+      "maxValue": 30000.0,
+      "stepValue": 100.0
+    },
+    {
+      "id": "47007",
+      "name": "heating curve",
+      "value": 7.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 0.0,
+      "maxValue": 15.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47011",
+      "name": "Offset",
+      "value": -1.0,
+      "unit": "",
+      "writable": true,
+      "minValue": -10.0,
+      "maxValue": 10.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47015",
+      "name": "climate system",
+      "value": 20.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 200.0,
+      "maxValue": 700.0,
+      "stepValue": 10.0
+    },
+    {
+      "id": "47020",
+      "name": "flow line temp. at 30 °C",
+      "value": 15.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 5.0,
+      "maxValue": 80.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47021",
+      "name": "flow line temp. at 20 °C",
+      "value": 15.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 5.0,
+      "maxValue": 80.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47022",
+      "name": "flow line temp. at 10 °C",
+      "value": 26.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 5.0,
+      "maxValue": 80.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47023",
+      "name": "flow line temp. at 0 °C",
+      "value": 32.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 5.0,
+      "maxValue": 80.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47024",
+      "name": "flow line temp. at -10 °C",
+      "value": 35.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 5.0,
+      "maxValue": 80.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47025",
+      "name": "flow line temp. at -20 °C",
+      "value": 40.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 5.0,
+      "maxValue": 80.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47026",
+      "name": "flow line temp. at -30 °C",
+      "value": 45.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 5.0,
+      "maxValue": 80.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47027",
+      "name": "outdoor temp. point",
+      "value": 0.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": -40.0,
+      "maxValue": 30.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47028",
+      "name": "change in curve",
+      "value": 0.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": -10.0,
+      "maxValue": 10.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47032",
+      "name": "climate system",
+      "value": 0.0,
+      "unit": "",
+      "writable": true,
+      "minValue": -10.0,
+      "maxValue": 10.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47041",
+      "name": "Hot water demand",
+      "value": 1.0,
+      "unit": "",
+      "writable": true,
+      "minValue": null,
+      "maxValue": null,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47050",
+      "name": "activated",
+      "value": 1.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47051",
+      "name": "period",
+      "value": 14.0,
+      "unit": "days",
+      "writable": true,
+      "minValue": 1.0,
+      "maxValue": 90.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47137",
+      "name": "op. mode",
+      "value": 0.0,
+      "unit": "",
+      "writable": true,
+      "minValue": null,
+      "maxValue": null,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47206",
+      "name": "start compressor",
+      "value": -200.0,
+      "unit": "DM",
+      "writable": true,
+      "minValue": -1000.0,
+      "maxValue": -30.0,
+      "stepValue": 10.0
+    },
+    {
+      "id": "47209",
+      "name": "diff. between additional steps",
+      "value": 100.0,
+      "unit": "DM",
+      "writable": true,
+      "minValue": 10.0,
+      "maxValue": 1000.0,
+      "stepValue": 10.0
+    },
+    {
+      "id": "47212",
+      "name": "set max electrical add.",
+      "value": 650.0,
+      "unit": "",
+      "writable": true,
+      "minValue": null,
+      "maxValue": null,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47271",
+      "name": "speed 4",
+      "value": 4.0,
+      "unit": "hrs",
+      "writable": true,
+      "minValue": 1.0,
+      "maxValue": 99.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47272",
+      "name": "speed 3",
+      "value": 4.0,
+      "unit": "hrs",
+      "writable": true,
+      "minValue": 1.0,
+      "maxValue": 99.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47273",
+      "name": "speed 2",
+      "value": 4.0,
+      "unit": "hrs",
+      "writable": true,
+      "minValue": 1.0,
+      "maxValue": 99.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47274",
+      "name": "speed 1",
+      "value": 4.0,
+      "unit": "hrs",
+      "writable": true,
+      "minValue": 1.0,
+      "maxValue": 99.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47375",
+      "name": "stop heating",
+      "value": 13.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": -200.0,
+      "maxValue": 400.0,
+      "stepValue": 10.0
+    },
+    {
+      "id": "47376",
+      "name": "stop additional heat",
+      "value": 1.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": -250.0,
+      "maxValue": 400.0,
+      "stepValue": 10.0
+    },
+    {
+      "id": "47377",
+      "name": "filtering time",
+      "value": 8.0,
+      "unit": "hrs",
+      "writable": true,
+      "minValue": 0.0,
+      "maxValue": 48.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47394",
+      "name": "control room sensor syst",
+      "value": 0.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47537",
+      "name": "night cooling",
+      "value": 0.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47538",
+      "name": "start temp. exhaust air",
+      "value": 24.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 20.0,
+      "maxValue": 30.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "47539",
+      "name": "min diff. outdoor-exhaust",
+      "value": 7.0,
+      "unit": "°C",
+      "writable": true,
+      "minValue": 3.0,
+      "maxValue": 10.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "48072",
+      "name": "start diff additional heat",
+      "value": 1500.0,
+      "unit": "DM",
+      "writable": true,
+      "minValue": 100.0,
+      "maxValue": 2000.0,
+      "stepValue": 10.0
+    },
+    {
+      "id": "48132",
+      "name": "Hot water boost",
+      "value": 0.0,
+      "unit": "",
+      "writable": true,
+      "minValue": null,
+      "maxValue": null,
+      "stepValue": 1.0
+    },
+    {
+      "id": "48442",
+      "name": "activated",
+      "value": 1.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "48443",
+      "name": "affect room temperature",
+      "value": 1.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "48444",
+      "name": "- degree of effect",
+      "value": 8.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 1.0,
+      "maxValue": 10.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "48445",
+      "name": "affect hot water",
+      "value": 1.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 0.0,
+      "maxValue": 1.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "48566",
+      "name": "- degree of effect",
+      "value": 4.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 1.0,
+      "maxValue": 4.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "49909",
+      "name": "start time",
+      "value": 3.0,
+      "unit": "",
+      "writable": true,
+      "minValue": 0.0,
+      "maxValue": 23.0,
+      "stepValue": 1.0
+    },
+    {
+      "id": "50004",
+      "name": "Tempo­rary lux",
+      "value": 0.0,
+      "unit": "",
+      "writable": true,
+      "minValue": null,
+      "maxValue": null,
+      "stepValue": 1.0
+    },
+    {
+      "id": "50005",
+      "name": "In­creased venti­lation",
+      "value": 0.0,
+      "unit": "",
+      "writable": true,
+      "minValue": null,
+      "maxValue": null,
+      "stepValue": 1.0
+    }
+  ],
+  "key_monitoring": {
+    "temperatures": [
+      [
+        "40004",
+        "Outdoor temperature"
+      ],
+      [
+        "40067",
+        "Average outdoor temp"
+      ],
+      [
+        "40033",
+        "Room temperature"
+      ],
+      [
+        "40008",
+        "Supply line (BT2)"
+      ],
+      [
+        "40012",
+        "Return line (BT3)"
+      ],
+      [
+        "40013",
+        "Hot water top (BT7)"
+      ],
+      [
+        "40018",
+        "Discharge (BT14)"
+      ],
+      [
+        "40020",
+        "Evaporator (BT16)"
+      ],
+      [
+        "43009",
+        "Calculated supply climate system 1"
+      ]
+    ],
+    "compressor": [
+      {
+        "id": "43416",
+        "name": "Number of compressor starts",
+        "value": 6026.0,
+        "unit": "",
+        "writable": false,
+        "minValue": null,
+        "maxValue": null,
+        "stepValue": 1.0
+      }
+    ],
+    "degree_minutes": [
+      {
+        "id": "40941",
+        "name": "Degree minutes",
+        "value": -211.0,
+        "unit": "",
+        "writable": false,
+        "minValue": null,
+        "maxValue": null,
+        "stepValue": 1.0
+      }
+    ],
+    "operational_stats": [
+      {
+        "id": "43420",
+        "name": "Oper. time",
+        "value": 11953.0,
+        "unit": "h",
+        "writable": false,
+        "minValue": null,
+        "maxValue": null,
+        "stepValue": 1.0
+      },
+      {
+        "id": "43424",
+        "name": "Oper. time hot water",
+        "value": 2777.0,
+        "unit": "h",
+        "writable": false,
+        "minValue": null,
+        "maxValue": null,
+        "stepValue": 1.0
+      }
+    ]
+  },
+  "optimization_targets": {
+    "heating_curve": [
+      {
+        "id": "47007",
+        "name": "heating curve",
+        "value": 7.0,
+        "unit": "",
+        "writable": true,
+        "minValue": 0.0,
+        "maxValue": 15.0,
+        "stepValue": 1.0
+      },
+      {
+        "id": "47011",
+        "name": "Offset",
+        "value": -1.0,
+        "unit": "",
+        "writable": true,
+        "minValue": -10.0,
+        "maxValue": 10.0,
+        "stepValue": 1.0
+      },
+      {
+        "id": "47020",
+        "name": "flow line temp. at 30 °C",
+        "value": 15.0,
+        "unit": "°C",
+        "writable": true,
+        "minValue": 5.0,
+        "maxValue": 80.0,
+        "stepValue": 1.0
+      },
+      {
+        "id": "47021",
+        "name": "flow line temp. at 20 °C",
+        "value": 15.0,
+        "unit": "°C",
+        "writable": true,
+        "minValue": 5.0,
+        "maxValue": 80.0,
+        "stepValue": 1.0
+      },
+      {
+        "id": "47022",
+        "name": "flow line temp. at 10 °C",
+        "value": 26.0,
+        "unit": "°C",
+        "writable": true,
+        "minValue": 5.0,
+        "maxValue": 80.0,
+        "stepValue": 1.0
+      },
+      {
+        "id": "47023",
+        "name": "flow line temp. at 0 °C",
+        "value": 32.0,
+        "unit": "°C",
+        "writable": true,
+        "minValue": 5.0,
+        "maxValue": 80.0,
+        "stepValue": 1.0
+      },
+      {
+        "id": "47024",
+        "name": "flow line temp. at -10 °C",
+        "value": 35.0,
+        "unit": "°C",
+        "writable": true,
+        "minValue": 5.0,
+        "maxValue": 80.0,
+        "stepValue": 1.0
+      },
+      {
+        "id": "47025",
+        "name": "flow line temp. at -20 °C",
+        "value": 40.0,
+        "unit": "°C",
+        "writable": true,
+        "minValue": 5.0,
+        "maxValue": 80.0,
+        "stepValue": 1.0
+      },
+      {
+        "id": "47026",
+        "name": "flow line temp. at -30 °C",
+        "value": 45.0,
+        "unit": "°C",
+        "writable": true,
+        "minValue": 5.0,
+        "maxValue": 80.0,
+        "stepValue": 1.0
+      },
+      {
+        "id": "47028",
+        "name": "change in curve",
+        "value": 0.0,
+        "unit": "°C",
+        "writable": true,
+        "minValue": -10.0,
+        "maxValue": 10.0,
+        "stepValue": 1.0
+      }
+    ],
+    "degree_minutes": [
+      {
+        "id": "40940",
+        "name": "current value",
+        "value": -210.0,
+        "unit": "DM",
+        "writable": true,
+        "minValue": -30000.0,
+        "maxValue": 30000.0,
+        "stepValue": 100.0
+      },
+      {
+        "id": "47206",
+        "name": "start compressor",
+        "value": -200.0,
+        "unit": "DM",
+        "writable": true,
+        "minValue": -1000.0,
+        "maxValue": -30.0,
+        "stepValue": 10.0
+      },
+      {
+        "id": "47209",
+        "name": "diff. between additional steps",
+        "value": 100.0,
+        "unit": "DM",
+        "writable": true,
+        "minValue": 10.0,
+        "maxValue": 1000.0,
+        "stepValue": 10.0
+      },
+      {
+        "id": "48072",
+        "name": "start diff additional heat",
+        "value": 1500.0,
+        "unit": "DM",
+        "writable": true,
+        "minValue": 100.0,
+        "maxValue": 2000.0,
+        "stepValue": 10.0
+      }
+    ],
+    "hot_water": [
+      {
+        "id": "47041",
+        "name": "Hot water demand",
+        "value": 1.0,
+        "unit": "",
+        "writable": true,
+        "minValue": null,
+        "maxValue": null,
+        "stepValue": 1.0
+      },
+      {
+        "id": "48132",
+        "name": "Hot water boost",
+        "value": 0.0,
+        "unit": "",
+        "writable": true,
+        "minValue": null,
+        "maxValue": null,
+        "stepValue": 1.0
+      },
+      {
+        "id": "48445",
+        "name": "affect hot water",
+        "value": 1.0,
+        "unit": "",
+        "writable": true,
+        "minValue": 0.0,
+        "maxValue": 1.0,
+        "stepValue": 1.0
+      }
+    ]
+  }
+}

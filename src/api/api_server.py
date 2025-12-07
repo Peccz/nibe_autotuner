@@ -6,6 +6,9 @@ import os
 # Importera routers
 from api.routers import status
 from api.routers import ai_agent
+from api.routers import metrics
+from api.routers import user_settings
+from api.routers import ventilation
 
 # Konfigurera appen
 app = FastAPI(
@@ -27,8 +30,17 @@ app.add_middleware(
 # Status ligger på /api/status
 app.include_router(status.router, prefix="/api")
 
-# AI Agent endpoints låg under /api/ai-agent i din frontend
-app.include_router(ai_agent.router, prefix="/api/ai-agent")
+# AI Agent endpoints
+app.include_router(ai_agent.router, prefix="/api/ai-agent", tags=["AI Agent"])
+
+# Metrics endpoints (/api/metrics, /api/performance-score, etc)
+app.include_router(metrics.router, prefix="/api", tags=["Metrics"])
+
+# User settings endpoints
+app.include_router(user_settings.router, prefix="/api/settings", tags=["Settings"])
+
+# Ventilation endpoints
+app.include_router(ventilation.router, prefix="/api/ventilation", tags=["Ventilation"])
 
 @app.get("/")
 def root():

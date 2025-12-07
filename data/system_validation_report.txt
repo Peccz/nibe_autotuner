@@ -1,0 +1,81 @@
+================================================================================
+NIBE F730 SYSTEM VALIDATION REPORT
+================================================================================
+
+Generated: 2025-11-24 20:12:40
+Model: F730 CU 3x400V
+Serial: 06615522045017
+Status: Connected
+
+--- MANUFACTURER SPECIFICATIONS (Nibe F730) ---
+Compressor Output Range:     1.1 - 6.0 kW
+Exhaust Air Operating Range: -15.0°C to normal
+Compressor Block Threshold:  <6.0°C (electric backup engages)
+Exhaust Air Flow Range:      90 - 252 m³/h
+
+--- OPTIMAL OPERATING PARAMETERS ---
+Target COP:                  >= 3.0
+Target Degree Minutes:       -200 DM
+Degree Minutes Comfort Zone: -300 to -100 DM
+Target Delta T Range:        5.0 - 8.0°C
+Optimal Hot Water Temp:      45.0°C
+Max Efficient Hot Water:     55.0°C
+Heating Curve (Underfloor):  3 - 6
+Heating Curve (Radiators):   5 - 9
+
+--- SYSTEM PERFORMANCE (Last 24 hours) ---
+COP:                 3.11   Target: >= 3.0   [PASS ✅]
+Degree Minutes:      -212   Target: -300 to -100   [PASS ✅]
+Delta T:              3.1°C Target: 5.0-8.0°C   [WARNING ⚠️]
+Heating Curve:        7.0   Range: 5-9 (radiators)   [RADIATOR ✅]
+Curve Offset:        -1.0
+Outdoor Temp:         1.1°C
+Indoor Temp:         20.6°C
+Supply Temp:         49.1°C
+Return Temp:         46.0°C
+Compressor Freq:       80 Hz
+
+--- SYSTEM PERFORMANCE (Last 7 days) ---
+COP:                 3.80   Target: >= 3.0   [PASS ✅]
+Degree Minutes:      -212   Target: -300 to -100   [PASS ✅]
+Delta T:              3.0°C Target: 5.0-8.0°C   [WARNING ⚠️]
+Heating Curve:        7.0   Range: 5-9 (radiators)   [RADIATOR ✅]
+Curve Offset:        -1.0
+Outdoor Temp:        -1.7°C
+Indoor Temp:         20.6°C
+Supply Temp:         36.3°C
+Return Temp:         33.4°C
+Compressor Freq:       48 Hz
+
+--- SYSTEM PERFORMANCE (Last 30 days) ---
+COP:                 4.66   Target: >= 3.0   [PASS ✅]
+Degree Minutes:      -212   Target: -300 to -100   [PASS ✅]
+Delta T:              2.2°C Target: 5.0-8.0°C   [WARNING ⚠️]
+Heating Curve:        7.0   Range: 5-9 (radiators)   [RADIATOR ✅]
+Curve Offset:        -1.0
+Outdoor Temp:         4.5°C
+Indoor Temp:         20.9°C
+Supply Temp:         35.3°C
+Return Temp:         33.1°C
+Compressor Freq:       45 Hz
+
+================================================================================
+SUMMARY
+================================================================================
+
+Your Nibe F730 is performing well:
+  ✅ COP exceeds 3.0 target across all periods (3.11 - 4.66)
+  ✅ Degree Minutes -212 is PERFECT (target: -200)
+  ⚠️  Delta T 2.2-3.1°C could be improved (target: 5-8°C)
+
+Suggested Actions:
+  1. Monitor Delta T - may indicate flow rate or radiator sizing issue
+  2. Consider curve offset adjustment (-2.0) for improved efficiency
+  3. System is well optimized overall - excellent COP performance
+
+Reference Documents:
+  - docs/NIBE_F730_BASELINE.md - Manufacturer specifications
+  - docs/SCIENTIFIC_BASELINE.md - Academic research foundation
+  - GUI_GUIDE.md - Web interface user guide
+
+================================================================================

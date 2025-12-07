@@ -343,8 +343,13 @@ class SmartOptimizer:
         session = SessionLocal()
         try:
             device = session.query(Device).first()
-            min_temp = device.min_indoor_temp_user_setting if device else 20.5
-            target_max = device.target_indoor_temp_max if device else 22.0
+            base_min_temp = device.min_indoor_temp_user_setting if device else 20.5
+            base_target_max = device.target_indoor_temp_max if device else 22.0
+            # Apply comfort offset
+            comfort_offset = getattr(device, 'comfort_adjustment_offset', 0.0) if device else 0.0
+            
+            min_temp = base_min_temp + comfort_offset
+            target_max = base_target_max + comfort_offset
         finally:
             session.close()
 

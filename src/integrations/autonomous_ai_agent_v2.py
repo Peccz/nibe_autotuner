@@ -243,9 +243,12 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         try:
             device = session.query(Device).filter(Device.device_id == self.device_id).first()
             if device:
-                min_temp = device.min_indoor_temp_user_setting
-                target_min = device.target_indoor_temp_min
-                target_max = device.target_indoor_temp_max
+                # Apply Comfort Offset
+                offset = getattr(device, 'comfort_adjustment_offset', 0.0)
+                
+                min_temp = device.min_indoor_temp_user_setting + offset
+                target_min = device.target_indoor_temp_min + offset
+                target_max = device.target_indoor_temp_max + offset
             else:
                 # Fallback values if device not found
                 min_temp, target_min, target_max = 20.5, 20.5, 22.0
@@ -324,7 +327,8 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
             try:
                 device = session.query(Device).filter(Device.device_id == self.device_id).first()
                 if device:
-                    min_temp = device.min_indoor_temp_user_setting
+                    offset = getattr(device, 'comfort_adjustment_offset', 0.0)
+                    min_temp = device.min_indoor_temp_user_setting + offset
                 else:
                     min_temp = 20.5  # Fallback if device not found
                     logger.warning(f"Device {self.device_id} not found in DB, using fallback min_temp={min_temp}°C")

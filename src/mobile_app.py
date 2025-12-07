@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.analyzer import HeatPumpAnalyzer
-from data.models import ParameterChange, Device, Parameter, ABTestResult
+from data.models import ParameterChange, Device, Parameter, ABTestResult, PlannedTest
 from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 from integrations.ab_tester import ABTester
@@ -288,10 +288,10 @@ def handle_changes():
 
         else:
             # Get all changes with parameter info
-            changes = session.query(ParameterChange)\
-                .join(Parameter)\
-                .order_by(ParameterChange.timestamp.desc())\
-                .limit(100)\
+            changes = session.query(ParameterChange)
+                .join(Parameter)
+                .order_by(ParameterChange.timestamp.desc())
+                .limit(100)
                 .all()
 
             data = [{
@@ -336,11 +336,11 @@ def get_ab_tests():
     try:
         limit = request.args.get('limit', 20, type=int)
 
-        results = session.query(ABTestResult)\
-            .join(ParameterChange)\
-            .join(Parameter)\
-            .order_by(ABTestResult.created_at.desc())\
-            .limit(limit)\
+        results = session.query(ABTestResult)
+            .join(ParameterChange)
+            .join(Parameter)
+            .order_by(ABTestResult.created_at.desc())
+            .limit(limit)
             .all()
 
         data = []
@@ -383,8 +383,8 @@ def get_ab_test_detail(change_id):
     """Get detailed A/B test result for a specific change"""
     session = SessionLocal()
     try:
-        result = session.query(ABTestResult)\
-            .filter_by(parameter_change_id=change_id)\
+        result = session.query(ABTestResult)
+            .filter_by(parameter_change_id=change_id)
             .first()
 
         if not result:
@@ -610,7 +610,7 @@ def dismiss_suggestion():
         logger.error(f"Error dismissing suggestion: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# ========== GEMINI AI CHAT ==========
+# ========== GEMINI AI CHAT ========== 
 
 @app.route('/api/gemini/chat', methods=['POST'])
 def gemini_chat():
@@ -736,7 +736,7 @@ def gemini_analyze():
         logger.error(f"Gemini analyze error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# ========== QUICK ACTIONS ==========
+# ========== QUICK ACTIONS ========== 
 
 def get_device_id():
     """Helper to get device ID from database"""
@@ -943,7 +943,7 @@ def quick_action_optimize_comfort():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# ========== AUTO OPTIMIZER ==========
+# ========== AUTO OPTIMIZER ========== 
 
 @app.route('/api/auto-optimize/analyze', methods=['POST'])
 def auto_optimize_analyze():

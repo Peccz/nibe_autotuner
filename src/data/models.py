@@ -66,6 +66,9 @@ class Device(Base):
     target_indoor_temp_max = Column(Float, default=22.0, nullable=False)
     """Target indoor temperature maximum (°C). Default: 22.0°C"""
 
+    comfort_adjustment_offset = Column(Float, default=0.0)
+    """Global comfort offset (°C) added to min/target temperatures. Default: 0.0"""
+
     # Relationships
     system = relationship('System', back_populates='devices')
     readings = relationship('ParameterReading', back_populates='device')
@@ -283,6 +286,7 @@ class PlannedTest(Base):
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
     result_id = Column(Integer, ForeignKey('ab_test_results.id'))
+    instruction = Column(Text) # Instructions for manual tests
 
     # Relationships
     parameter = relationship('Parameter')
