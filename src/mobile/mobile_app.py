@@ -1,5 +1,3 @@
-from data.database import SessionLocal, init_db
-init_db()
 """
 Nibe Autotuner - Mobile PWA
 Lightweight Flask app optimized for mobile devices
@@ -20,8 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Define paths relative to this file (src/mobile_app.py)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEMPLATE_DIR = os.path.join(BASE_DIR, 'mobile', 'templates')
-STATIC_DIR = os.path.join(BASE_DIR, 'mobile', 'static')
+TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
+STATIC_DIR = os.path.join(BASE_DIR, 'static')
 
 from services.analyzer import HeatPumpAnalyzer
 from data.models import ParameterChange, Device, Parameter, ABTestResult, PlannedTest
@@ -200,7 +198,7 @@ def get_chart_data(chart_type):
         # Map chart types to parameter IDs
         param_map = {
             'outdoor': 40004,    # Outdoor temp
-            'indoor': 40033,     # Indoor temp
+            'indoor': 13,     # Indoor temp
             'supply': 40008,     # Supply temp
             'return': 40012,     # Return temp
             'compressor': 41778, # Current compressor frequency (Hz)
@@ -264,7 +262,7 @@ def handle_changes():
             data = request.json
 
             # Get device and parameter from database
-            device = session.query(Device).first()
+            device = session.query(Device).first() 
             if not device:
                 return jsonify({'success': False, 'error': 'No device found'}), 404
 
@@ -293,10 +291,10 @@ def handle_changes():
 
         else:
             # Get all changes with parameter info
-            changes = session.query(ParameterChange)
-                .join(Parameter)
-                .order_by(ParameterChange.timestamp.desc())
-                .limit(100)
+            changes = session.query(ParameterChange) \
+                .join(Parameter) \
+                .order_by(ParameterChange.timestamp.desc()) \
+                .limit(100) \
                 .all()
 
             data = [{
@@ -341,11 +339,11 @@ def get_ab_tests():
     try:
         limit = request.args.get('limit', 20, type=int)
 
-        results = session.query(ABTestResult)
-            .join(ParameterChange)
-            .join(Parameter)
-            .order_by(ABTestResult.created_at.desc())
-            .limit(limit)
+        results = session.query(ABTestResult) \
+            .join(ParameterChange) \
+            .join(Parameter) \
+            .order_by(ABTestResult.created_at.desc()) \
+            .limit(limit) \
             .all()
 
         data = []
@@ -388,8 +386,8 @@ def get_ab_test_detail(change_id):
     """Get detailed A/B test result for a specific change"""
     session = SessionLocal()
     try:
-        result = session.query(ABTestResult)
-            .filter_by(parameter_change_id=change_id)
+        result = session.query(ABTestResult) \
+            .filter_by(parameter_change_id=change_id) \
             .first()
 
         if not result:
@@ -1470,4 +1468,4 @@ def interactive_visualizations():
     return render_template('visualizations_interactive.html')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8502, debug=False)
+    app.run(host='0.0.0.0', port=5001, debug=False)

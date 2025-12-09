@@ -7,7 +7,7 @@ These schemas define the structure of data sent to and received from API endpoin
 
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 
 
 # ============================================================================
@@ -162,10 +162,27 @@ class ParameterChangeSchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class ParameterChangeRequest(BaseModel):
+    """Request to change a parameter value"""
+    parameter_id: str
+    value: float
+
 
 # ============================================================================
 # AI Decision Schemas
 # ============================================================================
+
+class AgentAIDecisionSchema(BaseModel):
+    """AI decision from agent before logging"""
+    action: str
+    parameter: Optional[str] = None
+    current_value: Optional[float] = None
+    suggested_value: Optional[float] = None
+    reasoning: str
+    confidence: float
+    expected_impact: str
+
+    model_config = ConfigDict(from_attributes=True)
 
 class AIDecisionSchema(BaseModel):
     """AI decision record"""
@@ -191,17 +208,21 @@ class AIDecisionSchema(BaseModel):
 # API Response Schemas
 # ============================================================================
 
+class APIResponse(BaseModel):
+    """Generic API response wrapper"""
+    success: bool = True
+    message: Optional[str] = None
+    data: Optional[Any] = None
+
 class SuccessResponse(BaseModel):
     """Generic success response"""
     success: bool = True
     message: Optional[str] = None
 
-
 class ErrorResponse(BaseModel):
     """Generic error response"""
     success: bool = False
     error: str
-
 
 class SettingsResponse(BaseModel):
     """Settings API response"""

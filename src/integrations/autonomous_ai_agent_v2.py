@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any, Tuple, List
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, GoogleAPIError
 from loguru import logger
+from services.safety_guard import SafetyGuard
 from pydantic import BaseModel, Field, ValidationError, ConfigDict
 
 # Reuse existing classes
@@ -16,7 +17,7 @@ from integrations.autonomous_ai_agent import AIDecision, AutonomousAIAgent
 from core.config import settings
 from data.models import AIDecisionLog, Parameter, ParameterChange, PlannedTest, ABTestResult
 from data.evaluation_model import AIEvaluation
-from services.price_service import ElectricityPriceService
+from services.price_service import price_service
 from services.hw_analyzer import HotWaterPatternAnalyzer
 from services.scientific_analyzer import ScientificTestAnalyzer
 
@@ -131,10 +132,14 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         self.analyzer = analyzer
         self.api_client = api_client
         self.weather_service = weather_service
+        # Initialize Safety Guard
+        from data.database import SessionLocal
+        self.db = SessionLocal()
+        self.safety_guard = SafetyGuard(self.db)
         self.device_id = device_id
 
         # Initialize Price Service (defaults to SE3 Stockholm)
-        self.price_service = ElectricityPriceService("SE3")
+        self.price_service = price_service
 
         # Initialize HW Usage Analyzer
         self.hw_analyzer = HotWaterPatternAnalyzer()
@@ -258,10 +263,18 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
 
         # 2. Build Optimized Context
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
+        # --- FIX: USE LATEST TEMP FOR AI CONTEXT ---
+        # Hämta senaste värdet istället för snittet, så AI agerar på nutid
+        real_time_indoor = self.analyzer.get_latest_value(self.analyzer.get_device(), self.analyzer.PARAM_INDOOR_TEMP)
+        if real_time_indoor is not None:
+            logger.info(f"Overriding avg indoor ({metrics.avg_indoor_temp}) with latest ({real_time_indoor}) for AI context")
+            metrics.avg_indoor_temp = real_time_indoor
+        # ---------------------------------------------
         context = self._build_optimized_context(metrics)
 
         # 3. Create Optimized Prompt with user settings and MODE restriction
-        prompt = self._create_optimized_prompt(context, min_temp, target_min, target_max, mode)
+        # Skicka metrics direkt för att slippa regex-parsing
+        prompt = self._create_optimized_prompt(context, min_temp, target_min, target_max, mode, metrics)
 
         # 3. Call AI with automatic fallback
         try:
@@ -594,8 +607,8 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
 
         # Fetch Price Data
         try:
-            p_info = self.price_service.get_current_price_info()
-            price_str = f"Price:{p_info.get('current_price_sek',0):.2f} SEK/kWh. Status:{'CHEAP' if p_info.get('is_cheap') else 'EXPENSIVE' if p_info.get('is_expensive') else 'NORMAL'}."
+            p_info = self.price_service.get_price_analysis()
+            price_str = f"Price: {p_info.get('current_price',0):.2f} SEK/kWh. Status: {p_info.get('price_level', 'UNKNOWN')}."
         except Exception as e:
             logger.warning(f"Failed to get prices: {e}")
             price_str = "Price: N/A"
@@ -644,80 +657,84 @@ Curve:{metrics.heating_curve}/Offset:{metrics.curve_offset}
 {history_str}
 """
 
-    def _create_optimized_prompt(self, context: str, min_temp: float, target_min: float, target_max: float, mode: str = "tactical") -> str:
+    def _create_optimized_prompt(self, context: str, min_temp: float, target_min: float, target_max: float, mode: str = "tactical", metrics=None) -> str:
         
+        # Hämta säkra värden från metrics om det finns, annars fallback
+        indoor_temp = 20.0
+        outdoor_temp = 0.0
+        current_offset = -3.0
+        
+        if metrics:
+            if metrics.avg_indoor_temp is not None: indoor_temp = metrics.avg_indoor_temp
+            if metrics.avg_outdoor_temp is not None: outdoor_temp = metrics.avg_outdoor_temp
+            if metrics.curve_offset is not None: current_offset = metrics.curve_offset
+
+        # Hämta pris från context-texten
+        import re
+        price_match = re.search(r"Price: ([\d\.]+)", context)
+        current_price = price_match.group(1) if price_match else "Unknown"
+
         # Define allowed parameters based on mode
         if mode == "strategic":
-            # Full control including slope and compressor limits
             allowed_params = "heating_curve(1-15), curve_offset(-10-10), start_compressor(-DM), hot_water_demand(0-2), increased_ventilation(0-4)"
-            mode_instruction = "MODE: STRATEGIC. You may adjust base Heating Curve (slope) if long-term trends require it."
+            mode_instruction = "MODE: STRATEGIC. You may adjust base Heating Curve (slope)."
         else:
-            # Tactical control only (Offset & HW)
             allowed_params = "curve_offset(-10-10), hot_water_demand(0-2), increased_ventilation(0-4)"
-            mode_instruction = "MODE: TACTICAL. Focus on curve_offset and hot_water only. Do NOT touch base heating_curve."
+            mode_instruction = "MODE: TACTICAL. Focus on curve_offset and hot_water only."
 
-        return f"""System: Nibe F730 HeatPump. Goal: Optimize COP, Comfort & COST.
-Context:
-{context}
+        prompt = f"""
+You are an expert autonomous control agent for a Nibe F730 Heat Pump.
+Your goal is to optimize indoor comfort and electricity cost.
 
-Output JSON only.
+SYSTEM CONTEXT:
+- **BASELINE CURVE OFFSET: -3** (This is the 'Normal' setting).
+- Higher values (e.g. -2, -1, 0) = MORE HEAT (Buffering/Comfort).
+- Lower values (e.g. -4, -5) = LESS HEAT (Saving/Coasting).
+- Current Curve Offset: {current_offset}
+
+SENSORS:
+- Indoor Temp: {indoor_temp:.1f}°C (Target: {target_min}-{target_max}°C)
+- Outdoor Temp: {outdoor_temp:.1f}°C
+- Electricity Price: {current_price}
+
+STRATEGY LOGIC (Evaluate in order):
+
+1. COMFORT PROTECTION (The Law):
+   - IF Indoor > {target_max}: REDUCE heating (Target -4 or -5).
+   - IF Indoor < {min_temp}: INCREASE heating (Target -1 or 0).
+
+2. PRICE TREND STRATEGY (If comfort is OK):
+   - **Scenario A: Price is DROPPING soon** (Cheap later):
+     ACTION: COASTING. Reduce heating NOW to save expensive energy. Wait for the cheap price.
+     Target: -4 or -5.
+   
+   - **Scenario B: Price is RISING soon** (Expensive later):
+     ACTION: PRE-HEATING. Increase heating NOW (using current cheaper price) to buffer heat.
+     Target: -1 or 0 (Only if Indoor < 22).
+
+   - **Scenario C: Stable Price**:
+     - If Expensive: Target -4 or -5.
+     - If Cheap: Target -3 (Baseline) or -2 (Slight buffer).
+
+3. STABILITY (Override):
+   - IF Indoor is PERFECT ({target_min} - {target_max}) AND Price is Unknown/Stable:
+     ACTION: HOLD or gentle move to Baseline (-3). Do NOT make drastic changes if comfort is good.
+
+4. EXECUTION:
+   - Determine target based on above.
+   - Max change: +/- 3 steps allowed (if needed).
+   - Explain reasoning clearly.
+
+Output JSON only. Use 'suggested_value' for the new target.
 Action: adjust|hold|investigate
 Params: {allowed_params}
 Rules: Indoor target {target_min:.1f}-{target_max:.1f}C (MINIMUM {min_temp:.1f}°C). Max 1 change. Min conf 0.7.
 {mode_instruction}
 
-IMPORTANT: DegMin is a START THRESHOLD (when compressor starts), NOT an indicator of overheating.
-- DegMin negative = compressor starts earlier
-- To check if heating too much: Compare Indoor temp vs target ({target_min:.1f}-{target_max:.1f}C)
-- ABSOLUTE MINIMUM: {min_temp:.1f}°C - never target below this (USER SETTING)
-- If Indoor > {target_max:.1f}C AND price expensive: Lower curve_offset
-- If Indoor < {min_temp:.1f}C: Never lower heating, regardless of price
-
-THERMAL LAG: House takes ~3h to respond to heating changes. BE PREDICTIVE!
-- If expensive prices coming in 2-4h: Act NOW (lower heating before price spike)
-- If cheap prices coming soon: Buffer heat NOW (raise before price drops)
-- If weather COOLING: Increase heat NOW (before temp drops)
-- If weather WARMING: Decrease heat NOW (before temp rises)
-- System response time ~3h, so prepare in advance
-
-STRATEGY (PREDICTIVE) - Based on empirical data for outdoor temp 3-5°C:
-
-OFFSET TARGET VALUES (outdoor 3-5°C):
-- BASELINE: -3 (normal operation, gives indoor {target_min:.1f}-{target_max:.1f}°C)
-- REDUCED: -5 (maximum reduction during expensive electricity, gives indoor {min_temp:.1f}-{target_min+0.5:.1f}°C)
-- BUFFERED: -1 (heat buffering before expensive period, gives indoor {target_min+0.5:.1f}-{target_max+1:.1f}°C)
-- NEVER go below -5 at current outdoor temps (3-5°C) - provides NO additional savings and risks going below {min_temp:.1f}°C minimum
-
-Max change per decision: ±2 steps only.
-
-1. FORECAST EXPENSIVE (in 2-4h) + Indoor >= {min_temp+0.5:.1f}C:
-   → Target offset -5 (move gradually from current, max -2 steps)
-   → Set HotWater=Small(0) if HW_Usage_Risk LOW
-   → ONLY if indoor temp provides buffer above {min_temp:.1f}°C minimum
-
-2. FORECAST CHEAP (in 2-4h) + Indoor <= {target_max-0.5:.1f}C:
-   → Target offset -1 (move gradually from current, max +2 steps)
-   → Set HotWater=Large(2) if HW_Usage_Risk HIGH
-
-3. CURRENTLY CHEAP + Indoor in range ({target_min:.1f}-{target_max:.1f}C):
-   → Target offset -3 (baseline, comfortable and efficient)
-
-4. WEATHER COOLING (>2°C drop forecast):
-   → Increase offset by +1 step (comfort > cost when temp dropping)
-
-5. WEATHER WARMING (>2°C rise forecast):
-   → Decrease offset by -1 step (save energy when temp rising)
-
-6. If current offset is below -5:
-   → INCREASE immediately toward -5 (current value is too extreme)
-
-7. LEARN FROM HISTORY: Review recent changes and their COP impact. Avoid repeating changes that decreased COP.
-
-8. If HW_Usage_Risk is HIGH: Ensure HotWater is at least Medium(1).
-
 Example:
-{{"action":"adjust","parameter":"hot_water_demand","current_value":1,"suggested_value":0,"reasoning":"Price is EXPENSIVE & HW Usage Risk is LOW. Saving energy.","confidence":0.9,"expected_impact":"Save energy"}}
+{{"action":"adjust","parameter":"curve_offset","suggested_value":-4.0,"reasoning":"Price dropping soon, coasting to save energy.","confidence":0.9}}
 """
+        return prompt
 
     def _parse_json_response_robust(self, text: str) -> AIDecisionModel:
         """

@@ -129,7 +129,7 @@ def analyze_parameters():
     key_temps = [
         ('40004', 'Outdoor temperature'),
         ('40067', 'Average outdoor temp'),
-        ('40033', 'Room temperature'),
+        ('13', 'Room temperature'),
         ('40008', 'Supply line (BT2)'),
         ('40012', 'Return line (BT3)'),
         ('40013', 'Hot water top (BT7)'),
@@ -183,7 +183,7 @@ def analyze_parameters():
     logger.info("4. **KEY MONITORING FOR OPTIMIZATION:**")
     logger.info("   - 40940/40941: Degree minutes (balance indicator)")
     logger.info("   - 41778: Compressor frequency (20-120 Hz)")
-    logger.info("   - 40033: Room temperature (comfort)")
+    logger.info("   - 13: Room temperature (comfort)")
     logger.info("   - 43084: Internal additional heat (minimize this!)\n")
 
     logger.info("5. **OPTIMIZATION STRATEGY:**")

@@ -295,7 +295,7 @@ class CSVImporter:
             'outdoor temperature': '40004',
             'supply temperature': '40008',
             'return temperature': '40012',
-            'indoor temperature': '40033',
+            'indoor temperature': '13',
             'compressor frequency': '41778',
             'degree minutes': '40940',
             'heating curve': '47007',

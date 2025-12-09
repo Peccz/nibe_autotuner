@@ -376,9 +376,9 @@ Now propose tests:"""
             return
 
         # 3. Check Indoor Safety
-        # Get current indoor temp (using PARAM_INDOOR_TEMP '40033')
+        # Get current indoor temp (using PARAM_INDOOR_TEMP '13')
         latest_indoor = self.analyzer.get_latest_value(
-            self.analyzer.get_device(), '40033'
+            self.analyzer.get_device(), '13'
         )
         if latest_indoor and latest_indoor < 20.5:
             logger.warning(f"Indoor temp {latest_indoor}°C is too low for testing. Pausing.")

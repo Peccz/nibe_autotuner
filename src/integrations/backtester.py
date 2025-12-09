@@ -175,13 +175,13 @@ class Backtester:
         # Map API IDs to DB IDs
         # We need to query the Parameter table to map '40004' to its DB ID
         param_map = {}
-        for pid in ['40004', '40033', '41778']: # Outdoor, Indoor, Compressor Frequency
+        for pid in ['40004', '13', '41778']: # Outdoor, Indoor, Compressor Frequency
             p = self.analyzer.get_parameter(pid)
             if p:
                 param_map[pid] = p.id
         
         outdoor = get_avg(param_map.get('40004'))
-        indoor = get_avg(param_map.get('40033'))
+        indoor = get_avg(param_map.get('13'))
         
         if outdoor is None or indoor is None:
             return None

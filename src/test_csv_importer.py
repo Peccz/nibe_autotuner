@@ -38,7 +38,7 @@ def create_sample_csv():
 
             # Indoor temperature (relatively stable)
             indoor_temp = 20.5 + ((hour % 24) - 12) * 0.1
-            f.write(f"{ts_str},40033,Indoor Temperature,{indoor_temp:.1f},°C\n")
+            f.write(f"{ts_str},13,Indoor Temperature,{indoor_temp:.1f},°C\n")
 
     logger.info(f"✅ Sample CSV created with {24 * 4} readings")
     return sample_file

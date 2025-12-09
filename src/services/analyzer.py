@@ -82,14 +82,14 @@ class HeatPumpAnalyzer:
     """Analyzes heat pump performance and generates optimization recommendations"""
 
     # Key parameter IDs for Nibe F730
-    PARAM_OUTDOOR_TEMP = '40004'
-    PARAM_SUPPLY_TEMP = '40008'
-    PARAM_RETURN_TEMP = '40012'
+    PARAM_OUTDOOR_TEMP = '1'
+    PARAM_SUPPLY_TEMP = '5'
+    PARAM_RETURN_TEMP = '2'
     PARAM_HOT_WATER_TEMP = '40013'  # Hot water top (BT7)
-    PARAM_INDOOR_TEMP = '40033'
+    PARAM_INDOOR_TEMP = '13'
     PARAM_COMPRESSOR_FREQ = '41778'
-    PARAM_HEATING_CURVE = '47007'
-    PARAM_CURVE_OFFSET = '47011'
+    PARAM_HEATING_CURVE = '26'
+    PARAM_CURVE_OFFSET = '30'
     PARAM_DM_HEATING_START = '47206'
     PARAM_DM_HEATING_STOP = '48072'
     PARAM_DM_CURRENT = '40940'  # Current degree minutes value
@@ -171,13 +171,8 @@ class HeatPumpAnalyzer:
             raise ValueError("No device found in database")
         return device
 
-    def get_parameter_id(self, param_id_str: str) -> int:
-        """Get internal parameter ID from parameter ID string"""
-        param = self.session.query(Parameter).filter_by(parameter_id=param_id_str).first()
-        if not param:
-            raise ValueError(f"Parameter {param_id_str} not found")
-        return param.id
-
+    def get_parameter_id(self, parameter_id):
+        return parameter_id
     def get_readings(
         self,
         device: Device,
@@ -347,7 +342,7 @@ class HeatPumpAnalyzer:
             delta_t_active=delta_t_active,
             delta_t_hot_water=delta_t_hot_water,
             avg_compressor_freq=avg_compressor or 0.0,
-            degree_minutes=degree_minutes or 0.0,
+            degree_minutes=degree_minutes or 0.0 or 0.0,
             heating_curve=heating_curve or 0.0,
             curve_offset=curve_offset or 0.0,
             estimated_cop=estimated_cop,

@@ -1,175 +1,128 @@
-"""
-Price Service for Nibe Autotuner
-Fetches 15-minute electricity prices (Spot Price) for Sweden.
-Priority:
-1. Tibber API (Requires TIBBER_API_TOKEN in .env) - Best for 15-min resolution
-2. Elprisetjustnu.se (Fallback) - Hourly only
-"""
 import requests
 import json
 from datetime import datetime, timedelta
+from typing import Optional, Dict, List, Any
 from loguru import logger
-from typing import List, Dict, Optional
-from core.config import settings
+import os
 
-class ElectricityPriceService:
-    def __init__(self, price_area: str = "SE3"):
-        self.price_area = price_area
-        self.tibber_token = settings.TIBBER_API_TOKEN
+class PriceService:
+    """
+    Hämtar aktuella elpriser (spotpris) från Elprisetjustnu.se (gratis, inget konto).
+    """
+
+    def __init__(self):
+        # Standardzon SE3 (Stockholm) om inget annat anges i .env
+        self.zone = os.getenv("ELECTRICITY_ZONE", "SE3")
+        self.api_base_url = "https://www.elprisetjustnu.se/api/v1/prices"
         
-    def get_current_price_info(self) -> Dict:
-        """Get analysis of current price situation"""
-        if self.tibber_token:
-            return self._get_tibber_prices()
-        else:
-            logger.warning("No TIBBER_API_TOKEN found. Falling back to hourly data.")
-            return self._get_hourly_fallback()
+        # Enkel cache för att slippa anropa API:t varje gång
+        self.cache: Dict[str, Any] = {}
+        self.cache_timestamp: Optional[datetime] = None
+        self.cache_date_str: Optional[str] = None
 
-    def _get_tibber_prices(self) -> Dict:
-        """Fetch 15-min prices from Tibber GraphQL"""
-        query = """
-        {
-          viewer {
-            homes {
-              currentSubscription {
-                priceInfo {
-                  current {
-                    total
-                    level
-                    startsAt
-                  }
-                  today {
-                    total
-                    startsAt
-                  }
-                  tomorrow {
-                    total
-                    startsAt
-                  }
-                }
-              }
-            }
-          }
-        }
+    def get_current_price(self) -> float:
+        """
+        Hämtar aktuellt timpris i SEK/kWh.
+        Inkluderar INTE överföringsavgifter eller skatt, bara spotpriset.
         """
         try:
-            resp = requests.post(
-                "https://api.tibber.com/v1-beta/gql",
-                headers={"Authorization": f"Bearer {self.tibber_token}"},
-                json={"query": query},
-                timeout=10
-            )
-            if resp.status_code != 200:
-                logger.error(f"Tibber API error: {resp.text}")
-                return self._get_hourly_fallback()
-
-            data = resp.json()
-
-            # Validate response structure
-            if not data.get('data', {}).get('viewer', {}).get('homes'):
-                logger.error("Tibber API: No homes found in response")
-                return self._get_hourly_fallback()
-
-            home = data['data']['viewer']['homes'][0]
-
-            if not home.get('currentSubscription'):
-                logger.error("Tibber API: No active subscription found. Please ensure your Tibber account has an active electricity subscription.")
-                return self._get_hourly_fallback()
-
-            price_info = home['currentSubscription']['priceInfo']
+            now = datetime.now()
+            prices = self._get_prices_for_date(now)
             
-            current_price = price_info['current']['total']
-            # Calculate stats from today's prices
-            all_prices = [p['total'] for p in price_info['today']]
-            if price_info['tomorrow']:
-                all_prices.extend([p['total'] for p in price_info['tomorrow']])
-                
-            avg_price = sum(all_prices) / len(all_prices) if all_prices else 0
+            if not prices:
+                logger.warning("Could not fetch prices, using fallback default.")
+                return 1.50 # Fallback: 1.50 kr om API är nere
+
+            # Hitta rätt timme
+            current_hour = now.hour
             
-            # Determine status based on simple heuristics relative to daily avg
-            is_expensive = current_price > avg_price * 1.2
-            is_cheap = current_price < avg_price * 0.8
-            
-            return {
-                "current_price_sek": round(current_price, 3),
-                "daily_avg_sek": round(avg_price, 3),
-                "is_cheap": is_cheap,
-                "is_expensive": is_expensive,
-                "source": "Tibber (15-min)"
-            }
-            
-        except Exception as e:
-            logger.error(f"Tibber fetch failed: {e}")
-            return self._get_hourly_fallback()
-
-    def _get_hourly_fallback(self) -> Dict:
-        """Fallback to elprisetjustnu.se (Hourly prices)"""
-        try:
-            # Map SE regions to elprisetjustnu.se regions
-            region_map = {
-                "SE1": "SE1",  # Luleå
-                "SE2": "SE2",  # Sundsvall
-                "SE3": "SE3",  # Stockholm
-                "SE4": "SE4",  # Malmö
-            }
-            region = region_map.get(self.price_area, "SE3")
-
-            # Get today's prices
-            today = datetime.now()
-            url = f"https://www.elprisetjustnu.se/api/v1/prices/{today.year}/{today.month:02d}-{today.day:02d}_{region}.json"
-
-            resp = requests.get(url, timeout=10)
-            if resp.status_code != 200:
-                logger.warning(f"Elprisetjustnu.se API returned {resp.status_code}")
-                return self._get_error_fallback()
-
-            prices = resp.json()
-
-            # Find current hour
-            current_hour = datetime.now().hour
-            current_price = None
-            all_prices = []
-
             for p in prices:
-                price_sek = p['SEK_per_kWh']
-                all_prices.append(price_sek)
-
-                # Check if this is the current hour
-                time_start = datetime.fromisoformat(p['time_start'].replace('Z', '+00:00'))
-                if time_start.hour == current_hour:
-                    current_price = price_sek
-
-            if current_price is None:
-                logger.warning("Could not find current hour in price data")
-                return self._get_error_fallback()
-
-            avg_price = sum(all_prices) / len(all_prices) if all_prices else 0
-
-            is_expensive = current_price > avg_price * 1.2
-            is_cheap = current_price < avg_price * 0.8
-
-            return {
-                "current_price_sek": round(current_price, 3),
-                "daily_avg_sek": round(avg_price, 3),
-                "is_cheap": is_cheap,
-                "is_expensive": is_expensive,
-                "source": "Elprisetjustnu.se (Hourly)"
-            }
+                # API format: "time_start": "2023-10-25T14:00:00+02:00"
+                # Vi litar på ordningen eller parsear datumet
+                try:
+                    start_time = datetime.fromisoformat(p['time_start'])
+                    if start_time.hour == current_hour:
+                        # Priset är i SEK per kWh
+                        return float(p['SEK_per_kWh'])
+                except Exception:
+                    continue
+            
+            logger.warning(f"Could not find price for hour {current_hour}, using fallback.")
+            return 1.50
 
         except Exception as e:
-            logger.error(f"Hourly fallback failed: {e}")
-            return self._get_error_fallback()
+            logger.error(f"Error fetching electricity price: {e}")
+            return 1.50 # Fallback
 
-    def _get_error_fallback(self) -> Dict:
-        """Return safe defaults when all price fetching fails"""
+    def get_price_analysis(self) -> Dict[str, Any]:
+        """
+        Ger en analys av prisläget:
+        - current_price: Nuvarande pris
+        - price_level: CHEAP, NORMAL, EXPENSIVE, VERY_EXPENSIVE
+        - average: Dygnsmedel
+        - is_cheap_soon: Om priset sjunker kommande timmar
+        """
+        current = self.get_current_price()
+        
+        # Hämta alla priser för idag för att räkna snitt
+        prices = self._get_prices_for_date(datetime.now())
+        if not prices:
+            return {
+                "current_price": current,
+                "price_level": "NORMAL", # Utgå från normalt om vi inte vet
+                "average": current,
+                "trend": "STABLE"
+            }
+
+        daily_values = [float(p['SEK_per_kWh']) for p in prices]
+        avg_price = sum(daily_values) / len(daily_values)
+        
+        # Bestäm nivå relativt till dygnsmedel
+        if current < avg_price * 0.8:
+            level = "CHEAP"
+        elif current > avg_price * 1.4:
+            level = "VERY_EXPENSIVE"
+        elif current > avg_price * 1.15:
+            level = "EXPENSIVE"
+        else:
+            level = "NORMAL"
+
         return {
-            "current_price_sek": 1.0,  # Reasonable default (~1 SEK/kWh)
-            "daily_avg_sek": 1.0,
-            "is_cheap": False,
-            "is_expensive": False,
-            "source": "Error/Default"
+            "current_price": round(current, 3),
+            "price_level": level,
+            "average": round(avg_price, 3),
+            "currency": "SEK"
         }
 
-if __name__ == "__main__":
-    svc = ElectricityPriceService()
-    print(json.dumps(svc.get_current_price_info(), indent=2))
+    def _get_prices_for_date(self, date_obj: datetime) -> List[Dict]:
+        """Hämtar priser för ett specifikt datum med caching"""
+        date_str = date_obj.strftime('%Y/%m-%d') # Format: 2023/10-25
+        
+        # Returnera cache om vi har den för idag och den är ny (max 1h gammal)
+        if (self.cache_date_str == date_str and 
+            self.cache and 
+            self.cache_timestamp and 
+            (datetime.now() - self.cache_timestamp).total_seconds() < 3600):
+            return self.cache
+
+        # Konstruera URL: https://www.elprisetjustnu.se/api/v1/prices/2023/10-25_SE3.json
+        url = f"{self.api_base_url}/{date_str}_{self.zone}.json"
+        
+        try:
+            logger.info(f"Fetching prices from {url}")
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Uppdatera cache
+            self.cache = data
+            self.cache_date_str = date_str
+            self.cache_timestamp = datetime.now()
+            
+            return data
+        except Exception as e:
+            logger.error(f"Failed to fetch prices from Elprisetjustnu: {e}")
+            return []
+
+# Singleton instance
+price_service = PriceService()

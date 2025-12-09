@@ -26,7 +26,7 @@ class ScientificTestAnalyzer:
         self.db_path = db_path
 
         # Parameter IDs for analysis
-        self.PARAM_ROOM_TEMP = '40033'  # BT50 Room temperature
+        self.PARAM_ROOM_TEMP = '13'  # BT50 Room temperature
         self.PARAM_COMPRESSOR_FREQ = '41778'  # Compressor frequency (Hz)
         self.PARAM_IMMERSION_HEATER_POWER = '43427'  # Electrical addition power (kW)
         self.PARAM_DEGREE_MINUTES = '43005'  # Degree minutes

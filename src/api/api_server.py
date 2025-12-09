@@ -9,12 +9,14 @@ from api.routers import ai_agent
 from api.routers import metrics
 from api.routers import user_settings
 from api.routers import ventilation
+from api.routers import parameters
+from api.routers import visualizations
 
 # Konfigurera appen
 app = FastAPI(
     title="Nibe Autotuner API",
     description="API för styrning och övervakning av Nibe värmepump",
-    version="2.0.0"
+    version="2.1.0"
 )
 
 # CORS-inställningar
@@ -26,28 +28,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Inkludera routers
-# Status ligger på /api/status
-app.include_router(status.router, prefix="/api")
+# --- Inkludera routers ---
 
-# AI Agent endpoints
+# System Status
+app.include_router(status.router, prefix="/api", tags=["Status"])
+
+# AI & Automation
 app.include_router(ai_agent.router, prefix="/api/ai-agent", tags=["AI Agent"])
 
-# Metrics endpoints (/api/metrics, /api/performance-score, etc)
+# Metrics & Performance
 app.include_router(metrics.router, prefix="/api", tags=["Metrics"])
 
-# User settings endpoints
+# User Settings
 app.include_router(user_settings.router, prefix="/api/settings", tags=["Settings"])
 
-# Ventilation endpoints
+# Ventilation Control
 app.include_router(ventilation.router, prefix="/api/ventilation", tags=["Ventilation"])
+
+# Parameters & History
+app.include_router(parameters.router, prefix="/api", tags=["Parameters"])
+
+# Visualizations & Plots
+app.include_router(visualizations.router, prefix="/api/visualizations", tags=["Visualizations"])
 
 @app.get("/")
 def root():
     return {
         "message": "Nibe Autotuner API is running",
         "docs_url": "/docs",
-        "version": "2.0.0"
+        "version": "2.1.0"
     }
 
 if __name__ == "__main__":
