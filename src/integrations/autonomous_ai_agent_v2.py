@@ -82,7 +82,7 @@ class ParameterConfig:
 
     # Maximum step size changes to prevent aggressive adjustments
     MAX_STEP_SIZES = {
-        'curve_offset': 2,      # Max ±2 steps - conservative to avoid extreme changes
+        'curve_offset': 3,      # Max ±3 steps - allows reaching baseline faster
         'heating_curve': 1,     # Max ±1 step
         'room_temp': 1,         # Max ±1°C
     }
@@ -318,11 +318,65 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
             traceback.print_exc()
             return AIDecision('hold', None, None, None, f"Error: {str(e)}", 0.0, "None")
 
+    def _get_current_parameter_value(self, parameter_name: str) -> Optional[float]:
+        """
+        Get current value of a parameter from database.
+        Used when AI decision has null current_value.
+
+        Args:
+            parameter_name: Logical parameter name (e.g., 'curve_offset')
+
+        Returns:
+            Current value or None if not found
+        """
+        if parameter_name not in ParameterConfig.PARAMETER_IDS:
+            return None
+
+        param_id = ParameterConfig.PARAMETER_IDS[parameter_name]
+        param = self.analyzer.get_parameter(param_id)
+
+        if not param:
+            return None
+
+        device = self.analyzer.get_device()
+        return self.analyzer.get_latest_value(device, param_id)
+
+    def _predict_indoor_temp_after_offset_change(
+        self,
+        current_offset: float,
+        new_offset: float,
+        current_indoor_temp: float
+    ) -> float:
+        """
+        Predict indoor temperature after offset change.
+
+        Empirical model: Each offset step ≈ 0.5°C change
+
+        Args:
+            current_offset: Current curve offset
+            new_offset: Proposed new offset
+            current_indoor_temp: Current indoor temperature
+
+        Returns:
+            Predicted indoor temperature
+        """
+        offset_change = new_offset - current_offset
+        temp_change = offset_change * 0.5  # Each step ≈ 0.5°C
+        predicted_temp = current_indoor_temp + temp_change
+
+        logger.info(f"Temperature prediction: {current_indoor_temp:.1f}°C + ({offset_change:.1f} steps × 0.5°C) = {predicted_temp:.1f}°C")
+
+        return predicted_temp
+
     def _is_decision_safe(self, decision: AIDecision) -> Tuple[bool, str]:
         """
         Deterministic safety checks that override the AI.
         Uses centralized ParameterConfig for all bounds and limits.
         Reads MIN_INDOOR_TEMP from database (device-specific user setting).
+
+        Enhanced with:
+        - Null value handling: fetches current value from DB if missing
+        - Predictive temperature check: forecasts indoor temp after offset changes
         """
         if decision.action != 'adjust':
             return True, ""
@@ -330,26 +384,26 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         if decision.suggested_value is None or decision.parameter is None:
             return False, "Missing required fields: parameter or suggested_value"
 
+        # Get user settings from database
+        from data.database import SessionLocal
+        from data.models import Device
+
+        session = SessionLocal()
+        try:
+            device = session.query(Device).filter(Device.device_id == self.device_id).first()
+            if device:
+                comfort_offset = getattr(device, 'comfort_adjustment_offset', 0.0)
+                min_temp = device.min_indoor_temp_user_setting + comfort_offset
+            else:
+                min_temp = 20.5
+                logger.warning(f"Device {self.device_id} not found in DB, using fallback min_temp={min_temp}°C")
+        finally:
+            session.close()
+
         # Rule 1: Minimum Indoor Temperature (Safety over Cost)
-        # Read from database - user-configurable per device
         if decision.parameter == 'room_temp':
-            from data.database import SessionLocal
-            from data.models import Device
-
-            session = SessionLocal()
-            try:
-                device = session.query(Device).filter(Device.device_id == self.device_id).first()
-                if device:
-                    offset = getattr(device, 'comfort_adjustment_offset', 0.0)
-                    min_temp = device.min_indoor_temp_user_setting + offset
-                else:
-                    min_temp = 20.5  # Fallback if device not found
-                    logger.warning(f"Device {self.device_id} not found in DB, using fallback min_temp={min_temp}°C")
-
-                if decision.suggested_value < min_temp:
-                    return False, f"Suggested room temp {decision.suggested_value}°C is below safety limit ({min_temp}°C)"
-            finally:
-                session.close()
+            if decision.suggested_value < min_temp:
+                return False, f"Suggested room temp {decision.suggested_value}°C is below safety limit ({min_temp}°C)"
 
         # Rule 2: Parameter Bounds
         if decision.parameter in ParameterConfig.BOUNDS:
@@ -358,13 +412,44 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
                 return False, f"Value {decision.suggested_value} for {decision.parameter} is out of bounds ({min_val}-{max_val})"
 
         # Rule 3: Step Size Limits (Prevent drastic changes)
-        if decision.parameter in ParameterConfig.MAX_STEP_SIZES and decision.current_value is not None:
-            max_step = ParameterConfig.MAX_STEP_SIZES[decision.parameter]
-            diff = abs(decision.suggested_value - decision.current_value)
-            if diff > max_step:
-                return False, f"Change of {diff} steps for {decision.parameter} is too aggressive (max {max_step})"
+        # Enhanced: Fetch current value from DB if null
+        current_value = decision.current_value
+        if current_value is None and decision.parameter in ParameterConfig.MAX_STEP_SIZES:
+            current_value = self._get_current_parameter_value(decision.parameter)
+            logger.info(f"Fetched current value from DB: {decision.parameter} = {current_value}")
 
-        # Rule 4: Curve Offset Empirical Limits (outdoor temp 3-5°C)
+        if decision.parameter in ParameterConfig.MAX_STEP_SIZES and current_value is not None:
+            max_step = ParameterConfig.MAX_STEP_SIZES[decision.parameter]
+            diff = abs(decision.suggested_value - current_value)
+            if diff > max_step:
+                return False, f"Change of {diff:.1f} steps for {decision.parameter} exceeds max ({max_step})"
+
+        # Rule 4: Predictive Temperature Check for Offset Changes
+        # Ensures offset changes won't drop indoor temp below minimum
+        if decision.parameter == 'curve_offset':
+            # Get current indoor temperature
+            device = self.analyzer.get_device()
+            current_indoor = self.analyzer.get_latest_value(device, self.analyzer.PARAM_INDOOR_TEMP)
+
+            if current_indoor is not None and current_value is not None:
+                predicted_indoor = self._predict_indoor_temp_after_offset_change(
+                    current_value,
+                    decision.suggested_value,
+                    current_indoor
+                )
+
+                # Safety margin: require 0.3°C buffer above minimum
+                safety_margin = 0.3
+                if predicted_indoor < (min_temp + safety_margin):
+                    return False, (
+                        f"PREDICTIVE SAFETY BLOCK: Offset change would drop indoor temp to "
+                        f"{predicted_indoor:.1f}°C (below {min_temp + safety_margin:.1f}°C safe minimum). "
+                        f"Current: {current_indoor:.1f}°C, Offset: {current_value:.1f} → {decision.suggested_value:.1f}"
+                    )
+
+                logger.info(f"✓ Predictive check passed: {predicted_indoor:.1f}°C > {min_temp + safety_margin:.1f}°C")
+
+        # Rule 5: Curve Offset Empirical Limits (outdoor temp 3-5°C)
         if decision.parameter == 'curve_offset':
             if decision.suggested_value < ParameterConfig.OFFSET_REDUCED:
                 return False, f"Offset {decision.suggested_value} is below empirical minimum ({ParameterConfig.OFFSET_REDUCED}) for current outdoor temps. No additional savings, risks discomfort."
