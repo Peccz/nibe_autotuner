@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <h2>🏠 House DNA (Inlärning)</h2>
+    <p class="text-muted">Här ser du hur systemet lär sig husets egenskaper över tid.</p>
+
+    <!-- Thermal Profile -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card bg-dark text-white">
+                <div class="card-header">
+                    Termisk Profil
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="alert alert-info">
+                                <h5>Kylning vid < 0°C</h5>
+                                <h3 id="cooling-cold">...</h3>
+                                <small>°C per timme</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="alert alert-info">
+                                <h5>Kylning vid 0-10°C</h5>
+                                <h3 id="cooling-mild">...</h3>
+                                <small>°C per timme</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="alert alert-info">
+                                <h5>Kylning vid > 10°C</h5>
+                                <h3 id="cooling-warm">...</h3>
+                                <small>°C per timme</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hot Water Usage Heatmap -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card bg-dark text-white">
+                <div class="card-header">
+                    Varmvattenmönster
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-bordered text-center" id="hw-heatmap">
+                            <thead>
+                                <tr>
+                                    <th>Timme</th>
+                                    <th>Mån</th>
+                                    <th>Tis</th>
+                                    <th>Ons</th>
+                                    <th>Tor</th>
+                                    <th>Fre</th>
+                                    <th>Lör</th>
+                                    <th>Sön</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- JS fills this -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Events Table -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card bg-dark text-white">
+                <div class="card-header">
+                    Senaste Inlärningshändelser
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped" id="events-table">
+                            <thead>
+                                <tr>
+                                    <th>Tid</th>
+                                    <th>Händelse</th>
+                                    <th>Ute (°C)</th>
+                                    <th>Start (°C)</th>
+                                    <th>Slut (4h)</th>
+                                    <th>Hastighet</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- JS fills this -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadLearningData() {
+    try {
+        const response = await fetch('/api/learning/thermal-profile');
+        const result = await response.json();
+        
+        if (result.success) {
+            // Update Profile
+            const p = result.profile;
+            document.getElementById('cooling-cold').innerText = p.cooling_rate_cold;
+            document.getElementById('cooling-mild').innerText = p.cooling_rate_mild;
+            document.getElementById('cooling-warm').innerText = p.cooling_rate_warm;
+            
+            // Update Table
+            const tbody = document.querySelector('#events-table tbody');
+            tbody.innerHTML = '';
+            
+            result.events.forEach(e => {
+                const row = `<tr>
+                    <td>${new Date(e.timestamp).toLocaleString()}</td>
+                    <td>${e.action}</td>
+                    <td>${e.outdoor_temp ? e.outdoor_temp.toFixed(1) : '-'}</td>
+                    <td>${e.indoor_start ? e.indoor_start.toFixed(1) : '-'}</td>
+                    <td>${e.indoor_end ? e.indoor_end.toFixed(1) : '-'}</td>
+                    <td>${e.thermal_rate ? e.thermal_rate.toFixed(3) : 'Pending'}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+    } catch (error) {
+        console.error('Error loading learning data:', error);
+    }
+}
+
+async function loadHotWaterPatterns() {
+    try {
+        const response = await fetch('/api/learning/hot-water-patterns');
+        const result = await response.json();
+
+        if (result.success) {
+            const tbody = document.querySelector('#hw-heatmap tbody');
+            tbody.innerHTML = '';
+
+            for (let hour = 0; hour < 24; hour++) {
+                let row = `<tr><td>${hour}:00</td>`;
+                for (let weekday = 0; weekday < 7; weekday++) {
+                    const prob = result.matrix[weekday][hour];
+                    let bgColor = '';
+                    if (prob > 0.6) {
+                        bgColor = 'bg-danger'; // High usage
+                    } else if (prob > 0.3) {
+                        bgColor = 'bg-warning'; // Medium usage
+                    } else if (prob > 0.0) {
+                        bgColor = 'bg-primary'; // Low usage
+                    } else {
+                        bgColor = 'bg-secondary'; // No usage
+                    }
+                    row += `<td class="${bgColor}">${(prob * 100).toFixed(0)}%</td>`;
+                }
+                row += '</tr>';
+                tbody.innerHTML += row;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading hot water patterns:', error);
+    }
+}
+
+// Load on start
+loadLearningData();
+loadHotWaterPatterns();
+</script>
+{% endblock %}

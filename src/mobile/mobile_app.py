@@ -23,6 +23,7 @@ STATIC_DIR = os.path.join(BASE_DIR, 'static')
 
 from services.analyzer import HeatPumpAnalyzer
 from data.models import ParameterChange, Device, Parameter, ABTestResult, PlannedTest
+from data.models import LearningEvent
 from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 from integrations.ab_tester import ABTester
@@ -30,6 +31,7 @@ from services.optimizer import SmartOptimizer
 from integrations.api_client import MyUplinkClient
 from integrations.auth import MyUplinkAuth
 from services.auto_optimizer import AutoOptimizer
+from services.learning_service import LearningService
 from core.config import settings
 
 app = Flask(__name__,
@@ -44,6 +46,7 @@ engine = analyzer.engine
 SessionLocal = sessionmaker(bind=engine)
 ab_tester = ABTester(analyzer)
 optimizer = SmartOptimizer(analyzer)
+learning_service = LearningService(SessionLocal(), analyzer)
 
 # Initialize myUplink API client
 auth = MyUplinkAuth()
@@ -1326,6 +1329,70 @@ def get_learning_stats():
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         session.close()
+
+
+@app.route('/learning')
+def learning_page():
+    '''Learning DNA page'''
+    return render_template('learning.html')
+
+@app.route('/api/learning/thermal-profile')
+def get_thermal_profile():
+    '''Get learned thermal inertia profile'''
+    try:
+        profile = learning_service.analyze_thermal_inertia()
+        
+        # Get recent events too
+        session = SessionLocal()
+        events = session.query(LearningEvent).order_by(LearningEvent.timestamp.desc()).limit(20).all()
+        
+        events_data = [{
+            'timestamp': e.timestamp.isoformat(),
+            'action': e.action,
+            'outdoor_temp': e.outdoor_temp_start,
+            'indoor_start': e.indoor_temp_start,
+            'indoor_end': e.indoor_temp_4h,
+            'thermal_rate': e.thermal_rate
+        } for e in events]
+        
+        session.close()
+        
+        return jsonify({
+            'success': True, 
+            'profile': profile,
+            'events': events_data
+        })
+    except Exception as e:
+
+@app.route('/api/learning/hot-water-patterns')
+def get_hw_patterns():
+    """Get learned hot water usage patterns"""
+    try:
+        # Ensure analyzer is trained first
+        hw_analyzer.detect_new_usage_events() # Update DB with new events
+        hw_analyzer.build_probability_map() # Build map from DB events
+        
+        # Build probability matrix (7 days x 24 hours)
+        matrix = []
+        for wd in range(7):
+            day_row = []
+            for hr in range(24):
+                # Use a specific time to query probability map
+                test_time = datetime(2000, 1, 3, hr, 0, 0) # Mon=0, so Jan 3rd 2000 was a Mon
+                test_time = test_time.replace(day=test_time.day + wd) # Adjust day of week
+                prob = hw_analyzer.get_usage_probability(test_time)
+                day_row.append(prob)
+            matrix.append(day_row)
+            
+        return jsonify({
+            'success': True, 
+            'matrix': matrix,
+            'days': ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'] # For frontend display
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/settings')
 def settings_page():
