@@ -320,6 +320,54 @@ class AIDecisionLog(Base):
         return f"<AIDecision(id={self.id}, action={self.action}, applied={self.applied})>"
 
 
+
+class LearningEvent(Base):
+    """
+    Tracks action-reaction events to learn house thermal properties.
+    Example: Action "Offset -3" -> Result "Temp dropped 0.5C in 4h"
+    """
+    __tablename__ = 'learning_events'
+
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    parameter_id = Column(String(50), index=True) # e.g. '47011'
+    action = Column(String(50))                   # e.g. 'adjust_offset'
+    
+    # State before action
+    old_value = Column(Float)
+    new_value = Column(Float)
+    outdoor_temp_start = Column(Float)
+    indoor_temp_start = Column(Float)
+    target_temp_start = Column(Float, nullable=True)
+    
+    # Results (filled in later by LearningService)
+    indoor_temp_1h = Column(Float, nullable=True)
+    indoor_temp_4h = Column(Float, nullable=True)
+    thermal_rate = Column(Float, nullable=True)   # Degrees C per hour change (negative = cooling)
+    
+    def __repr__(self):
+        return f"<LearningEvent(id={self.id}, action={self.action}, rate={self.thermal_rate})>"
+
+
+class HotWaterUsage(Base):
+    '''
+    Log of detected hot water usage events (showers, baths, etc.)
+    '''
+    __tablename__ = 'hot_water_usage'
+
+    id = Column(Integer, primary_key=True)
+    start_time = Column(DateTime, nullable=False, index=True)
+    end_time = Column(DateTime)
+    duration_minutes = Column(Integer)
+    start_temp = Column(Float) # BT6/40013 value at start
+    end_temp = Column(Float)   # BT6/40013 value at lowest point
+    temp_drop = Column(Float)  # Total drop
+    weekday = Column(Integer)  # 0=Monday, 6=Sunday
+    hour = Column(Integer)     # 0-23
+    
+    def __repr__(self):
+        return f"<HWUsage({self.start_time}, drop={self.temp_drop})>"
+
 if __name__ == '__main__':
     # Test database models
     from loguru import logger

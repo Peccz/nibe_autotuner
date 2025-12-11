@@ -171,6 +171,11 @@ class HeatPumpAnalyzer:
             raise ValueError("No device found in database")
         return device
 
+
+    def get_parameter(self, parameter_id: str):
+        """Get parameter by API ID string"""
+        from data.models import Parameter
+        return self.session.query(Parameter).filter_by(parameter_id=parameter_id).first()
     def get_parameter_id(self, parameter_id):
         return parameter_id
     def get_readings(

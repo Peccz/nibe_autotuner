@@ -1,5 +1,6 @@
 import requests
 import json
+import threading
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 from loguru import logger
@@ -14,11 +15,14 @@ class PriceService:
         # Standardzon SE3 (Stockholm) om inget annat anges i .env
         self.zone = os.getenv("ELECTRICITY_ZONE", "SE3")
         self.api_base_url = "https://www.elprisetjustnu.se/api/v1/prices"
-        
+
         # Enkel cache för att slippa anropa API:t varje gång
         self.cache: Dict[str, Any] = {}
         self.cache_timestamp: Optional[datetime] = None
         self.cache_date_str: Optional[str] = None
+
+        # Thread-safety: Lock för cache-access
+        self._cache_lock = threading.Lock()
 
     def get_current_price(self) -> float:
         """
@@ -95,30 +99,33 @@ class PriceService:
         }
 
     def _get_prices_for_date(self, date_obj: datetime) -> List[Dict]:
-        """Hämtar priser för ett specifikt datum med caching"""
+        """Hämtar priser för ett specifikt datum med thread-safe caching"""
         date_str = date_obj.strftime('%Y/%m-%d') # Format: 2023/10-25
-        
-        # Returnera cache om vi har den för idag och den är ny (max 1h gammal)
-        if (self.cache_date_str == date_str and 
-            self.cache and 
-            self.cache_timestamp and 
-            (datetime.now() - self.cache_timestamp).total_seconds() < 3600):
-            return self.cache
 
+        # Check cache with lock (fast path)
+        with self._cache_lock:
+            if (self.cache_date_str == date_str and
+                self.cache and
+                self.cache_timestamp and
+                (datetime.now() - self.cache_timestamp).total_seconds() < 3600):
+                return self.cache.copy()  # Return copy to avoid mutation issues
+
+        # Cache miss - fetch from API (outside lock to avoid blocking other threads)
         # Konstruera URL: https://www.elprisetjustnu.se/api/v1/prices/2023/10-25_SE3.json
         url = f"{self.api_base_url}/{date_str}_{self.zone}.json"
-        
+
         try:
             logger.info(f"Fetching prices from {url}")
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             data = response.json()
-            
-            # Uppdatera cache
-            self.cache = data
-            self.cache_date_str = date_str
-            self.cache_timestamp = datetime.now()
-            
+
+            # Uppdatera cache med lock
+            with self._cache_lock:
+                self.cache = data
+                self.cache_date_str = date_str
+                self.cache_timestamp = datetime.now()
+
             return data
         except Exception as e:
             logger.error(f"Failed to fetch prices from Elprisetjustnu: {e}")

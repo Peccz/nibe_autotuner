@@ -1,120 +1,161 @@
 """
-Hot Water Usage Pattern Analyzer
-Detects usage patterns based on rapid temperature drops in the water heater.
+HotWaterUsage Pattern Analyzer (V2)
+Detects, logs, and predicts hot water usage.
 """
-import sqlite3
 from datetime import datetime, timedelta
-import pandas as pd
-import numpy as np
+from typing import Dict, List, Optional
+from sqlalchemy import func
 from loguru import logger
-from typing import Dict, Tuple
+import pandas as pd
+
+from data.database import SessionLocal
+from data.models import ParameterReading, Parameter, HotWaterUsage
 
 class HotWaterPatternAnalyzer:
-    def __init__(self, db_path='data/nibe_autotuner.db'):
-        self.db_path = db_path
-        # Parameter 40013 is "Hot Water Top" (BT7) - best indicator of usage
-        self.param_id_top = '40013' 
-        self.usage_map = {} # (weekday, hour) -> probability
+    def __init__(self):
+        self.param_id_top = '40013' # BT7
+        self.usage_map = {}
+        
+    def train_on_history(self, days_back=7):
+        """Legacy alias for detect_new_usage_events + build_map"""
+        self.detect_new_usage_events(days_back)
+        self.build_probability_map()
 
-    def train_on_history(self, days_back=30):
-        """
-        Analyze historical data to learn usage patterns.
-        Looks for drops > 2°C in short timeframes.
-        """
+    def detect_new_usage_events(self, days_back=7):
+        """Scan recent raw data for new usage events and save to DB."""
+        session = SessionLocal()
         try:
-            conn = sqlite3.connect(self.db_path)
-            
-            # Get parameter internal ID
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM parameters WHERE parameter_id = ?", (self.param_id_top,))
-            res = cursor.fetchone()
-            if not res:
-                logger.warning(f"Parameter {self.param_id_top} not found in DB")
-                return
-            
-            p_id = res[0]
-            start_date = datetime.now() - timedelta(days=days_back)
-            
-            query = """
-            SELECT timestamp, value 
-            FROM parameter_readings 
-            WHERE parameter_id = ? AND timestamp > ?
-            ORDER BY timestamp ASC
-            """
-            
-            df = pd.read_sql_query(query, conn, params=(p_id, start_date))
-            conn.close()
-            
-            if df.empty:
-                logger.warning("No hot water data found")
+            # Get Parameter ID
+            param = session.query(Parameter).filter_by(parameter_id=self.param_id_top).first()
+            if not param:
+                # Try finding it by raw query if model filter fails (sometimes ID vs param_id confusion)
                 return
 
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df['value'] = pd.to_numeric(df['value'])
+            # Determine where to start scanning
+            # Find the latest event we already logged
+            last_event = session.query(HotWaterUsage).order_by(HotWaterUsage.end_time.desc()).first()
             
-            # Calculate rate of change (diff per ~5 min step)
-            df['diff'] = df['value'].diff()
+            if last_event and last_event.end_time:
+                # Start a bit after last event
+                start_scan = last_event.end_time
+            else:
+                # No events logged yet, scan back X days
+                start_scan = datetime.utcnow() - timedelta(days=days_back)
+
+            # Fetch raw readings
+            readings = session.query(ParameterReading).filter(
+                ParameterReading.parameter_id == param.id,
+                ParameterReading.timestamp > start_scan
+            ).order_by(ParameterReading.timestamp).all()
+
+            if not readings:
+                return
+
+            # Analyze for drops
+            # Logic: If temp drops > 3 degrees within 15 mins -> Event Start
+            # Event End: When temp starts rising or stabilizes
             
-            # Define "Usage Event": Temp drops more than 1.5 degrees in one reading (5 min)
-            # Or cumulative drop could be better, but let's start simple.
-            # A shower usually drops temp by 5-10 degrees over 10-15 mins.
-            # So a drop of < -0.5 per 5 min step is significant if sustained.
-            # Let's look for rapid drops < -1.0.
-            usage_events = df[df['diff'] < -1.0].copy()
+            current_event = None
             
-            usage_events['hour'] = usage_events['timestamp'].dt.hour
-            usage_events['weekday'] = usage_events['timestamp'].dt.weekday # 0=Mon, 6=Sun
-            
-            # Build probability map
-            # Count events per (weekday, hour)
-            counts = usage_events.groupby(['weekday', 'hour']).size()
-            
-            # Normalize (approximate probability)
-            # Max usage seen in a slot becomes "100% likely" relative to this household's habits
-            max_events = counts.max() if not counts.empty else 1
-            
-            self.usage_map = {}
-            for (wd, hr), count in counts.items():
-                prob = min(1.0, count / max(1, (days_back / 7))) # Events per specific weekday over period
-                # Or simpler: relative score
-                score = count / max_events
-                self.usage_map[(wd, hr)] = round(score, 2)
+            for i in range(1, len(readings)):
+                curr = readings[i]
+                prev = readings[i-1]
                 
-            logger.info(f"Analyzed {len(df)} readings. Found {len(usage_events)} usage events.")
+                # Check time continuity (ignore gaps > 15 min in data)
+                if (curr.timestamp - prev.timestamp).total_seconds() > 900:
+                    if current_event: # Close event if gap
+                        self._check_and_save(session, current_event, prev)
+                        current_event = None
+                    continue
+
+                diff = curr.value - prev.value
+                
+                # Detect Drop (Start or Continue)
+                # Drop faster than 0.5C per reading (approx 5 min)
+                if diff < -0.2: # Sensitive threshold for start
+                    if not current_event:
+                        # New event potential
+                        current_event = {
+                            'start_time': prev.timestamp,
+                            'start_temp': prev.value,
+                            'readings': [prev, curr]
+                        }
+                    else:
+                        current_event['readings'].append(curr)
+                else:
+                    # Stable or Rising
+                    if current_event:
+                        # Event ended
+                        self._check_and_save(session, current_event, prev)
+                        current_event = None # Reset
+
+            # Commit any changes
+            session.commit()
             
         except Exception as e:
-            logger.error(f"Error analyzing HW patterns: {e}")
+            logger.error(f"Error detecting HW events: {e}")
+        finally:
+            session.close()
+
+    def _check_and_save(self, session, event_data, end_reading):
+        """Validate and save event"""
+        last_reading = event_data['readings'][-1]
+        total_drop = event_data['start_temp'] - last_reading.value
+        
+        # Only count if drop > 3C (filtering noise)
+        if total_drop >= 3.0:
+            duration = (last_reading.timestamp - event_data['start_time']).total_seconds() / 60
+            
+            usage = HotWaterUsage(
+                start_time=event_data['start_time'],
+                end_time=last_reading.timestamp,
+                duration_minutes=int(duration),
+                start_temp=event_data['start_temp'],
+                end_temp=last_reading.value,
+                temp_drop=total_drop,
+                weekday=event_data['start_time'].weekday(),
+                hour=event_data['start_time'].hour
+            )
+            session.add(usage)
+            logger.info(f"Detected HW Event: -{total_drop:.1f}C over {int(duration)}m at {event_data['start_time']}")
+
+    def build_probability_map(self):
+        """Builds usage_map from DB events."""
+        session = SessionLocal()
+        try:
+            # Count events per weekday/hour
+            # We want: P(Usage | Weekday, Hour)
+            
+            # First, find range of data available
+            first = session.query(func.min(HotWaterUsage.start_time)).scalar()
+            if not first:
+                self.usage_map = {}
+                return
+            
+            # Number of weeks since first data point
+            weeks = max(1.0, (datetime.utcnow() - first).days / 7.0)
+            
+            # Query counts
+            results = session.query(
+                HotWaterUsage.weekday, 
+                HotWaterUsage.hour, 
+                func.count(HotWaterUsage.id)
+            ).group_by(HotWaterUsage.weekday, HotWaterUsage.hour).all()
+            
+            self.usage_map = {}
+            for wd, hr, count in results:
+                # Probability is roughly occurrences / num_weeks
+                # Cap at 1.0. If it happens > once a week on average, it's very likely.
+                prob = min(1.0, count / weeks)
+                self.usage_map[(wd, hr)] = round(prob, 2)
+                
+        finally:
+            session.close()
 
     def get_usage_probability(self, timestamp: datetime) -> float:
-        """Get probability (0.0-1.0) of hot water usage for a specific time"""
         if not self.usage_map:
-            self.train_on_history()
+            self.build_probability_map()
             
         wd = timestamp.weekday()
         hr = timestamp.hour
-        
-        # Check current hour and next hour (pre-heating)
-        prob_now = self.usage_map.get((wd, hr), 0.0)
-        
-        next_t = timestamp + timedelta(hours=1)
-        prob_next = self.usage_map.get((next_t.weekday(), next_t.hour), 0.0)
-        
-        return max(prob_now, prob_next)
-
-    def get_status_string(self) -> str:
-        prob = self.get_usage_probability(datetime.now())
-        if prob > 0.6: return "HIGH"
-        if prob > 0.3: return "MEDIUM"
-        return "LOW"
-
-if __name__ == "__main__":
-    analyzer = HotWaterPatternAnalyzer()
-    analyzer.train_on_history()
-    print("Current Usage Probability:", analyzer.get_usage_probability(datetime.now()))
-    
-    # Print "High Risk" times
-    print("\nHigh Usage Times detected:")
-    days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-    for (wd, hr), prob in analyzer.usage_map.items():
-        if prob > 0.3:
-            print(f"{days[wd]} {hr:02d}:00 - Score: {prob}")
+        return self.usage_map.get((wd, hr), 0.0)

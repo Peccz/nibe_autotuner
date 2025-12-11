@@ -8,7 +8,8 @@ Type=simple
 User=peccz
 WorkingDirectory=/home/peccz/nibe_autotuner
 Environment="PATH=/home/peccz/nibe_autotuner/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/peccz/nibe_autotuner/venv/bin/python src/data_logger.py --interval 300
+Environment="PYTHONPATH=/home/peccz/nibe_autotuner/src"
+ExecStart=/home/peccz/nibe_autotuner/venv/bin/python src/data/data_logger.py --interval 300
 
 # Restart policy
 Restart=always

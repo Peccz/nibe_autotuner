@@ -17,11 +17,18 @@ class SafetyGuard:
         if not device:
             return False, "Device not found", None
         
-        # Override user setting if it's below absolute hard limit
-        if user_min_temp < self.ABSOLUTE_MIN_TEMP_HARD_LIMIT:
-            user_min_temp = self.ABSOLUTE_MIN_TEMP_HARD_LIMIT
-            logger.warning(f"SafetyGuard: User min temp ({device.min_indoor_temp_user_setting}) overridden to hard limit ({self.ABSOLUTE_MIN_TEMP_HARD_LIMIT}) for device {device_id}")
+        # Get user setting
         user_min_temp = device.min_indoor_temp_user_setting
+
+        # Handle None case (shouldn't happen with nullable=False, but be defensive)
+        if user_min_temp is None:
+            user_min_temp = self.ABSOLUTE_MIN_TEMP_HARD_LIMIT
+            logger.warning(f"SafetyGuard: User min temp is None for device {device_id}, using hard limit {self.ABSOLUTE_MIN_TEMP_HARD_LIMIT}°C")
+
+        # Override user setting if it's below absolute hard limit
+        elif user_min_temp < self.ABSOLUTE_MIN_TEMP_HARD_LIMIT:
+            logger.warning(f"SafetyGuard: User min temp ({user_min_temp}°C) is below hard limit. Overriding to {self.ABSOLUTE_MIN_TEMP_HARD_LIMIT}°C for device {device_id}")
+            user_min_temp = self.ABSOLUTE_MIN_TEMP_HARD_LIMIT
 
         # 2. Hämta FAKTISK innetemperatur
         # Vi letar efter '13' (sträng) eller 13 (int) beroende på hur DB sparar det
