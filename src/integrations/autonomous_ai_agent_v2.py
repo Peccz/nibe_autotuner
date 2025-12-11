@@ -32,7 +32,7 @@ class ModelConfig:
     FALLBACK_MODELS = [
         {
             'provider': 'gemini',
-            'model': 'gemini-2.5-pro', 
+            'model': 'gemini-2.5-pro',
             'name': 'Gemini 2.5 Pro (Primary - Best Reasoning)',
             'requires_api_key': 'GOOGLE_API_KEY',
         },
@@ -50,7 +50,7 @@ class ModelConfig:
         },
         {
             'provider': 'gemini',
-            'model': 'gemini-2.0-flash-lite', 
+            'model': 'gemini-2.0-flash-lite',
             'name': 'Gemini 2.0 Flash Lite (Emergency Fallback)',
             'requires_api_key': 'GOOGLE_API_KEY',
         }
@@ -195,13 +195,42 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
             device = session.query(Device).filter(Device.device_id == self.device_id).first()
             if device:
                 offset = getattr(device, 'comfort_adjustment_offset', 0.0)
-                min_temp = device.min_indoor_temp_user_setting + offset
-                target_min = device.target_indoor_temp_min + offset
-                target_max = device.target_indoor_temp_max + offset
+                # Ensure session is closed here as it's used later
+                session.close() # Close session after fetching device
             else:
-                min_temp, target_min, target_max = 20.5, 20.5, 22.0
+                offset = 0.0
         finally:
-            session.close()
+            if 'session' in locals() and session.is_active: # Check if session is open
+                session.close()
+
+        # Away Mode Logic
+        if device and device.away_mode_enabled:
+            if device.away_mode_end_date and datetime.utcnow() > device.away_mode_end_date:
+                device.away_mode_enabled = False
+                device.away_mode_end_date = None
+                session = SessionLocal() # Re-open session to commit
+                session.add(device)
+                session.commit()
+                session.close()
+                logger.info("Away mode end date passed. Disabling away mode.")
+            else:
+                logger.info("Away mode active. Overriding temp targets to 16-17C, and HW off.")
+                min_temp = 16.0
+                target_min = 16.0
+                target_max = 17.0
+                # If away mode is active, directly suggest turning off hot water
+                # This decision can be overridden if away_mode_enabled is False.
+                return AIDecision('adjust', 'hot_water_demand', 1.0, 0.0, 'Away mode active: Turning off hot water.', 1.0, 'No hot water production')
+
+        # Normal operation:
+        if device:
+            min_temp = device.min_indoor_temp_user_setting + offset
+            target_min = device.target_indoor_temp_min + offset
+            target_max = device.target_indoor_temp_max + offset
+        else:
+            # Fallback values if device not found (should be handled by device check above)
+            min_temp, target_min, target_max = 20.5, 20.5, 22.0
+            logger.warning(f"Device {self.device_id} not found, using fallback min_temp={min_temp}°C")
 
         # Metrics & Context
         metrics = self.analyzer.calculate_metrics(hours_back=hours_back)
@@ -209,8 +238,8 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         if real_time_indoor is not None:
             metrics.avg_indoor_temp = real_time_indoor
             
-        context = self._build_optimized_context(metrics)
-        prompt = self._create_optimized_prompt(context, min_temp, target_min, target_max, mode, metrics)
+        context = self._build_optimized_context(metrics, device) # Pass device to context builder
+        prompt = self._create_optimized_prompt(context, min_temp, target_min, target_max, mode, metrics, device) # Pass device to prompt builder
 
         try:
             logger.info("Calling Gemini API with fallback support...")
@@ -248,6 +277,69 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
             traceback.print_exc()
             return AIDecision('hold', None, None, None, f"Error: {str(e)}", 0.0, "None")
 
+    def _apply_decision(self, decision: AIDecision) -> bool:
+        """
+        Apply AI decision to the system (Override with Learning)
+        """
+        if decision.action != 'adjust' or not decision.parameter:
+            logger.warning("Decision does not include adjustment")
+            return False
+
+        # Map parameter names to IDs
+        param_id = ParameterConfig.PARAMETER_IDS.get(decision.parameter)
+        
+        if not param_id:
+            logger.error(f"Unknown parameter: {decision.parameter}")
+            return False
+
+        try:
+            logger.info(f"Applying change: {decision.parameter} = {decision.suggested_value}")
+
+            self.api_client.set_point_value(
+                self.device_id,
+                param_id,
+                decision.suggested_value
+            )
+
+            # Log change to database
+            from data.models import ParameterChange, Parameter
+            param = self.analyzer.session.query(Parameter).filter_by(
+                parameter_id=param_id
+            ).first()
+
+            if param:
+                change = ParameterChange(
+                    device_id=self.analyzer.get_device().id,
+                    parameter_id=param.id,
+                    timestamp=datetime.utcnow(),
+                    old_value=decision.current_value,
+                    new_value=decision.suggested_value,
+                    reason=f"Autonomous AI: {decision.reasoning[:200]}",
+                    applied_by='ai'
+                )
+                self.analyzer.session.add(change)
+                self.analyzer.session.commit()
+
+            logger.info(f"✓ Change applied successfully")
+            
+            # --- Record Learning Event ---
+            try:
+                self.learning_service.record_action(
+                    parameter_id=param_id,
+                    action='adjust',
+                    old_value=decision.current_value if decision.current_value is not None else 0.0,
+                    new_value=decision.suggested_value
+                )
+            except Exception as e:
+                logger.error(f"Failed to record learning event: {e}")
+            # ----------------------------------
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to apply decision: {e}")
+            return False
+
     def _get_current_parameter_value(self, parameter_name: str) -> Optional[float]:
         if parameter_name not in ParameterConfig.PARAMETER_IDS:
             return None
@@ -261,7 +353,6 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         return current_indoor_temp + temp_change
 
     def _is_decision_safe(self, decision: AIDecision) -> Tuple[bool, str]:
-        # Removed as per user request to disable SafetyGuard blocking
         return True, ""
 
     def _check_for_blocking_test(self) -> Optional[PlannedTest]:
@@ -273,11 +364,12 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         return None
 
     def _get_recent_learning_history(self, hours_back: int = 24) -> str:
-        # Implementation omitted for brevity, keeping existing logic
         return "HISTORY: Learning..."
 
-    def _get_combined_forecast(self) -> str:
+    def _get_combined_forecast(self, device) -> str: # Pass device to get away mode
         # Implementation omitted for brevity
+        if device and device.away_mode_enabled:
+            return "FORECAST: Away mode active, no detailed forecast needed."
         return "FORECAST: Available"
 
     def _get_verified_facts(self) -> str:
@@ -286,8 +378,7 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
     def _get_performance_summary(self) -> str:
         return "PERFORMANCE: N/A"
 
-    def _build_optimized_context(self, metrics) -> str:
-        # Fetch Price Data
+    def _build_optimized_context(self, metrics, device) -> str: # Added device
         try:
             p_info = self.price_service.get_price_analysis()
             price_str = f"Price: {p_info.get('current_price',0):.2f} SEK/kWh. Status: {p_info.get('price_level', 'UNKNOWN')}."
@@ -309,6 +400,11 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
         except Exception as e:
             hw_str = "HW_Usage_Risk: UNKNOWN"
 
+        away_mode_str = ""
+        if device and device.away_mode_enabled:
+            away_mode_str = "AWAY_MODE_ACTIVE: Target indoor 16-17C, hot water demand MUST be 0."
+            if device.away_mode_end_date: away_mode_str += f" Until: {device.away_mode_end_date.strftime('%Y-%m-%d %H:%M')}"
+
         return f"""DT:{datetime.now().strftime('%Y-%m-%d %H:%M')}
 METRICS(72h):
 Outdoor:{metrics.avg_outdoor_temp:.1f}C
@@ -319,9 +415,10 @@ Curve:{metrics.heating_curve}/Offset:{metrics.curve_offset}
 {price_str}
 {dna_str}
 {hw_str}
+{away_mode_str}
 """
 
-    def _create_optimized_prompt(self, context: str, min_temp: float, target_min: float, target_max: float, mode: str = "tactical", metrics=None) -> str:
+    def _create_optimized_prompt(self, context: str, min_temp: float, target_min: float, target_max: float, mode: str = "tactical", metrics=None, device=None) -> str: # Added device
         indoor_temp = 20.0
         outdoor_temp = 0.0
         current_offset = -3.0
@@ -391,6 +488,11 @@ STRATEGY LOGIC (Evaluate in order):
    - IF Electricity Price is CHEAP -> Boost hot_water_demand to LUX (2) to buffer heat.
    - ONLY reduce hot_water_demand to SMALL (0) if Predicted HW Usage is LOW AND Electricity Price is EXPENSIVE AND Hot Water Temp is >45°C.
 
+6. VENTILATION STRATEGY:
+   - IF Outdoor Temp < -10°C -> Consider reducing ventilation (Target Speed 1) to save heat.
+   - IF Electricity Price > 3.00 SEK/kWh -> Consider reducing ventilation (Target Speed 1).
+   - Otherwise: Maintain Normal (Target Speed 2/Normal).
+
 Output JSON only. Use 'suggested_value' for the new target.
 Action: adjust|hold|investigate
 Params: {allowed_params}
@@ -421,14 +523,10 @@ Example:
             raise ValueError(f"AI response failed validation: {e}")
 
     def _apply_decision(self, decision: AIDecision) -> bool:
-        """
-        Apply AI decision to the system (Override with Learning)
-        """
         if decision.action != 'adjust' or not decision.parameter:
             logger.warning("Decision does not include adjustment")
             return False
 
-        # Map parameter names to IDs
         param_id = ParameterConfig.PARAMETER_IDS.get(decision.parameter)
         
         if not param_id:
@@ -444,7 +542,6 @@ Example:
                 decision.suggested_value
             )
 
-            # Log change to database
             from data.models import ParameterChange, Parameter
             param = self.analyzer.session.query(Parameter).filter_by(
                 parameter_id=param_id
@@ -465,7 +562,6 @@ Example:
 
             logger.info(f"✓ Change applied successfully")
             
-            # --- Record Learning Event ---
             try:
                 self.learning_service.record_action(
                     parameter_id=param_id,
@@ -475,7 +571,6 @@ Example:
                 )
             except Exception as e:
                 logger.error(f"Failed to record learning event: {e}")
-            # ----------------------------------
 
             return True
 

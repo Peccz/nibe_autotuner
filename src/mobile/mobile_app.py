@@ -1363,6 +1363,7 @@ def get_thermal_profile():
             'events': events_data
         })
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/learning/hot-water-patterns')
 def get_hw_patterns():
@@ -1421,6 +1422,8 @@ def get_settings():
                 'min_indoor_temp': device.min_indoor_temp_user_setting,
                 'target_indoor_temp_min': device.target_indoor_temp_min,
                 'target_indoor_temp_max': device.target_indoor_temp_max,
+                'away_mode_enabled': device.away_mode_enabled,
+                'away_mode_end_date': device.away_mode_end_date.isoformat() if device.away_mode_end_date else None,
             }
         })
     except Exception as e:
@@ -1428,6 +1431,47 @@ def get_settings():
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         if session:
+            session.close()
+
+
+@app.route('/api/settings/away-mode', methods=['POST'])
+def set_away_mode():
+    try:
+        data = request.json
+        enabled = data.get('enabled', False)
+        end_date_str = data.get('end_date') # ISO format string or None
+        
+        session = SessionLocal()
+        device = session.query(Device).first()
+        if not device:
+            return jsonify({'success': False, 'error': 'No device'}), 404
+            
+        device.away_mode_enabled = enabled
+        
+        if end_date_str:
+            try:
+                # Handle empty string
+                if not end_date_str:
+                    device.away_mode_end_date = None
+                else:
+                    device.away_mode_end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            except ValueError:
+                # Try simple date parsing if isoformat fails
+                pass 
+        else:
+            device.away_mode_end_date = None
+            
+        session.commit()
+        
+        status = "ON" if enabled else "OFF"
+        logger.info(f"Away mode set to {status}")
+        
+        return jsonify({'success': True, 'message': f'Away mode {status}'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if 'session' in locals():
             session.close()
 
 @app.route('/api/settings', methods=['POST'])

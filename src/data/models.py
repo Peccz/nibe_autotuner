@@ -67,6 +67,10 @@ class Device(Base):
     """Target indoor temperature maximum (°C). Default: 22.0°C"""
 
     comfort_adjustment_offset = Column(Float, default=0.0)
+
+    # Away Mode
+    away_mode_enabled = Column(Boolean, default=False)
+    away_mode_end_date = Column(DateTime, nullable=True)
     """Global comfort offset (°C) added to min/target temperatures. Default: 0.0"""
 
     # Relationships

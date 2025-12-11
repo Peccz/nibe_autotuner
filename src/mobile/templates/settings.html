@@ -277,6 +277,28 @@
 {% endblock %}
 
 {% block extra_js %}
+
+    <!-- Away Mode -->
+    <div class="card bg-dark text-white mb-4 border-info">
+        <div class="card-header border-info">
+            <i class="bi bi-airplane"></i> Semester / Borta
+        </div>
+        <div class="card-body">
+            <p class="text-muted small">Sänker temperaturen till 16°C och stänger av varmvatten.</p>
+            
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="away-enabled">
+                <label class="form-check-label" for="away-enabled">Aktivera Borta-läge</label>
+            </div>
+            
+            <div class="mb-3">
+                <label for="away-end" class="form-label">Hemkomst</label>
+                <input type="datetime-local" class="form-control bg-dark text-white" id="away-end">
+            </div>
+            
+            <button class="btn btn-info w-100" onclick="saveAwayMode()">Spara Semesterläge</button>
+        </div>
+    </div>
 <script>
 // Load current settings on page load
 document.addEventListener('DOMContentLoaded', async () => {
