@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from loguru import logger
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, desc
 from sqlalchemy.orm import Session
 
 from data.models import (System, Device, Parameter, ParameterReading, ParameterChange, Recommendation, RecommendationResult)
@@ -88,8 +88,8 @@ class HeatPumpAnalyzer:
     PARAM_HOT_WATER_TEMP = '40013'  # Hot water top (BT7)
     PARAM_INDOOR_TEMP = '13'
     PARAM_COMPRESSOR_FREQ = '41778'
-    PARAM_HEATING_CURVE = '26'
-    PARAM_CURVE_OFFSET = '30'
+    PARAM_HEATING_CURVE = '47007'
+    PARAM_CURVE_OFFSET = '47011'
     PARAM_DM_HEATING_START = '47206'
     PARAM_DM_HEATING_STOP = '48072'
     PARAM_DM_CURRENT = '40940'  # Current degree minutes value
@@ -269,17 +269,29 @@ class HeatPumpAnalyzer:
         return float(result) if result is not None else None
 
     def get_latest_value(self, device: Device, parameter_id_str: str) -> Optional[float]:
-        """Get the most recent value for a parameter"""
-        param_id = self.get_parameter_id(parameter_id_str)
+        try:
+            # Find parameter first
+            param = self.session.query(Parameter).filter_by(
+                parameter_id=parameter_id_str
+            ).first()
+            
+            if not param:
+                return None
+            
 
-        reading = self.session.query(ParameterReading).filter(
-            and_(
-                ParameterReading.device_id == device.id,
-                ParameterReading.parameter_id == param_id
-            )
-        ).order_by(ParameterReading.timestamp.desc()).first()
-
-        return reading.value if reading else None
+            # Get latest reading
+            reading = self.session.query(ParameterReading).filter_by(
+                device_id=device.id,
+                parameter_id=param.id
+            ).order_by(desc(ParameterReading.timestamp)).first()
+            
+            if reading:
+                return reading.value
+            
+            return None
+        except Exception as e:
+            logger.error(f"[Analyzer.get_latest_value] Error for '{parameter_id_str}': {e}")
+            return None
 
     def calculate_metrics(
         self,

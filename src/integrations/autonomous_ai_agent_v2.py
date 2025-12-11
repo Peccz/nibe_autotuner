@@ -460,35 +460,40 @@ STRATEGY LOGIC (Evaluate in order):
    - IF Indoor > {target_max}: REDUCE heating (Target -4 or -5).
    - IF Indoor < {min_temp}: INCREASE heating (Target -1 or 0).
 
-2. PRICE TREND STRATEGY (If comfort is OK):
+2. WEATHER ANTICIPATION (Proactive):
+   - IF Forecast implies drop >3C next 4h: PRE-HEAT (Increase +1 step from current).
+   - IF Forecast implies rise >3C next 4h: COAST (Decrease -1 step from current).
+
+3. PRICE TREND STRATEGY (If comfort is OK):
    - **Scenario A: Price is DROPPING soon** (Cheap later):
-     ACTION: COASTING. Reduce heating NOW to save expensive energy. Wait for the cheap price.
-     Target: -4 or -5.
+     ACTION: COASTING. Reduce heating to save energy.
+     Target: -4 IF Indoor > 21.0C (Buffer exists).
+     Target: -3 IF Indoor < 21.0C (Don't risk comfort).
    
    - **Scenario B: Price is RISING soon** (Expensive later):
-     ACTION: PRE-HEATING. Increase heating NOW (using current cheaper price) to buffer heat.
-     Target: -1 or 0 (Only if Indoor < 22).
+     ACTION: PRE-HEATING. Increase heating to buffer heat.
+     Target: -2 or -1 (Only if Indoor < 22).
 
    - **Scenario C: Stable Price**:
-     - If Expensive: Target -4 or -5.
-     - If Cheap: Target -3 (Baseline) or -2 (Slight buffer).
+     - If Expensive: Target -4 (only if Indoor > 20.8C).
+     - If Cheap: Target -2 (to build buffer).
 
-3. STABILITY (Override):
+4. STABILITY (Override):
    - IF Indoor is PERFECT ({target_min} - {target_max}) AND Price is Unknown/Stable:
-     ACTION: HOLD or gentle move to Baseline (-3). Do NOT make drastic changes if comfort is good.
+     ACTION: HOLD or gentle move to Baseline (-3). Do NOT make drastic changes (>1 step) if comfort is good.
 
-4. EXECUTION:
+5. EXECUTION:
    - Determine target based on above.
    - Max change: +/- 3 steps allowed (if needed).
    - Explain reasoning clearly.
 
-5. HOT WATER STRATEGY (Comfort Priority):
+6. HOT WATER STRATEGY (Comfort Priority):
    - IF Predicted HW Usage (based on historical data) is HIGH (e.g., morning/evening) -> Ensure hot_water_demand is at least NORMAL (1).
    - IF Hot Water Temp is LOW (<45°C) -> Boost to LUX (2) immediately.
    - IF Electricity Price is CHEAP -> Boost hot_water_demand to LUX (2) to buffer heat.
    - ONLY reduce hot_water_demand to SMALL (0) if Predicted HW Usage is LOW AND Electricity Price is EXPENSIVE AND Hot Water Temp is >45°C.
 
-6. VENTILATION STRATEGY:
+7. VENTILATION STRATEGY:
    - IF Outdoor Temp < -10°C -> Consider reducing ventilation (Target Speed 1) to save heat.
    - IF Electricity Price > 3.00 SEK/kWh -> Consider reducing ventilation (Target Speed 1).
    - Otherwise: Maintain Normal (Target Speed 2/Normal).
