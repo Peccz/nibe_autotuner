@@ -1,268 +1,67 @@
 {% extends "base.html" %}
-
-{% block title %}Ändringslogg - Nibe Autotuner{% endblock %}
+{% set active_page = 'log' %}
 
 {% block content %}
-<!-- Success message -->
-<div id="successMsg" class="success" style="display: none;">
-    ✅ Ändring loggad!
+<div class="container-fluid mt-3">
+    <h2 class="mb-4">📜 Historik</h2>
+    <div class="list-group list-group-flush" id="log-list">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    </div>
 </div>
 
-<!-- Error message -->
-<div id="errorMsg" class="error" style="display: none;"></div>
-
-<!-- Add New Change -->
-<section class="section">
-    <h2 class="section-title">📝 Logga Ny Ändring</h2>
-
-    <div class="info" style="margin-bottom: 16px; padding: 12px; background: rgba(33, 150, 243, 0.1); border-left: 3px solid #2196f3; color: var(--text-primary);">
-        <strong>ℹ️ OBS:</strong> Ändringsloggen är tillfälligt inaktiverad för uppdatering. Data loggas automatiskt av systemet.
-    </div>
-
-    <form id="changeForm" style="opacity: 0.5; pointer-events: none;">
-        <div class="form-group">
-            <label for="changeDate" class="form-label">Datum</label>
-            <input type="date" id="changeDate" class="form-input" required>
-        </div>
-
-        <div class="form-group">
-            <label for="changeTime" class="form-label">Tid</label>
-            <input type="time" id="changeTime" class="form-input" required>
-        </div>
-
-        <div class="form-group">
-            <label for="paramType" class="form-label">Typ av ändring</label>
-            <select id="paramType" class="form-select" required>
-                <option value="">Välj typ...</option>
-                <option value="heating_curve">Värmekurva</option>
-                <option value="curve_offset">Kurvjustering</option>
-                <option value="hot_water_temp">Varmvattentemperatur</option>
-                <option value="room_temp">Rumstemperatur</option>
-                <option value="ventilation">Ventilation</option>
-                <option value="other">Annat</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="paramName" class="form-label">Parameternamn (valfritt)</label>
-            <input type="text" id="paramName" class="form-input" placeholder="T.ex. 'Värmekurva våning 2'">
-        </div>
-
-        <div class="form-group">
-            <label for="oldValue" class="form-label">Gammalt värde</label>
-            <input type="text" id="oldValue" class="form-input" placeholder="T.ex. '35'">
-        </div>
-
-        <div class="form-group">
-            <label for="newValue" class="form-label">Nytt värde</label>
-            <input type="text" id="newValue" class="form-input" placeholder="T.ex. '37'">
-        </div>
-
-        <div class="form-group">
-            <label for="reason" class="form-label">Anledning</label>
-            <select id="reason" class="form-select" required>
-                <option value="">Välj anledning...</option>
-                <option value="too_cold">För kallt</option>
-                <option value="too_warm">För varmt</option>
-                <option value="optimize_cop">Optimera COP</option>
-                <option value="optimize_delta_t">Optimera Delta T</option>
-                <option value="seasonal_adjustment">Säsongsanpassning</option>
-                <option value="energy_saving">Energibesparing</option>
-                <option value="other">Annat</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="notes" class="form-label">Anteckningar (valfritt)</label>
-            <textarea id="notes" class="form-textarea" placeholder="Ytterligare kommentarer..."></textarea>
-        </div>
-
-        <button type="submit" class="btn btn-primary">💾 Spara Ändring</button>
-    </form>
-</section>
-
-<!-- Change History -->
-<section class="section">
-    <h2 class="section-title">📋 Historik</h2>
-
-    <div id="loading" class="loading" style="display: none;">
-        <div class="spinner"></div>
-        <p>Laddar historik...</p>
-    </div>
-
-    <div id="changeList" class="change-list"></div>
-
-    <div id="emptyState" style="display: none; text-align: center; padding: 40px 20px; color: var(--text-secondary);">
-        <p>Inga ändringar loggade än.</p>
-        <p style="font-size: 14px; margin-top: 8px;">Fyll i formuläret ovan för att börja logga ändringar.</p>
-    </div>
-</section>
-
-{% endblock %}
-
-{% block extra_js %}
 <script>
-// Set default date/time to now
-document.addEventListener('DOMContentLoaded', () => {
-    const now = new Date();
-    document.getElementById('changeDate').valueAsDate = now;
-    document.getElementById('changeTime').value = now.toTimeString().substring(0, 5);
-
-    loadChanges();
-});
-
-// Submit form
-document.getElementById('changeForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const successMsg = document.getElementById('successMsg');
-    const errorMsg = document.getElementById('errorMsg');
-
-    successMsg.style.display = 'none';
-    errorMsg.style.display = 'none';
-
-    // Gather form data
-    const date = document.getElementById('changeDate').value;
-    const time = document.getElementById('changeTime').value;
-    const timestamp = new Date(`${date}T${time}`).toISOString();
-
-    const data = {
-        timestamp: timestamp,
-        parameter_type: document.getElementById('paramType').value,
-        parameter_name: document.getElementById('paramName').value || null,
-        old_value: document.getElementById('oldValue').value || null,
-        new_value: document.getElementById('newValue').value || null,
-        reason: document.getElementById('reason').value,
-        notes: document.getElementById('notes').value || null
-    };
-
-    try {
-        const response = await fetch('/api/changes', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            successMsg.style.display = 'block';
-
-            // Reset form
-            document.getElementById('changeForm').reset();
-
-            // Reset date/time to now
-            const now = new Date();
-            document.getElementById('changeDate').valueAsDate = now;
-            document.getElementById('changeTime').value = now.toTimeString().substring(0, 5);
-
-            // Reload changes
-            loadChanges();
-
-            // Scroll to top
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-            throw new Error(result.error);
+    async function loadLogs() {
+        try {
+            const res = await fetch('/api/changes');
+            const data = await res.json();
+            
+            const list = document.getElementById('log-list');
+            list.innerHTML = '';
+            
+            if (data.success && data.data.length > 0) {
+                data.data.forEach(log => {
+                    const time = new Date(log.timestamp).toLocaleString([], {
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+                    const isAI = log.applied_by === 'ai';
+                    const icon = isAI ? 'bi-robot' : 'bi-person-fill';
+                    const color = isAI ? 'text-primary' : 'text-warning';
+                    const badge = isAI ? 'AI Agent' : 'User';
+                    
+                    const item = `
+                    <div class="card bg-dark text-white mb-3 border-secondary">
+                        <div class="card-body py-2">
+                            <div class="d-flex w-100 justify-content-between align-items-center mb-1">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi ${icon} ${color} fs-5 me-2"></i>
+                                    <strong class="me-2">${log.parameter_name}</strong>
+                                    <span class="badge bg-secondary bg-opacity-25 text-secondary" style="font-size:0.6rem">${badge}</span>
+                                </div>
+                                <small class="text-muted">${time}</small>
+                            </div>
+                            <div class="d-flex align-items-center mt-2">
+                                <span class="fs-5 fw-bold text-white-50 me-2">${log.old_value}</span>
+                                <i class="bi bi-arrow-right text-success mx-2"></i>
+                                <span class="fs-4 fw-bold text-white">${log.new_value}</span>
+                            </div>
+                            <p class="mb-0 mt-2 small text-muted fst-italic border-top border-secondary pt-2">
+                                "${log.reason}"
+                            </p>
+                        </div>
+                    </div>
+                    `;
+                    list.innerHTML += item;
+                });
+            } else {
+                list.innerHTML = '<div class="text-center text-muted py-5">Inga loggar funna</div>';
+            }
+        } catch (e) {
+            console.error(e);
+            document.getElementById('log-list').innerHTML = '<div class="alert alert-danger">Kunde inte ladda loggar</div>';
         }
-    } catch (err) {
-        errorMsg.textContent = '❌ Fel vid sparande: ' + err.message;
-        errorMsg.style.display = 'block';
-        console.error('Error saving change:', err);
     }
-});
-
-// Load changes
-async function loadChanges() {
-    const loading = document.getElementById('loading');
-    const changeList = document.getElementById('changeList');
-    const emptyState = document.getElementById('emptyState');
-
-    loading.style.display = 'block';
-    changeList.innerHTML = '';
-    emptyState.style.display = 'none';
-
-    try {
-        const response = await fetch('/api/changes');
-        const result = await response.json();
-
-        if (!result.success) {
-            throw new Error(result.error);
-        }
-
-        const changes = result.data;
-
-        if (changes.length === 0) {
-            emptyState.style.display = 'block';
-        } else {
-            changes.forEach(change => {
-                const item = createChangeItem(change);
-                changeList.appendChild(item);
-            });
-        }
-    } catch (err) {
-        console.error('Error loading changes:', err);
-        emptyState.textContent = '❌ Fel vid laddning av historik';
-        emptyState.style.display = 'block';
-    } finally {
-        loading.style.display = 'none';
-    }
-}
-
-// Create change item HTML
-function createChangeItem(change) {
-    const div = document.createElement('div');
-    div.className = 'change-item';
-
-    const timestamp = new Date(change.timestamp);
-    const timeStr = timestamp.toLocaleString('sv-SE', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-
-    const typeLabels = {
-        'heating_curve': 'Värmekurva',
-        'curve_offset': 'Kurvjustering',
-        'hot_water_temp': 'Varmvatten',
-        'room_temp': 'Rumstemperatur',
-        'ventilation': 'Ventilation',
-        'other': 'Annat'
-    };
-
-    const reasonLabels = {
-        'too_cold': 'För kallt',
-        'too_warm': 'För varmt',
-        'optimize_cop': 'Optimera COP',
-        'optimize_delta_t': 'Optimera Delta T',
-        'seasonal_adjustment': 'Säsongsanpassning',
-        'energy_saving': 'Energibesparing',
-        'other': 'Annat'
-    };
-
-    div.innerHTML = `
-        <div class="change-header">
-            <span class="change-type">${typeLabels[change.parameter_type] || change.parameter_type}</span>
-            <span class="change-time">${timeStr}</span>
-        </div>
-        ${change.parameter_name ? `<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">${change.parameter_name}</div>` : ''}
-        ${change.old_value && change.new_value ? `
-            <div class="change-values">
-                ${change.old_value} → ${change.new_value}
-            </div>
-        ` : ''}
-        <div class="change-reason">${reasonLabels[change.reason] || change.reason}</div>
-        ${change.notes ? `<div style="font-size: 12px; margin-top: 8px; color: var(--text-primary);">${change.notes}</div>` : ''}
-    `;
-
-    return div;
-}
-
-// Refresh button
-function refreshData() {
-    loadChanges();
-}
+    loadLogs();
 </script>
 {% endblock %}

@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% set active_page = 'analytics' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>📊 Analys</h2>
+        <select class="form-select w-auto bg-dark text-white border-secondary" id="time-range" onchange="loadCharts()">
+            <option value="24">24h</option>
+            <option value="48">48h</option>
+            <option value="72">3 dygn</option>
+            <option value="168">1 vecka</option>
+        </select>
+    </div>
+
+    <!-- Main Chart -->
+    <div class="card bg-dark text-white mb-4">
+        <div class="card-header">
+            Temperaturer
+        </div>
+        <div class="card-body">
+            <div style="height: 300px;">
+                <canvas id="tempChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- COP & Compressor -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card bg-dark text-white mb-4">
+                <div class="card-header">
+                    Kompressorfrekvens
+                </div>
+                <div class="card-body">
+                    <div style="height: 200px;">
+                        <canvas id="compChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-dark text-white mb-4">
+                <div class="card-header">
+                    COP (Estimerad)
+                </div>
+                <div class="card-body">
+                    <div style="height: 200px;">
+                        <canvas id="copChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let charts = {};
+
+    async function loadCharts() {
+        const hours = document.getElementById('time-range').value;
+        
+        try {
+            // Load data in parallel
+            const [indoor, outdoor, supply, comp, cop] = await Promise.all([
+                fetch(`/api/chart/indoor?hours=${hours}`).then(r => r.json()),
+                fetch(`/api/chart/outdoor?hours=${hours}`).then(r => r.json()),
+                fetch(`/api/chart/supply?hours=${hours}`).then(r => r.json()),
+                fetch(`/api/chart/compressor?hours=${hours}`).then(r => r.json()),
+                fetch(`/api/chart/cop?hours=${hours}`).then(r => r.json())
+            ]);
+
+            renderChart('tempChart', [
+                { label: 'Inne', data: indoor.data.values, borderColor: '#3b82f6', tension: 0.4 },
+                { label: 'Ute', data: outdoor.data.values, borderColor: '#10b981', tension: 0.4 },
+                { label: 'Framledning', data: supply.data.values, borderColor: '#ef4444', tension: 0.4, borderDash: [5, 5] }
+            ], indoor.data.labels);
+
+            renderChart('compChart', [
+                { label: 'Kompressor (Hz)', data: comp.data.values, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4 }
+            ], comp.data.labels);
+
+            renderChart('copChart', [
+                { label: 'COP', data: cop.data.values, borderColor: '#f59e0b', tension: 0.4 }
+            ], cop.data.labels);
+            
+        } catch (e) {
+            console.error("Failed to load charts:", e);
+        }
+    }
+
+    function renderChart(canvasId, datasets, labels) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        
+        if (charts[canvasId]) charts[canvasId].destroy();
+
+        charts[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: { 
+                labels: labels.map(t => new Date(t).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})), 
+                datasets: datasets 
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                elements: { point: { radius: 0, hitRadius: 10 } },
+                interaction: { mode: 'index', intersect: false },
+                plugins: { 
+                    legend: { position: 'bottom', labels: { color: '#e5e7eb' } }
+                },
+                scales: {
+                    x: { 
+                        ticks: { maxTicksLimit: 8, color: '#9ca3af' }, 
+                        grid: { color: 'rgba(255,255,255,0.05)' } 
+                    },
+                    y: { 
+                        ticks: { color: '#9ca3af' },
+                        grid: { color: 'rgba(255,255,255,0.05)' } 
+                    }
+                }
+            }
+        });
+    }
+
+    loadCharts();
+</script>
+{% endblock %}

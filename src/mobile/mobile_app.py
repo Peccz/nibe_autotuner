@@ -1395,6 +1395,14 @@ def get_hw_patterns():
 
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/analytics')
+def analytics():
+    return render_template('analytics.html')
+
+@app.route('/log')
+def log_page():
+    return render_template('changes.html')
 @app.route('/settings')
 def settings_page():
     """Settings page"""
