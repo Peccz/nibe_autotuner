@@ -395,7 +395,9 @@ class AutonomousAIAgentV2(AutonomousAIAgent):
 
         # HW Probability
         try:
-            hw_prob = self.hw_analyzer.get_usage_probability(datetime.now())
+            # Look ahead 4 hours for HW risk
+            probs = [self.hw_analyzer.get_usage_probability(datetime.now() + timedelta(hours=h)) for h in range(5)]
+            hw_prob = max(probs) if probs else 0.0
             hw_str = f"HW_Usage_Risk: {'HIGH' if hw_prob > 0.5 else 'LOW'} ({hw_prob:.1f})"
         except Exception as e:
             hw_str = "HW_Usage_Risk: UNKNOWN"
@@ -487,11 +489,16 @@ STRATEGY LOGIC (Evaluate in order):
    - Max change: +/- 3 steps allowed (if needed).
    - Explain reasoning clearly.
 
-6. HOT WATER STRATEGY (Comfort Priority):
-   - IF Predicted HW Usage (based on historical data) is HIGH (e.g., morning/evening) -> Ensure hot_water_demand is at least NORMAL (1).
-   - IF Hot Water Temp is LOW (<45°C) -> Boost to LUX (2) immediately.
-   - IF Electricity Price is CHEAP -> Boost hot_water_demand to LUX (2) to buffer heat.
-   - ONLY reduce hot_water_demand to SMALL (0) if Predicted HW Usage is LOW AND Electricity Price is EXPENSIVE AND Hot Water Temp is >45°C.
+6. HOT WATER STRATEGY (Strict Economy):
+   - **Default State:** NORMAL (1).
+   - **LUX (2) Rules (Use sparingly):**
+     - Trigger ONLY if Temp is CRITICAL (<43°C).
+     - OR if Price is EXTREMELY CHEAP (lowest 20% of day) AND Temp < 48°C.
+     - NEVER use LUX just because "price is rising later" if current price is already high.
+   - **ECONOMY (0) Rules:**
+     - Use if Price is EXPENSIVE AND HW_Usage_Risk is LOW (next 4h).
+     - Ensure Temp stays > 45°C before switching to Economy.
+   - **Planning Horizon:** Focus on the next 3-6 hours. If usage is high soon, maintain NORMAL.
 
 7. VENTILATION STRATEGY:
    - IF Outdoor Temp < -10°C -> Consider reducing ventilation (Target Speed 1) to save heat.
