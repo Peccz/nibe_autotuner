@@ -63,7 +63,7 @@
         const hours = document.getElementById('time-range').value;
         
         try {
-            // Load data in parallel
+            // Load data
             const [indoor, outdoor, supply, comp, cop] = await Promise.all([
                 fetch(`/api/chart/indoor?hours=${hours}`).then(r => r.json()),
                 fetch(`/api/chart/outdoor?hours=${hours}`).then(r => r.json()),
@@ -72,19 +72,32 @@
                 fetch(`/api/chart/cop?hours=${hours}`).then(r => r.json())
             ]);
 
-            renderChart('tempChart', [
-                { label: 'Inne', data: indoor.data.values, borderColor: '#3b82f6', tension: 0.4 },
-                { label: 'Ute', data: outdoor.data.values, borderColor: '#10b981', tension: 0.4 },
-                { label: 'Framledning', data: supply.data.values, borderColor: '#ef4444', tension: 0.4, borderDash: [5, 5] }
-            ], indoor.data.labels);
+            console.log("Charts Data Loaded:", {indoor, outdoor, supply, comp, cop});
 
-            renderChart('compChart', [
-                { label: 'Kompressor (Hz)', data: comp.data.values, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4 }
-            ], comp.data.labels);
+            // Temperature Chart
+            if (indoor?.success && outdoor?.success && supply?.success) {
+                renderChart('tempChart', [
+                    { label: 'Inne', data: indoor.data?.values || [], borderColor: '#3b82f6', tension: 0.4 },
+                    { label: 'Ute', data: outdoor.data?.values || [], borderColor: '#10b981', tension: 0.4 },
+                    { label: 'Framledning', data: supply.data?.values || [], borderColor: '#ef4444', tension: 0.4, borderDash: [5, 5] }
+                ], indoor.data?.labels || []);
+            } else {
+                console.warn("Missing temperature data");
+            }
 
-            renderChart('copChart', [
-                { label: 'COP', data: cop.data.values, borderColor: '#f59e0b', tension: 0.4 }
-            ], cop.data.labels);
+            // Compressor Chart
+            if (comp?.success && comp.data) {
+                renderChart('compChart', [
+                    { label: 'Kompressor (Hz)', data: comp.data.values || [], borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4 }
+                ], comp.data.labels || []);
+            }
+
+            // COP Chart
+            if (cop?.success && cop.data) {
+                renderChart('copChart', [
+                    { label: 'COP', data: cop.data.values || [], borderColor: '#f59e0b', tension: 0.4 }
+                ], cop.data.labels || []);
+            }
             
         } catch (e) {
             console.error("Failed to load charts:", e);
@@ -96,10 +109,20 @@
         
         if (charts[canvasId]) charts[canvasId].destroy();
 
+        if (!labels) labels = [];
+
+        const formattedLabels = labels.map(t => {
+            try {
+                return new Date(t).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            } catch (e) {
+                return t;
+            }
+        });
+
         charts[canvasId] = new Chart(ctx, {
             type: 'line',
             data: { 
-                labels: labels.map(t => new Date(t).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})), 
+                labels: formattedLabels, 
                 datasets: datasets 
             },
             options: {

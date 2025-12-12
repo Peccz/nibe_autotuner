@@ -200,13 +200,13 @@ def get_chart_data(chart_type):
 
         # Map chart types to parameter IDs
         param_map = {
-            'outdoor': 40004,    # Outdoor temp
+            'outdoor': '40004',
             'indoor': 13,     # Indoor temp
-            'supply': 40008,     # Supply temp
-            'return': 40012,     # Return temp
-            'compressor': 41778, # Current compressor frequency (Hz)
-            'hot_water': 40013,  # Hot water temp
-            'pump_speed': 43437  # Circulation pump speed (GP1)
+            'supply': '40008',
+            'return': '40012',
+            'compressor': '41778',
+            'hot_water': '40013',
+            'pump_speed': '43437'
         }
 
         # Handle special chart types that need calculation
