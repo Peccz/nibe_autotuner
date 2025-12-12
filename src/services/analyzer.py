@@ -85,6 +85,7 @@ class HeatPumpAnalyzer:
     PARAM_HEATING_CURVE = '47007'
     PARAM_CURVE_OFFSET = '47011'
     PARAM_DM_CURRENT = '40009'
+    PARAM_DM_WRITE = '40940'     # Degree Minutes Writeable (current value for writing)
     PARAM_DM_HEATING_START = '47021'
     PARAM_CALCULATED_SUPPLY_TEMP = '40067'
     PARAM_HOT_WATER_TEMP = '40013'

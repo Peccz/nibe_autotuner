@@ -504,7 +504,6 @@ STRATEGY LOGIC (Evaluate in order):
    - IF Outdoor Temp < -10°C -> Consider reducing ventilation (Target Speed 1) to save heat.
    - IF Electricity Price > 3.00 SEK/kWh -> Consider reducing ventilation (Target Speed 1).
    - Otherwise: Maintain Normal (Target Speed 2/Normal).
-
 Output JSON only. Use 'suggested_value' for the new target.
 Action: adjust|hold|investigate
 Params: {allowed_params}
