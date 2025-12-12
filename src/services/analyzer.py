@@ -483,6 +483,24 @@ class HeatPumpAnalyzer:
             if theoretical_cop: carnot_curve.append((outdoor_temp, theoretical_cop))
         return {'heating': heating_points, 'hot_water': hot_water_points, 'carnot_curve': carnot_curve}
 
+    def get_cop_timeseries(self, device: Device, start_time: datetime, end_time: datetime) -> List[Tuple[datetime, float]]:
+        supply_readings = self.get_readings(device, self.PARAM_SUPPLY_TEMP, start_time, end_time)
+        outdoor_readings = self.get_readings(device, self.PARAM_OUTDOOR_TEMP, start_time, end_time)
+        return_readings = self.get_readings(device, self.PARAM_RETURN_TEMP, start_time, end_time)
+        
+        cop_data = []
+        time_tolerance = timedelta(minutes=5)
+        
+        for supply_ts, supply_temp in supply_readings:
+            outdoor_temp = self._find_closest_reading(outdoor_readings, supply_ts, time_tolerance)
+            return_temp = self._find_closest_reading(return_readings, supply_ts, time_tolerance)
+            
+            if outdoor_temp is not None and return_temp is not None:
+                cop = self._estimate_cop(outdoor_temp, supply_temp, return_temp)
+                if cop is not None:
+                    cop_data.append((supply_ts, cop))
+        return cop_data
+
     def calculate_cost_analysis(self, heating_metrics: Optional[HeatingMetrics], hot_water_metrics: Optional[HotWaterMetrics], electricity_price: float = None) -> dict:
         if electricity_price is None: electricity_price = self.ELECTRICITY_PRICE_SEK_KWH
         result = {'heating': {'runtime_hours': 0, 'energy_kwh': 0, 'cost_sek': 0, 'heat_output_kwh': 0}, 'hot_water': {'runtime_hours': 0, 'energy_kwh': 0, 'cost_sek': 0, 'heat_output_kwh': 0}, 'total': {'runtime_hours': 0, 'energy_kwh': 0, 'cost_sek': 0, 'heat_output_kwh': 0}, 'electricity_price': electricity_price}
