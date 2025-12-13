@@ -156,6 +156,9 @@ class DataLogger:
                             # Timestamp is old/same, BUT value changed! API/Firmware bug?
                             # Force log with current time to capture the value change
                             logger.warning(f"Stuck timestamp for {parameter.parameter_id} ({timestamp}) but value changed {last_reading.value}->{point['value']}. Forcing log.")
+                        elif (datetime.utcnow() - last_reading.timestamp).total_seconds() > 1800:
+                            # Keep-alive: Force log every 30 mins even if no change, so we know sensor is alive
+                            timestamp = datetime.utcnow()
                             timestamp = datetime.utcnow()
                         else:
                             # Same timestamp, same value. Skip.

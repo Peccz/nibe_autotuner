@@ -15,7 +15,7 @@ from integrations.auth import MyUplinkAuth
 
 class GMController:
     # Constants
-    PARAM_GM_READ = '40009' # Read Only sensor
+    PARAM_GM_READ = '40941' # FIXED: Correct ID for Degree Minutes (Read Only)
     PARAM_GM_WRITE = '40940' # Writeable setting
     
     # Safety Limits
