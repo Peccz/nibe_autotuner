@@ -142,14 +142,24 @@ class DataLogger:
                         timestamp = datetime.utcnow()
 
                     # Check duplicate/stale
+                    # Check duplicate/stale
                     last_reading = self.session.query(ParameterReading).filter_by(
                         device_id=device.id,
                         parameter_id=parameter.id
                     ).order_by(desc(ParameterReading.timestamp)).first()
 
-                    # If we already have this timestamp (or newer), skip logging
-                    if last_reading and last_reading.timestamp >= timestamp:
-                        continue
+                    # Smart Stale Detection:
+                    if last_reading:
+                        if timestamp > last_reading.timestamp:
+                            pass # New data, proceed
+                        elif abs(point['value'] - last_reading.value) > 0.001:
+                            # Timestamp is old/same, BUT value changed! API/Firmware bug?
+                            # Force log with current time to capture the value change
+                            logger.warning(f"Stuck timestamp for {parameter.parameter_id} ({timestamp}) but value changed {last_reading.value}->{point['value']}. Forcing log.")
+                            timestamp = datetime.utcnow()
+                        else:
+                            # Same timestamp, same value. Skip.
+                            continue
 
                     reading = ParameterReading(
                         device_id=device.id,
