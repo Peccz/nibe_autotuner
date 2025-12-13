@@ -15,12 +15,13 @@ from integrations.auth import MyUplinkAuth
 
 class GMController:
     # Constants
-    PARAM_GM_READ = '40941' # FIXED: Correct ID for Degree Minutes (Read Only)
-    PARAM_GM_WRITE = '40940' # Writeable setting
+    PARAM_GM_READ = '40941' # Degree Minutes (Read Only)
+    PARAM_GM_WRITE = '40940' # Degree Minutes (Writeable)
+    PARAM_OFFSET_WRITE = '47011' # Curve Offset
     
     # Safety Limits
-    MIN_BALANCE = -800 # Never let virtual balance go below this (house freezes)
-    MAX_BALANCE = 100 # No point saving more positive than this
+    MIN_BALANCE = -800 
+    MAX_BALANCE = 100 
     
     def __init__(self):
         self.db = SessionLocal()
@@ -28,11 +29,11 @@ class GMController:
         self.client = MyUplinkClient(self.auth)
         self.analyzer = HeatPumpAnalyzer()
         
-        # Initialize account if missing
         self._get_account()
         
         # State tracking
-        self.last_written_gm = None # What was the last value we wrote to the pump?
+        self.last_written_gm = None
+        self.last_written_offset = None
 
     def _get_account(self):
         account = self.db.query(GMAccount).first()
@@ -43,7 +44,6 @@ class GMController:
         return account
 
     def get_pump_gm(self, device_id):
-        # We prefer reading 40009 as it is the "truth"
         try:
             val = self.client.get_point_data(device_id, self.PARAM_GM_READ)
             return float(val['value'])
@@ -53,16 +53,24 @@ class GMController:
 
     def set_pump_gm(self, device_id, value):
         try:
-            # Only write if value is different or if it's the first write
             if self.last_written_gm is None or abs(self.last_written_gm - value) > 0.01:
                 self.client.set_point_value(device_id, self.PARAM_GM_WRITE, value)
                 self.last_written_gm = value
-                logger.info(f"  -> Wrote {value:.1f} to pump (GM setpoint).")
-            else:
-                logger.debug(f"  -> GM setpoint already {value:.1f}, skipping write.")
+                logger.info(f"  -> Wrote GM {value:.1f} to pump.")
             return True
         except Exception as e:
             logger.error(f"Failed to write pump GM: {e}")
+            return False
+
+    def set_pump_offset(self, device_id, value):
+        try:
+            if self.last_written_offset is None or abs(self.last_written_offset - value) > 0.1:
+                self.client.set_point_value(device_id, self.PARAM_OFFSET_WRITE, value)
+                self.last_written_offset = value
+                logger.info(f"  -> Wrote Offset {value:.1f} to pump.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to write Offset: {e}")
             return False
 
     def run_tick(self):
@@ -76,94 +84,69 @@ class GMController:
             return
 
         current_pump_gm = self.get_pump_gm(device.device_id)
-        if current_pump_gm is None:
-            logger.error("Could not read current pump GM from API.")
-            return
+        if current_pump_gm is None: return
 
-        logger.info(f"STATUS: Pump GM: {current_pump_gm:.1f}, Bank Balance: {account.balance:.1f}, Mode: {account.mode}")
-
-        # 2. Update Balance (Calculate Production/Consumption)
+        # 2. Update Balance
         if self.last_written_gm is not None:
-            # The "delta" is how much the pump's GM changed from what we last set it to.
-            # This represents the heat loss/gain by the house since our last intervention.
             delta = current_pump_gm - self.last_written_gm
-            
-            # Sanity check delta (it shouldn't jump thousands in a minute)
-            if abs(delta) > 100: # If delta is too large, it might be an error or manual intervention
-                logger.warning(f"Large GM jump detected ({delta:.1f}). Syncing balance to pump.")
-                account.balance = current_pump_gm # Re-sync with reality
-                self.last_written_gm = current_pump_gm # Update what we think pump has
+            if abs(delta) > 100:
+                logger.warning(f"Large GM jump ({delta:.1f}). Syncing.")
+                account.balance = current_pump_gm 
+                self.last_written_gm = current_pump_gm 
             else:
-                account.balance += delta # Add the actual change observed in the pump's GM
+                account.balance += delta 
             
-            # Clamp balance (Safety)
+            # Safety Clamp
             if account.balance < self.MIN_BALANCE:
-                logger.warning(f"GM Bank Balance {account.balance:.1f} too low! Overriding mode to 'SPEND' for safety.")
-                account.mode = 'SPEND' # Override mode for safety
+                logger.warning(f"GM Balance low ({account.balance:.1f}). Forcing SPEND.")
+                account.mode = 'SPEND'
             elif account.balance > self.MAX_BALANCE:
                 account.balance = self.MAX_BALANCE
                 
-            self.db.add(account) # Add to session (might be existing)
-            self.db.commit()
-            logger.info(f"  -> Observed change: {delta:.1f}. New Bank Balance: {account.balance:.1f}")
-        else:
-            # First run, sync balance to pump's current GM
-            logger.info("First run: Syncing Bank Balance to current pump GM.")
-            account.balance = current_pump_gm
-            self.last_written_gm = current_pump_gm # Assume we've effectively just written this
             self.db.add(account)
             self.db.commit()
-            return # Don't write on first tick, just sync
+        else:
+            logger.info("First run: Syncing balance.")
+            account.balance = current_pump_gm
+            self.last_written_gm = current_pump_gm
+            self.db.add(account)
+            self.db.commit()
+            return
 
-        # 3. Get Planned Action from Schedule
+        # 3. Get Plan
         current_time_utc = datetime.now(timezone.utc)
         current_hour_plan = self.db.query(PlannedHeatingSchedule).filter(
             PlannedHeatingSchedule.timestamp <= current_time_utc,
             PlannedHeatingSchedule.timestamp > current_time_utc - timedelta(hours=1)
         ).order_by(PlannedHeatingSchedule.timestamp.desc()).first()
 
-        planned_action = current_hour_plan.planned_action if current_hour_plan else account.mode # Fallback to account mode
-        target_gm_from_plan = current_hour_plan.planned_gm_value if current_hour_plan and current_hour_plan.planned_gm_value is not None else 0 # Fallback
+        planned_action = current_hour_plan.planned_action if current_hour_plan else account.mode
+        target_offset = current_hour_plan.planned_offset if current_hour_plan else 0.0
 
-        logger.info(f"  -> Planned action for this hour: {planned_action}")
+        logger.info(f"Status: GM={current_pump_gm:.0f}, Bal={account.balance:.0f}. Plan: {planned_action}, Offset: {target_offset}")
 
-        # 4. Determine GM Value to Write to Pump (Verkställ)
-        value_to_write = current_pump_gm # Default: don't change
+        # 4. Execute GM Strategy
+        value_to_write = current_pump_gm
 
-        if planned_action == 'MUST_RUN' or planned_action == 'RUN':
-            value_to_write = account.balance # Let the pump work off the entire balance
-            if value_to_write > 0: # If balance is positive, we want pump to stop
-                value_to_write = 0 # Or a higher value if we want to build positive GM in pump
-            
-            # To make pump run long and hard, set GM to a low value
-            # Let's target -500 to make it run for a while if it can
-            if account.balance > -500: # Only if balance isn't too negative already
-                value_to_write = -500
-            else:
-                value_to_write = account.balance # Or just current balance if already very negative
-            logger.info(f"  Mode RUN. Target DM: {value_to_write:.1f}")
-
-        elif planned_action == 'MUST_REST' or planned_action == 'REST':
-            # Stop the pump (set GM to a high positive value, e.g., 100)
-            # This makes the pump think it's too warm.
-            value_to_write = 100
-            logger.info(f"  Mode REST. Target DM: {value_to_write:.1f}")
-
-        elif planned_action == 'HOLD' or planned_action == 'NORMAL':
-            # Simply let pump follow its own calculated GM (transparent)
+        if planned_action in ['MUST_RUN', 'RUN']:
             value_to_write = account.balance
-            logger.info(f"  Mode NORMAL/HOLD. Target DM: {value_to_write:.1f}")
+            if value_to_write > -60: value_to_write = -500 # Force start if balance is too high
+            
+        elif planned_action in ['MUST_REST', 'REST']:
+            value_to_write = 100 # Force stop
 
-        # Safety override: If pump GM is too high, force it to run
-        if current_pump_gm > 50:
-            logger.warning(f"Pump GM {current_pump_gm:.1f} is high, forcing pump to RUN.")
-            value_to_write = 0 # Set to 0 to make pump run if it has demand
+        elif planned_action in ['HOLD', 'NORMAL']:
+            value_to_write = account.balance
 
-        # Final write to pump
-        if self.set_pump_gm(device.device_id, value_to_write):
-            self.last_written_gm = value_to_write # Update what we actually wrote
+        # Safety override
+        if current_pump_gm > 50 and planned_action not in ['REST', 'MUST_REST']:
+             value_to_write = 0
+
+        # Write to Pump
+        self.set_pump_gm(device.device_id, value_to_write)
+        self.set_pump_offset(device.device_id, target_offset)
         
-        self.db.add(account) # Update last_updated
+        self.db.add(account)
         self.db.commit()
 
     def run_loop(self):
@@ -173,9 +156,8 @@ class GMController:
                 self.run_tick()
             except Exception as e:
                 logger.error(f"Crash in GM Controller loop: {e}")
-                self.db.rollback() # Rollback any pending changes
-                
-            time.sleep(60) # Run every minute
+                self.db.rollback()
+            time.sleep(60)
 
 if __name__ == "__main__":
     ctrl = GMController()
