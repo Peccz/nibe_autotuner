@@ -15,11 +15,12 @@
 
     <!-- Main Chart -->
     <div class="card bg-dark text-white mb-4">
-        <div class="card-header">
-            Temperaturer
+        <div class="card-header d-flex justify-content-between">
+            <span>Temperaturer & Delta T</span>
+            <small class="text-muted"><i class="bi bi-circle-fill text-primary"></i> Inne <i class="bi bi-circle-fill text-danger"></i> Fram <i class="bi bi-circle-fill text-success"></i> Ute <i class="bi bi-circle-fill" style="color:#a855f7"></i> Delta T</small>
         </div>
         <div class="card-body">
-            <div style="height: 300px;">
+            <div style="height: 350px;">
                 <canvas id="tempChart"></canvas>
             </div>
         </div>
@@ -64,43 +65,98 @@
         
         try {
             // Load data
-            const [indoor, outdoor, supply, comp, cop] = await Promise.all([
-                fetch(`/api/chart/indoor?hours=${hours}`).then(r => r.json()),
-                fetch(`/api/chart/outdoor?hours=${hours}`).then(r => r.json()),
-                fetch(`/api/chart/supply?hours=${hours}`).then(r => r.json()),
-                fetch(`/api/chart/compressor?hours=${hours}`).then(r => r.json()),
-                fetch(`/api/chart/cop?hours=${hours}`).then(r => r.json())
+            const [indoor, outdoor, supply, deltaT, comp, cop] = await Promise.all([
+                fetch(`/api/chart/indoor?hours=${hours}`).then(r => r.json()).catch(e => ({success: false, error: e})),
+                fetch(`/api/chart/outdoor?hours=${hours}`).then(r => r.json()).catch(e => ({success: false, error: e})),
+                fetch(`/api/chart/supply?hours=${hours}`).then(r => r.json()).catch(e => ({success: false, error: e})),
+                fetch(`/api/chart/delta_t?hours=${hours}`).then(r => r.json()).catch(e => ({success: false, error: e})),
+                fetch(`/api/chart/compressor?hours=${hours}`).then(r => r.json()).catch(e => ({success: false, error: e})),
+                fetch(`/api/chart/cop?hours=${hours}`).then(r => r.json()).catch(e => ({success: false, error: e}))
             ]);
 
-            console.log("Charts Data Loaded:", {indoor, outdoor, supply, comp, cop});
+            console.log("Charts Data Loaded:", {indoor, outdoor, supply, deltaT, comp, cop});
 
-            // Temperature Chart
-            if (indoor?.success && outdoor?.success && supply?.success) {
-                renderChart('tempChart', [
-                    { label: 'Inne', data: indoor.data?.values || [], borderColor: '#3b82f6', tension: 0.4 },
-                    { label: 'Ute', data: outdoor.data?.values || [], borderColor: '#10b981', tension: 0.4 },
-                    { label: 'Framledning', data: supply.data?.values || [], borderColor: '#ef4444', tension: 0.4, borderDash: [5, 5] }
-                ], indoor.data?.labels || []);
+            // Temperature Chart - Build dynamically
+            const tempDatasets = [];
+            let tempLabels = [];
+
+            // 1. Innetemperatur (Huvudfokus)
+            if (indoor?.success && indoor.data?.values && indoor.data.values.length > 0) {
+                tempDatasets.push({ 
+                    label: 'Inne (°C)', 
+                    data: indoor.data.values, 
+                    borderColor: '#3b82f6', 
+                    borderWidth: 3,
+                    tension: 0.4,
+                    pointRadius: 0
+                });
+                tempLabels = indoor.data.labels;
+            }
+
+            // 2. Framledning
+            if (supply?.success && supply.data?.values && supply.data.values.length > 0) {
+                tempDatasets.push({ 
+                    label: 'Framledning', 
+                    data: supply.data.values, 
+                    borderColor: '#ef4444', 
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    tension: 0.4,
+                    pointRadius: 0
+                });
+                if (!tempLabels.length) tempLabels = supply.data.labels;
+            }
+
+            // 3. Delta T (Ifylld yta)
+            if (deltaT?.success && deltaT.data?.values && deltaT.data.values.length > 0) {
+                tempDatasets.push({ 
+                    label: 'Delta T', 
+                    data: deltaT.data.values, 
+                    borderColor: '#a855f7', 
+                    backgroundColor: 'rgba(168, 85, 247, 0.1)', 
+                    borderWidth: 1,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                });
+                if (!tempLabels.length) tempLabels = deltaT.data.labels;
+            }
+
+            // 4. Utetemperatur
+            if (outdoor?.success && outdoor.data?.values && outdoor.data.values.length > 0) {
+                tempDatasets.push({ 
+                    label: 'Ute', 
+                    data: outdoor.data.values, 
+                    borderColor: '#10b981', 
+                    borderWidth: 2,
+                    tension: 0.4,
+                    pointRadius: 0
+                });
+                if (!tempLabels.length) tempLabels = outdoor.data.labels;
+            }
+
+            if (tempDatasets.length > 0) {
+                renderChart('tempChart', tempDatasets, tempLabels);
             } else {
-                console.warn("Missing temperature data");
+                console.warn("No temperature data available to render");
             }
 
             // Compressor Chart
-            if (comp?.success && comp.data) {
+            if (comp?.success && comp.data?.values && comp.data.values.length > 0) {
                 renderChart('compChart', [
-                    { label: 'Kompressor (Hz)', data: comp.data.values || [], borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4 }
-                ], comp.data.labels || []);
+                    { label: 'Kompressor (Hz)', data: comp.data.values, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4, pointRadius: 0 }
+                ], comp.data.labels);
             }
 
             // COP Chart
-            if (cop?.success && cop.data) {
+            if (cop?.success && cop.data?.values && cop.data.values.length > 0) {
                 renderChart('copChart', [
-                    { label: 'COP', data: cop.data.values || [], borderColor: '#f59e0b', tension: 0.4 }
-                ], cop.data.labels || []);
+                    { label: 'COP', data: cop.data.values, borderColor: '#f59e0b', tension: 0.4, pointRadius: 0 }
+                ], cop.data.labels);
             }
             
         } catch (e) {
-            console.error("Failed to load charts:", e);
+            console.error("Failed to load charts logic:", e);
         }
     }
 
@@ -111,7 +167,11 @@
 
         if (!labels) labels = [];
 
-        const formattedLabels = labels.map(t => {
+        // Simple downsampling if too many points to avoid sluggishness
+        let finalLabels = labels;
+        let finalDatasets = datasets;
+
+        const formattedLabels = finalLabels.map(t => {
             try {
                 return new Date(t).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             } catch (e) {
@@ -123,15 +183,23 @@
             type: 'line',
             data: { 
                 labels: formattedLabels, 
-                datasets: datasets 
+                datasets: finalDatasets 
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                elements: { point: { radius: 0, hitRadius: 10 } },
                 interaction: { mode: 'index', intersect: false },
                 plugins: { 
-                    legend: { position: 'bottom', labels: { color: '#e5e7eb' } }
+                    legend: { position: 'bottom', labels: { color: '#e5e7eb', usePointStyle: true } },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1
+                    }
                 },
                 scales: {
                     x: { 

@@ -325,6 +325,30 @@ class AIDecisionLog(Base):
 
 
 
+
+class PlannedHeatingSchedule(Base):
+    __tablename__ = "planned_heating_schedule"
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    outdoor_temp = Column(Float)
+    electricity_price = Column(Float)
+    simulated_indoor_temp = Column(Float)
+    planned_action = Column(String, nullable=False) # MUST_RUN, MUST_REST, RUN, REST, HOLD
+    planned_gm_value = Column(Float) # GM value to write to pump (40940)
+
+    def __repr__(self):
+        return f"<PlannedHeatingSchedule(timestamp='{self.timestamp}', action='{self.planned_action}')>"
+
+class GMAccount(Base):
+    __tablename__ = "gm_account"
+    id = Column(Integer, primary_key=True)
+    balance = Column(Float, default=0.0) # Virtual GM balance
+    mode = Column(String, default="NORMAL") # AUTO, SAVE, SPEND
+    last_updated = Column(DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<GMAccount(balance={self.balance}, mode='{self.mode}')>"
+
 class LearningEvent(Base):
     """
     Tracks action-reaction events to learn house thermal properties.
