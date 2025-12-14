@@ -8,7 +8,7 @@ import json
 sys.path.insert(0, os.path.abspath('src'))
 
 from data.database import SessionLocal
-from data.models import Device, Parameter, ParameterReading, GMAccount, PlannedHeatingSchedule
+from data.models import Device, Parameter, ParameterReading, GMAccount, PlannedHeatingSchedule, AIDecisionLog
 from services.analyzer import HeatPumpAnalyzer
 from services.price_service import price_service
 
@@ -26,6 +26,10 @@ def dashboard():
 @app.route('/analytics')
 def analytics():
     return render_template('analytics.html')
+
+@app.route('/log')
+def log_page():
+    return render_template('changes.html')
 
 @app.route('/settings')
 def settings_page():
@@ -46,14 +50,19 @@ def get_status():
         metrics = analyzer.calculate_metrics(hours_back=1)
         
         # Fallback indoor temp
-        indoor = metrics.avg_indoor_temp if metrics else None
+        indoor = metrics.avg_indoor_temp if metrics and metrics.avg_indoor_temp else None
         if indoor is None and device:
             indoor = analyzer.get_latest_value(device, '40033') # BT50
 
         # Fallback outdoor temp
-        outdoor = metrics.avg_outdoor_temp if metrics else None
+        outdoor = metrics.avg_outdoor_temp if metrics and metrics.avg_outdoor_temp else None
         if outdoor is None and device:
             outdoor = analyzer.get_latest_value(device, '40004') # Outdoor
+
+        # HW Temp
+        hw_temp = None
+        if device:
+            hw_temp = analyzer.get_latest_value(device, '40013') # BT6
 
         # 2. GM Account
         account = session.query(GMAccount).first()
@@ -66,6 +75,7 @@ def get_status():
         return jsonify({
             'indoor_temp': round(indoor, 1) if indoor else None,
             'outdoor_temp': round(outdoor, 1) if outdoor else None,
+            'hw_temp': round(hw_temp, 1) if hw_temp else None,
             'target_temp': device.target_indoor_temp_min if device else 21.0,
             'gm_balance': round(gm_balance, 0),
             'gm_mode': gm_mode,
@@ -81,27 +91,59 @@ def get_plan():
     session = SessionLocal()
     try:
         now = datetime.utcnow()
-        # Fetch plan starting from 1 hour ago
+        # Fetch plan starting from 2 hours ago
         schedule = session.query(PlannedHeatingSchedule).filter(
             PlannedHeatingSchedule.timestamp >= now - timedelta(hours=2)
         ).order_by(PlannedHeatingSchedule.timestamp).all()
         
         data = []
         for s in schedule:
-            # Color code action for frontend convenience
-            action_code = 0
-            if s.planned_action in ['RUN', 'MUST_RUN']: action_code = 1
+            is_running = 0
+            if s.planned_action in ['RUN', 'MUST_RUN']: is_running = 1
             
             data.append({
                 'timestamp': s.timestamp.isoformat() + 'Z',
                 'action': s.planned_action,
                 'gm_load': s.planned_gm_value,
-                'is_running': action_code,
+                'is_running': is_running,
+                'hw_mode': s.planned_hot_water_mode, # NEW: 0, 1, 2
                 'price': s.electricity_price,
                 'indoor_sim': s.simulated_indoor_temp,
                 'outdoor': s.outdoor_temp
             })
         return jsonify(data)
+    finally:
+        session.close()
+
+@app.route('/api/changes')
+def get_changes():
+    session = SessionLocal()
+    try:
+        logs = session.query(AIDecisionLog).order_by(AIDecisionLog.timestamp.desc()).limit(50).all()
+        data = []
+        for log in logs:
+            data.append({
+                'timestamp': log.timestamp.isoformat(),
+                'parameter_name': 'AI Strategy',
+                'old_value': str(log.current_value) if log.current_value is not None else '--',
+                'new_value': str(log.suggested_value) if log.suggested_value is not None else log.reasoning[:20],
+                'reason': log.reasoning,
+                'applied_by': 'ai'
+            })
+        return jsonify({'success': True, 'data': data})
+    finally:
+        session.close()
+
+@app.route('/api/ai-agent/history')
+def get_ai_history():
+    session = SessionLocal()
+    try:
+        logs = session.query(AIDecisionLog).order_by(AIDecisionLog.timestamp.desc()).limit(10).all()
+        return jsonify([{
+            'timestamp': l.timestamp.isoformat() + 'Z',
+            'action': l.action,
+            'reasoning': l.reasoning
+        } for l in logs])
     finally:
         session.close()
 
