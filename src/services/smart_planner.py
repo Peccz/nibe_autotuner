@@ -10,6 +10,7 @@ from services.analyzer import HeatPumpAnalyzer
 from services.weather_service import SMHIWeatherService
 from services.price_service import PriceService
 from services.learning_service import LearningService
+from services.hw_analyzer import HotWaterPatternAnalyzer 
 from integrations.api_client import MyUplinkClient
 from integrations.auth import MyUplinkAuth
 from core.config import settings
@@ -22,7 +23,8 @@ class HourlyPlan(BaseModel):
     simulated_indoor_temp: Optional[float] = None
     planned_action: str # "MUST_RUN", "MUST_REST", "RUN", "REST", "HOLD"
     planned_gm_value: Optional[float] = None # GM value to write to pump (40940)
-    planned_offset: Optional[float] = 0.0 # Heating curve offset
+    planned_offset: Optional[float] = 0.0 
+    planned_hot_water_mode: Optional[int] = 1 # 0, 1, 2
 
 class SmartPlanner:
     def __init__(self):
@@ -31,6 +33,7 @@ class SmartPlanner:
         self.weather_service = SMHIWeatherService()
         self.price_service = PriceService()
         self.learning_service = LearningService(self.session, self.analyzer)
+        self.hw_analyzer = HotWaterPatternAnalyzer() 
         
         # Get device for all operations
         self.device = self.analyzer.get_device()
@@ -56,9 +59,6 @@ class SmartPlanner:
             rate = total_change / hours if hours > 0 else 0
             
             logger.info(f"REALITY CHECK (6h): Indoor temp changed {total_change:.1f}C in {hours:.1f}h. Rate: {rate:.2f} C/h")
-            
-            # Simple adaptive logic: If rate is low despite heating, maybe our output constant is too high?
-            # Or if rate is negative, maybe cooling rate is higher than we thought?
             return {'rate_6h': rate}
         except Exception as e:
             logger.warning(f"Reality check failed: {e}")
@@ -73,19 +73,22 @@ class SmartPlanner:
                 logger.error("No device found for SmartPlanner. Aborting.")
                 return []
 
-        # Run Reality Check (Logging only for now, later feedback loop)
+        # Run Reality Check
         self.calculate_real_world_metrics()
 
         # 1. Fetch current context
         current_metrics = self.analyzer.calculate_metrics(hours_back=1)
         current_indoor_temp = current_metrics.avg_indoor_temp if current_metrics and current_metrics.avg_indoor_temp else None
         
-        # Fallback 1: Latest known value
         if current_indoor_temp is None:
             latest = self.analyzer.get_latest_value(self.device, self.analyzer.PARAM_INDOOR_TEMP)
             if latest is not None:
                 current_indoor_temp = latest
                 logger.warning(f"Using latest known indoor temp (older than 1h): {latest}°C")
+
+        # Get Current HW Temp
+        hw_temp = self.analyzer.get_latest_value(self.device, '40013') 
+        if hw_temp is None: hw_temp = 50.0 
 
         # Get Comfort Targets
         min_safety_temp = self.device.min_indoor_temp_user_setting
@@ -105,12 +108,15 @@ class SmartPlanner:
         all_prices_data: Dict[int, float] = {}
         for p in price_forecast_today + price_forecast_raw:
             all_prices_data[p.time_start.hour] = p.price_per_kwh
+            
+        # Calculate avg price for HW logic
+        avg_price = sum(all_prices_data.values()) / len(all_prices_data) if all_prices_data else 0.5
         
         # Get thermal inertia
         inertia = self.learning_service.analyze_thermal_inertia()
         cooling_rate_0c = inertia.get('cooling_rate_0c', -0.15) 
 
-        logger.info(f"Current Indoor: {current_indoor_temp:.1f}°C. Targets: {min_safety_temp:.1f}-{target_min_temp:.1f}-{target_max_temp:.1f}°C")
+        logger.info(f"Current Indoor: {current_indoor_temp:.1f}°C. HW Temp: {hw_temp:.1f}°C. Targets: {min_safety_temp:.1f}-{target_min_temp:.1f}-{target_max_temp:.1f}°C")
 
         plan: List[HourlyPlan] = []
         simulated_indoor_temp = current_indoor_temp
@@ -133,6 +139,31 @@ class SmartPlanner:
             # Price
             electricity_price_hour = all_prices_data.get(current_planning_time.hour, 0.5)
             
+            # Hot Water Logic
+            hw_prob = self.hw_analyzer.get_usage_probability(current_planning_time)
+            hw_mode = 1 # Normal
+            
+            # --- BOOST LOGIC (Recovery) ---
+            # If temp is critically low, force LUX.
+            # Only apply based on *current* sensor data for the immediate future (next 2h).
+            is_boost_needed = False
+            if i < 2: 
+                if hw_temp < 42.0: # Critical level
+                    is_boost_needed = True 
+                elif hw_temp < 47.0 and hw_prob > 0.2: # Low level and risk
+                    is_boost_needed = True
+
+            is_cheap = electricity_price_hour < avg_price * 0.8
+            is_expensive = electricity_price_hour > avg_price * 1.2
+            is_high_risk = hw_prob > 0.5
+            
+            if is_boost_needed:
+                hw_mode = 2 # Lux (Maximum power)
+            elif is_cheap:
+                hw_mode = 2 # Lux (Load tank)
+            elif is_expensive and not is_high_risk:
+                hw_mode = 0 # Eco (Save)
+            
             # Simulation (Passive)
             effective_cooling_rate = cooling_rate_0c * (1 + (0 - outdoor_temp_hour) / 10) 
             simulated_indoor_if_off = simulated_indoor_temp + effective_cooling_rate
@@ -151,7 +182,8 @@ class SmartPlanner:
                 simulated_indoor_temp=simulated_indoor_temp,
                 planned_action=action,
                 planned_gm_value=0,
-                planned_offset=0.0 # Default
+                planned_offset=0.0,
+                planned_hot_water_mode=hw_mode
             ))
 
             # Update Simulation
@@ -165,7 +197,7 @@ class SmartPlanner:
             simulated_indoor_temp = max(min_safety_temp - 1.0, min(target_max_temp + 2.0, simulated_indoor_temp))
 
 
-        # 3. Second Pass: Price Optimization & Offset Assignment
+        # 3. Second Pass: Price Optimization
         hours_needed_to_run = 0
         total_estimated_heat_loss = 0.0
         for p in plan:
@@ -191,7 +223,7 @@ class SmartPlanner:
                 p_hour.planned_action = "REST"
                 p_hour.planned_gm_value = 0
         
-        # 4. Assign Offsets based on final plan
+        # 4. Finalize
         simulated_indoor_temp = current_indoor_temp # Reset for final pass
         for p_hour in plan:
             # Simulation update
@@ -204,24 +236,14 @@ class SmartPlanner:
                 simulated_indoor_temp += effective_cooling_rate
             
             p_hour.simulated_indoor_temp = simulated_indoor_temp
-            
-            # Offset Logic
-            if p_hour.planned_action == "MUST_RUN":
-                p_hour.planned_offset = 2.0 # Force heat
-            elif p_hour.planned_action == "RUN":
-                p_hour.planned_offset = 1.0 # Efficient heat
-            elif p_hour.planned_action in ["REST", "MUST_REST"]:
-                p_hour.planned_offset = -5.0 # Force stop
-            else:
-                p_hour.planned_offset = 0.0
-
+            p_hour.planned_offset = 0.0 
 
         # Log and store
-        logger.info("\n--- 24h Heating Plan (with Offset) ---")
+        logger.info("\n--- 24h Heating Plan (Pure GM + Boost HW) ---")
         for p_hour in plan:
+            hw_str = ["ECO", "NORMAL", "LUX"][p_hour.planned_hot_water_mode]
             logger.info(f"{p_hour.timestamp.strftime('%H:%M')}: {p_hour.planned_action:<10} | "
-                        f"Offset:{p_hour.planned_offset:>4.1f} | "
-                        f"InneSim:{p_hour.simulated_indoor_temp:5.1f}°C")
+                        f"InneSim:{p_hour.simulated_indoor_temp:5.1f}°C | HW: {hw_str}")
         
         # Save to DB
         self.session.query(PlannedHeatingSchedule).delete()
@@ -235,7 +257,8 @@ class SmartPlanner:
                 simulated_indoor_temp=p_hour.simulated_indoor_temp,
                 planned_action=p_hour.planned_action,
                 planned_gm_value=p_hour.planned_gm_value,
-                planned_offset=p_hour.planned_offset # Save offset
+                planned_offset=p_hour.planned_offset,
+                planned_hot_water_mode=p_hour.planned_hot_water_mode 
             )
             self.session.add(schedule_entry)
         self.session.commit()

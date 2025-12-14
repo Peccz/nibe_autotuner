@@ -315,7 +315,6 @@ class AIDecisionLog(Base):
     expected_impact = Column(String(500))
     applied = Column(Boolean, default=False)  # Whether change was actually applied
     parameter_change_id = Column(Integer, ForeignKey('parameter_changes.id'))
-    # Added to handle non-numeric values in logs (like 'NORMAL', 'SPEND')
     hot_water_demand = Column(Integer, nullable=True) # 0, 1, 2, 3, 4
 
     # Relationships
@@ -395,7 +394,8 @@ class PlannedHeatingSchedule(Base):
     simulated_indoor_temp = Column(Float)
     planned_action = Column(String, nullable=False) # MUST_RUN, MUST_REST, RUN, REST, HOLD
     planned_gm_value = Column(Float) # GM value to write to pump (40940)
-    planned_offset = Column(Float, default=0.0) # NEW: Planned offset value
+    planned_offset = Column(Float, default=0.0) # Planned offset value
+    planned_hot_water_mode = Column(Integer, default=1) # NEW: 0=Eco, 1=Normal, 2=Lux
 
     def __repr__(self):
         return f"<PlannedHeatingSchedule(timestamp='{self.timestamp}', action='{self.planned_action}')>"
