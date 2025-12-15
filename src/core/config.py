@@ -93,6 +93,19 @@ class Settings(BaseSettings):
     """Mobile PWA server port"""
 
     # ============================================================================
+    # SmartPlanner Settings (Tuning)
+    # ============================================================================
+    
+    K_GM_PER_DELTA_T_PER_H: float = 3.0 
+    """GM lost per degree-hour difference. Lower value = house retains heat better/simulation less aggressive."""
+
+    COMPRESSOR_HEAT_OUTPUT_C_PER_H: float = 0.5 
+    """Degrees Celsius gain per hour when compressor is running."""
+
+    GM_PRODUCTION_PER_HOUR_RUNNING: float = 60.0 
+    """GM produced per hour when compressor is running."""
+
+    # ============================================================================
     # Feature Flags
     # ============================================================================
 
