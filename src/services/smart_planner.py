@@ -114,7 +114,7 @@ class SmartPlanner:
         
         # Get thermal inertia
         inertia = self.learning_service.analyze_thermal_inertia()
-        cooling_rate_0c = inertia.get('cooling_rate_0c', -0.15) 
+        cooling_rate_0c = inertia.get('cooling_rate_0c', -0.05) # UPDATED FROM -0.15
 
         logger.info(f"Current Indoor: {current_indoor_temp:.1f}°C. HW Temp: {hw_temp:.1f}°C. Targets: {min_safety_temp:.1f}-{target_min_temp:.1f}-{target_max_temp:.1f}°C")
 
@@ -139,30 +139,41 @@ class SmartPlanner:
             # Price
             electricity_price_hour = all_prices_data.get(current_planning_time.hour, 0.5)
             
-            # Hot Water Logic
+            # --- HOT WATER STRATEGY (Proactive) ---
+            hw_mode = 1 # Default Normal
+            hour = current_planning_time.hour
             hw_prob = self.hw_analyzer.get_usage_probability(current_planning_time)
-            hw_mode = 1 # Normal
             
-            # --- BOOST LOGIC (Recovery) ---
-            # If temp is critically low, force LUX.
-            # Only apply based on *current* sensor data for the immediate future (next 2h).
+            # 1. Critical Boost (Reactive) - Only applied to first hour based on sensor
             is_boost_needed = False
-            if i < 2: 
-                if hw_temp < 42.0: # Critical level
-                    is_boost_needed = True 
-                elif hw_temp < 47.0 and hw_prob > 0.2: # Low level and risk
-                    is_boost_needed = True
-
+            if i == 0:
+                if hw_temp < 42.0: is_boost_needed = True
+                elif hw_temp < 47.0 and hw_prob > 0.2: is_boost_needed = True
+            
+            # 2. Afternoon Charge (Proactive) - 13:00 to 16:00
+            is_preheat_time = 13 <= hour <= 16
+            is_price_ok_for_preheat = electricity_price_hour < avg_price * 1.15
+            
+            # 3. Evening Safety (Risk Management) - 17:00 to 21:00
+            is_high_risk_time = 17 <= hour <= 21
+            
+            # 4. General Price Logic
             is_cheap = electricity_price_hour < avg_price * 0.8
             is_expensive = electricity_price_hour > avg_price * 1.2
-            is_high_risk = hw_prob > 0.5
-            
+
+            # Decision Logic (Priority Order)
             if is_boost_needed:
-                hw_mode = 2 # Lux (Maximum power)
+                hw_mode = 2 # Lux (Critical)
+            elif is_preheat_time and is_price_ok_for_preheat:
+                hw_mode = 2 # Lux (Pre-load)
             elif is_cheap:
-                hw_mode = 2 # Lux (Load tank)
-            elif is_expensive and not is_high_risk:
-                hw_mode = 0 # Eco (Save)
+                hw_mode = 2 # Lux (Opportunity)
+            elif is_high_risk_time:
+                hw_mode = 1 # Normal (Safety floor)
+            elif is_expensive:
+                hw_mode = 0 # Eco (Savings)
+            else:
+                hw_mode = 1 # Normal
             
             # Simulation (Passive)
             effective_cooling_rate = cooling_rate_0c * (1 + (0 - outdoor_temp_hour) / 10) 
@@ -239,7 +250,7 @@ class SmartPlanner:
             p_hour.planned_offset = 0.0 
 
         # Log and store
-        logger.info("\n--- 24h Heating Plan (Pure GM + Boost HW) ---")
+        logger.info("\n--- 24h Heating Plan (Pure GM + Smart HW Pro) ---")
         for p_hour in plan:
             hw_str = ["ECO", "NORMAL", "LUX"][p_hour.planned_hot_water_mode]
             logger.info(f"{p_hour.timestamp.strftime('%H:%M')}: {p_hour.planned_action:<10} | "

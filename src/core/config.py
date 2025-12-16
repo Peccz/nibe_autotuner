@@ -96,10 +96,10 @@ class Settings(BaseSettings):
     # SmartPlanner Settings (Tuning)
     # ============================================================================
     
-    K_GM_PER_DELTA_T_PER_H: float = 3.0 
+    K_GM_PER_DELTA_T_PER_H: float = 2.0 
     """GM lost per degree-hour difference. Lower value = house retains heat better/simulation less aggressive."""
 
-    COMPRESSOR_HEAT_OUTPUT_C_PER_H: float = 0.5 
+    COMPRESSOR_HEAT_OUTPUT_C_PER_H: float = 0.6 
     """Degrees Celsius gain per hour when compressor is running."""
 
     GM_PRODUCTION_PER_HOUR_RUNNING: float = 60.0 
