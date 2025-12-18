@@ -114,7 +114,7 @@ class SmartPlanner:
         
         # Get thermal inertia
         inertia = self.learning_service.analyze_thermal_inertia()
-        cooling_rate_0c = inertia.get('cooling_rate_0c', -0.05) # UPDATED FROM -0.15
+        cooling_rate_0c = inertia.get('cooling_rate_0c', -0.10) # Balanced tuning
 
         logger.info(f"Current Indoor: {current_indoor_temp:.1f}°C. HW Temp: {hw_temp:.1f}°C. Targets: {min_safety_temp:.1f}-{target_min_temp:.1f}-{target_max_temp:.1f}°C")
 
@@ -159,7 +159,7 @@ class SmartPlanner:
             
             # 4. General Price Logic
             is_cheap = electricity_price_hour < avg_price * 0.8
-            is_expensive = electricity_price_hour > avg_price * 1.2
+            is_expensive = electricity_price_price_hour > avg_price * 1.2
 
             # Decision Logic (Priority Order)
             if is_boost_needed:
