@@ -3,132 +3,129 @@ import json
 import threading
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
+from dataclasses import dataclass
 from loguru import logger
 import os
 
+@dataclass
+class PricePoint:
+    time_start: datetime
+    price_per_kwh: float
+
 class PriceService:
     """
-    Hämtar aktuella elpriser (spotpris) från Elprisetjustnu.se (gratis, inget konto).
+    Hämtar aktuella elpriser och lägger på ALLA avgifter för att få fram verklig kostnad.
+    Baserat på användarens E.ON priser i Upplands Väsby.
     """
 
+    # --- PRISKOMPONENTER (SEK/kWh) ---
+    # Dessa värden är baserade på användarens faktiska priser från E.ON i Upplands Väsby.
+    # Spotpriset från API:et antas vara EXKLUSIVE moms.
+    
+    GRID_FEE_FLAT = 0.25                                # Elöverföringsavgift: 25 öre/kWh (Dygnet runt)
+    ENERGY_TAX_INCL_VAT = 0.5488                        # Energiskatt: 54.88 öre/kWh (Inklusive moms)
+    RETAILER_FEE = float(os.getenv("PRICE_RETAILER", 0.05)) # Elhandlare: Påslag + Elcertifikat (Default 5 öre/kWh)
+    VAT_RATE = 1.25                                     # Moms: 25% (på spotpris + nätavgift + påslag)
+    
     def __init__(self):
-        # Standardzon SE3 (Stockholm) om inget annat anges i .env
         self.zone = os.getenv("ELECTRICITY_ZONE", "SE3")
         self.api_base_url = "https://www.elprisetjustnu.se/api/v1/prices"
-
-        # Enkel cache för att slippa anropa API:t varje gång
         self.cache: Dict[str, Any] = {}
-        self.cache_timestamp: Optional[datetime] = None
-        self.cache_date_str: Optional[str] = None
-
-        # Thread-safety: Lock för cache-access
+        self.date_caches: Dict[str, List[Dict]] = {}
         self._cache_lock = threading.Lock()
 
+    def _calculate_total_cost(self, spot_price_incl_vat: float, dt: datetime) -> float:
+        """
+        Räknar ut totalt pris (Spot + Nät + Skatt + Påslag + Moms).
+        Spotpriset från API:et (elprisetjustnu.se) inkluderar redan 25% moms.
+        """
+        # Spotpriset inkluderar redan moms.
+        
+        # Nätavgift och elhandlarpåslag (antag exkl. moms i konstanterna)
+        base_fees_excl_vat = self.GRID_FEE_FLAT + self.RETAILER_FEE
+        fees_incl_vat = base_fees_excl_vat * self.VAT_RATE
+        
+        # Totalt pris inkl. moms men exkl. energiskatt
+        subtotal_incl_vat = spot_price_incl_vat + fees_incl_vat
+        
+        # Lägg till Energiskatten (som är inklusive moms)
+        final_price_per_kwh = subtotal_incl_vat + self.ENERGY_TAX_INCL_VAT
+        
+        return final_price_per_kwh
+
     def get_current_price(self) -> float:
-        """
-        Hämtar aktuellt timpris i SEK/kWh.
-        Inkluderar INTE överföringsavgifter eller skatt, bara spotpriset.
-        """
+        return self.get_current_price_details()['total']
+
+    def get_current_price_details(self) -> Dict[str, float]:
+        """Returns detailed price info: {'total': float, 'spot': float}"""
         try:
             now = datetime.now()
             prices = self._get_prices_for_date(now)
             
-            if not prices:
-                logger.warning("Could not fetch prices, using fallback default.")
-                return 1.50 # Fallback: 1.50 kr om API är nere
-
-            # Hitta rätt timme
-            current_hour = now.hour
+            spot = 1.0 # Fallback default spot
+            if prices:
+                for p in prices:
+                    try:
+                        start_time = datetime.fromisoformat(p['time_start'])
+                        # Adjust for timezone if necessary (API is often +01:00 or +02:00)
+                        # Ensure comparison is done on same timezone (UTC for now)
+                        if start_time.replace(tzinfo=None).hour == now.hour:
+                            spot = float(p['SEK_per_kWh'])
+                            break
+                    except: continue
             
-            for p in prices:
-                # API format: "time_start": "2023-10-25T14:00:00+02:00"
-                # Vi litar på ordningen eller parsear datumet
-                try:
-                    start_time = datetime.fromisoformat(p['time_start'])
-                    if start_time.hour == current_hour:
-                        # Priset är i SEK per kWh
-                        return float(p['SEK_per_kWh'])
-                except Exception:
-                    continue
-            
-            logger.warning(f"Could not find price for hour {current_hour}, using fallback.")
-            return 1.50
+            total = self._calculate_total_cost(spot, now)
+            return {'total': total, 'spot': spot}
 
         except Exception as e:
             logger.error(f"Error fetching electricity price: {e}")
-            return 1.50 # Fallback
+            return {'total': 1.50, 'spot': 0.50} # General fallback
 
-    def get_price_analysis(self) -> Dict[str, Any]:
-        """
-        Ger en analys av prisläget:
-        - current_price: Nuvarande pris
-        - price_level: CHEAP, NORMAL, EXPENSIVE, VERY_EXPENSIVE
-        - average: Dygnsmedel
-        - is_cheap_soon: Om priset sjunker kommande timmar
-        """
-        current = self.get_current_price()
-        
-        # Hämta alla priser för idag för att räkna snitt
-        prices = self._get_prices_for_date(datetime.now())
-        if not prices:
-            return {
-                "current_price": current,
-                "price_level": "NORMAL", # Utgå från normalt om vi inte vet
-                "average": current,
-                "trend": "STABLE"
-            }
+    def get_prices_today(self) -> List[PricePoint]:
+        data = self._get_prices_for_date(datetime.now())
+        return self._parse_prices(data)
 
-        daily_values = [float(p['SEK_per_kWh']) for p in prices]
-        avg_price = sum(daily_values) / len(daily_values)
-        
-        # Bestäm nivå relativt till dygnsmedel
-        if current < avg_price * 0.8:
-            level = "CHEAP"
-        elif current > avg_price * 1.4:
-            level = "VERY_EXPENSIVE"
-        elif current > avg_price * 1.15:
-            level = "EXPENSIVE"
-        else:
-            level = "NORMAL"
+    def get_prices_tomorrow(self) -> List[PricePoint]:
+        tomorrow = datetime.now() + timedelta(days=1)
+        data = self._get_prices_for_date(tomorrow)
+        return self._parse_prices(data)
 
-        return {
-            "current_price": round(current, 3),
-            "price_level": level,
-            "average": round(avg_price, 3),
-            "currency": "SEK"
-        }
+    def _parse_prices(self, data: List[Dict]) -> List[PricePoint]:
+        points = []
+        for item in data:
+            try:
+                ts_str = item['time_start']
+                if ts_str.endswith('Z'): ts_str = ts_str[:-1] + '+00:00'
+                dt = datetime.fromisoformat(ts_str)
+                
+                spot_price = float(item['SEK_per_kWh'])
+                total_price = self._calculate_total_cost(spot_price, dt)
+                
+                points.append(PricePoint(time_start=dt, price_per_kwh=total_price))
+            except Exception as e:
+                logger.warning(f"Failed to parse price item: {item} - {e}")
+                pass
+        return points
 
     def _get_prices_for_date(self, date_obj: datetime) -> List[Dict]:
-        """Hämtar priser för ett specifikt datum med thread-safe caching"""
-        date_str = date_obj.strftime('%Y/%m-%d') # Format: 2023/10-25
-
-        # Check cache with lock (fast path)
+        date_str = date_obj.strftime('%Y/%m-%d')
         with self._cache_lock:
-            if (self.cache_date_str == date_str and
-                self.cache and
-                self.cache_timestamp and
-                (datetime.now() - self.cache_timestamp).total_seconds() < 3600):
-                return self.cache.copy()  # Return copy to avoid mutation issues
+            if date_str in self.date_caches and self.date_caches[date_str]:
+                return self.date_caches[date_str]
 
-        # Cache miss - fetch from API (outside lock to avoid blocking other threads)
-        # Konstruera URL: https://www.elprisetjustnu.se/api/v1/prices/2023/10-25_SE3.json
         url = f"{self.api_base_url}/{date_str}_{self.zone}.json"
-
         try:
             logger.info(f"Fetching prices from {url}")
             response = requests.get(url, timeout=10)
+            if response.status_code == 404:
+                return [] # Not available yet
             response.raise_for_status()
             data = response.json()
-
-            # Uppdatera cache med lock
             with self._cache_lock:
-                self.cache = data
-                self.cache_date_str = date_str
-                self.cache_timestamp = datetime.now()
-
+                self.date_caches[date_str] = data
             return data
         except Exception as e:
-            logger.error(f"Failed to fetch prices from Elprisetjustnu: {e}")
+            logger.error(f"Failed to fetch prices: {e}")
             return []
 
 # Singleton instance

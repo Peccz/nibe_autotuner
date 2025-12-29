@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% set active_page = 'settings' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <h4 class="mb-4 text-white">Inställningar</h4>
+
+    <div class="card bg-dark text-white mb-3 border-secondary">
+        <div class="card-header border-secondary">Komfort & Gränser</div>
+        <div class="card-body">
+            <div class="mb-4">
+                <label class="form-label d-flex justify-content-between">
+                    <span>Måltemperatur Inne</span>
+                    <span class="fw-bold" id="lbl_target">{{ device.target_indoor_temp_min }}°C</span>
+                </label>
+                <input type="range" class="form-range" min="18" max="24" step="0.5" id="target_indoor_temp_min" value="{{ device.target_indoor_temp_min }}" oninput="updateLabel('lbl_target', this.value)">
+                <div class="form-text text-muted">Systemet försöker hålla temperaturen här.</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label d-flex justify-content-between">
+                    <span>Lägsta tillåtna (Safety)</span>
+                    <span class="fw-bold" id="lbl_min">{{ device.min_indoor_temp_user_setting }}°C</span>
+                </label>
+                <input type="range" class="form-range" min="15" max="22" step="0.5" id="min_indoor_temp" value="{{ device.min_indoor_temp_user_setting }}" oninput="updateLabel('lbl_min', this.value)">
+                <div class="form-text text-muted text-warning"><i class="bi bi-shield-exclamation"></i> Tvingar "MUST RUN" under denna gräns.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-grid gap-2">
+        <button class="btn btn-primary py-2" onclick="saveSettings()">
+            <i class="bi bi-save me-2"></i> Spara Inställningar
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function updateLabel(id, val) {
+        document.getElementById(id).innerText = val + "°C";
+    }
+
+    async function saveSettings() {
+        const target = parseFloat(document.getElementById('target_indoor_temp_min').value);
+        const min = parseFloat(document.getElementById('min_indoor_temp').value);
+
+        if (min >= target) {
+            alert('Säkerhetsgränsen måste vara lägre än måltemperaturen!');
+            return;
+        }
+
+        const data = {
+            target_indoor_temp_min: target,
+            target_indoor_temp_max: target + 1.0,
+            min_indoor_temp: min
+        };
+
+        try {
+            const btn = document.querySelector('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sparar...';
+            btn.disabled = true;
+
+            const res = await fetch('/api/settings/update', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+
+            if(result.success) {
+                // Show toast or alert
+                alert('Inställningar sparade!'); 
+            } else {
+                alert('Fel: ' + result.error);
+            }
+        } catch (e) {
+            alert('Kunde inte spara: ' + e);
+        }
+    }
+</script>
+{% endblock %}

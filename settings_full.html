@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% set active_page = 'settings' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <h2>⚙️ Inställningar</h2>
+    <div class="row mt-4">
+        <div class="col-md-6 offset-md-3">
+            
+            <!-- Temperature Settings -->
+            <div class="card bg-dark text-white mb-4 border-secondary">
+                <div class="card-header border-secondary">
+                    <i class="bi bi-thermometer-half"></i> Temperatur
+                </div>
+                <div class="card-body">
+                    
+                    <div class="mb-3">
+                        <label for="min-indoor" class="form-label text-danger"><i class="bi bi-shield-lock"></i> Absolut Lägsta (Säkerhet)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control bg-dark text-white border-secondary" id="min-indoor" step="0.5" min="15" max="25">
+                            <span class="input-group-text bg-secondary text-white border-secondary">°C</span>
+                        </div>
+                        <div class="form-text text-muted">Systemet tillåts ALDRIG gå under denna temperatur.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-success"><i class="bi bi-thermometer-sun"></i> Komfortintervall (Mål)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark text-muted border-secondary">Min</span>
+                            <input type="number" class="form-control bg-dark text-white border-secondary" id="target-min" step="0.5" min="18" max="25">
+                            <span class="input-group-text bg-dark text-muted border-secondary">Max</span>
+                            <input type="number" class="form-control bg-dark text-white border-secondary" id="target-max" step="0.5" min="18" max="25">
+                            <span class="input-group-text bg-secondary text-white border-secondary">°C</span>
+                        </div>
+                        <div class="form-text text-muted">AI:n optimerar för att ligga här. Höj Min för att tvinga buffring.</div>
+                    </div>
+
+                    <button class="btn btn-primary w-100" onclick="saveSettings()">Spara Temperatur</button>
+                </div>
+            </div>
+
+            <!-- Away Mode -->
+            <div class="card bg-dark text-white mb-4 border-info">
+                <div class="card-header border-info">
+                    <i class="bi bi-airplane"></i> Semester / Borta
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Sänker temperaturen till 16°C och stänger av varmvatten.</p>
+                    
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="away-enabled">
+                        <label class="form-check-label" for="away-enabled">Aktivera Borta-läge</label>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="away-end" class="form-label">Hemkomst</label>
+                        <input type="datetime-local" class="form-control bg-dark text-white" id="away-end">
+                    </div>
+                    
+                    <button class="btn btn-info w-100" onclick="saveAwayMode()">Spara Semesterläge</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    async function loadSettings() {
+        try {
+            const res = await fetch('/api/settings');
+            const data = await res.json();
+            
+            if (data.success) {
+                const s = data.settings;
+                document.getElementById('min-indoor').value = s.min_indoor_temp;
+                document.getElementById('target-min').value = s.target_indoor_temp_min;
+                document.getElementById('target-max').value = s.target_indoor_temp_max;
+                
+                if (s.away_mode_enabled !== undefined) document.getElementById('away-enabled').checked = s.away_mode_enabled;
+                if (s.away_mode_end_date) document.getElementById('away-end').value = s.away_mode_end_date.slice(0, 16);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    async function saveSettings() {
+        const minIndoor = document.getElementById('min-indoor').value;
+        const targetMin = document.getElementById('target-min').value;
+        const targetMax = document.getElementById('target-max').value;
+        
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    min_indoor_temp: minIndoor,
+                    target_indoor_temp_min: targetMin,
+                    target_indoor_temp_max: targetMax
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Sparat!');
+            } else {
+                alert('Fel: ' + data.error);
+            }
+        } catch (e) {
+            alert('Kunde inte spara');
+        }
+    }
+
+    async function saveAwayMode() {
+        const enabled = document.getElementById('away-enabled').checked;
+        const endDate = document.getElementById('away-end').value;
+        
+        try {
+            const response = await fetch('/api/settings/away-mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    enabled: enabled,
+                    end_date: endDate ? new Date(endDate).toISOString() : null
+                })
+            });
+            const result = await response.json();
+            if (result.success) {
+                alert('Semesterläge sparat!');
+            } else {
+                alert('Fel: ' + result.error);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Kunde inte spara.');
+        }
+    }
+
+    loadSettings();
+</script>
+{% endblock %}

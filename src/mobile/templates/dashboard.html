@@ -1,185 +1,356 @@
 {% extends "base.html" %}
-{% set active_page = 'home' %}
+{% set active_page = 'dashboard' %}
 
 {% block content %}
-<div class="row mt-2">
-    <!-- Status Card -->
-    <div class="col-12">
-        <div class="card bg-gradient-primary text-white" style="background: linear-gradient(135deg, #1e1e1e 0%, #252525 100%);">
-            <div class="card-body text-center py-4">
-                <div class="d-flex justify-content-center align-items-center mb-2">
-                    <span class="text-muted text-uppercase fw-bold me-2" style="font-size: 0.8rem;">INOMHUS</span>
-                    <i class="bi bi-thermometer-half text-primary"></i>
+<div class="container-fluid mt-3">
+    <!-- Top Status Row -->
+    <div class="row g-2 mb-3">
+        <!-- GM Bank -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark text-white h-100 border-secondary shadow-sm">
+                <div class="card-body text-center p-2">
+                    <small class="text-muted text-uppercase" style="font-size:0.7rem;">GM Bank</small>
+                    <div class="d-flex align-items-center justify-content-center mt-1">
+                        <h2 class="mb-0 fw-bold" id="gm-balance">--</h2>
+                    </div>
+                    <span class="badge mt-1" id="gm-mode-badge">--</span>
                 </div>
-                <h1 class="display-1 fw-bold mb-0" id="indoor-temp">--.-</h1>
-                <p class="text-muted mb-4">Mål: <span id="target-temp">--</span>°C</p>
-                
-                <div class="row border-top border-secondary pt-3">
-                    <div class="col-4 border-end border-secondary">
-                        <small class="text-muted d-block" style="font-size: 0.7rem;">UTE</small>
-                        <strong class="fs-5" id="outdoor-temp">--</strong>
+            </div>
+        </div>
+        
+        <!-- Price -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark text-white h-100 border-secondary shadow-sm">
+                <div class="card-body text-center p-2">
+                    <small class="text-muted text-uppercase" style="font-size:0.7rem;">Elpris</small>
+                    <div class="d-flex align-items-center justify-content-center mt-1">
+                        <h2 class="mb-0 fw-bold" id="current-price">--</h2>
+                        <span class="ms-1 small text-muted">kr</span>
                     </div>
-                    <div class="col-4 border-end border-secondary">
-                        <small class="text-muted d-block" style="font-size: 0.7rem;">OFFSET</small>
-                        <strong class="fs-5" id="curve-info">--</strong>
+                    <small class="text-muted" style="font-size:0.7rem;">Spot: <span id="spot-price">--</span> kr</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Indoor -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark text-white h-100 border-secondary shadow-sm">
+                <div class="card-body text-center p-2">
+                    <small class="text-muted text-uppercase" style="font-size:0.7rem;">Inne</small>
+                    <div class="d-flex align-items-center justify-content-center mt-1">
+                        <h2 class="mb-0 fw-bold" id="indoor-temp">--</h2>
+                        <span class="ms-1 small text-muted">°C</span>
                     </div>
-                    <div class="col-4">
-                        <small class="text-muted d-block" style="font-size: 0.7rem;">COP</small>
-                        <strong class="fs-5 text-success" id="cop-value">--</strong>
+                    <small class="text-success" style="font-size:0.7rem;">Mål: <span id="target-temp">--</span>°C</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Outdoor -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark text-white h-100 border-secondary shadow-sm">
+                <div class="card-body text-center p-2">
+                    <small class="text-muted text-uppercase" style="font-size:0.7rem;">Ute / VV</small>
+                    <div class="d-flex align-items-center justify-content-center mt-1">
+                        <h2 class="mb-0 fw-bold" id="outdoor-temp">--</h2>
+                        <span class="ms-1 small text-muted">°C</span>
+                    </div>
+                    <small class="text-info" style="font-size:0.7rem;">VV: <span id="hw-temp">--</span>°C</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chart: The Plan -->
+    <div class="card bg-dark text-white mb-3 border-secondary shadow-sm">
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center py-2">
+            <span class="fw-bold"><i class="bi bi-graph-up"></i> Historik & Plan (24h)</span>
+            <small class="text-muted" style="font-size:0.7rem;">Deterministisk Modell</small>
+        </div>
+        <div class="card-body p-2" style="height: 350px; position: relative;">
+            <canvas id="planChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Detailed Plan Table (Collapsible) -->
+    <div class="accordion mb-4" id="planAccordion">
+        <div class="accordion-item bg-dark border-secondary">
+            <h2 class="accordion-header" id="headingOne">
+                <button class="accordion-button collapsed bg-dark text-white shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                    <i class="bi bi-list-ul me-2"></i> Visa Detaljerad Tabell
+                </button>
+            </h2>
+            <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#planAccordion">
+                <div class="accordion-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm mb-0" style="font-size: 0.85rem;">
+                            <thead>
+                                <tr class="text-muted">
+                                    <th>Tid</th>
+                                    <th>Värme</th>
+                                    <th>VV</th>
+                                    <th>Pris</th>
+                                    <th>Ute</th>
+                                    <th>Inne</th>
+                                </tr>
+                            </thead>
+                            <tbody id="schedule-table-body">
+                                <tr><td colspan="6" class="text-center py-2">Laddar plan...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
-
-<!-- AI Status -->
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header border-0 bg-transparent pb-0 pt-3">
-                <span class="text-label" style="font-size: 0.75rem; color: #666;">AI AGENT</span>
-                <span class="badge bg-primary bg-opacity-10 text-primary" style="font-size: 0.7rem;">Gemini Active</span>
-            </div>
-            <div class="card-body pt-2">
-                <div class="d-flex align-items-start">
-                    <div class="me-3 mt-1">
-                        <span class="status-dot status-ok"></span>
-                    </div>
-                    <div>
-                        <h5 class="card-title fs-6 mb-1" id="ai-action">Väntar på data...</h5>
-                        <p class="card-text text-muted small mb-1" id="ai-reason" style="line-height: 1.4;">Laddar senaste beslutet från agenten.</p>
-                        <small class="text-muted" style="font-size: 0.7rem;" id="ai-time"></small>
-                    </div>
-                </div>
-            </div>
+    
+    <!-- Recent Activity Log -->
+    <div class="card bg-dark text-white mb-4 shadow-sm">
+        <div class="card-header border-secondary">
+            <span><i class="bi bi-activity"></i> Logg (Strategi)</span>
+        </div>
+        <div class="list-group list-group-flush list-group-dark" id="activity-log">
+            <!-- Items injected by JS -->
         </div>
     </div>
 </div>
-
-<!-- Quick Actions -->
-<div class="row g-2 mb-4">
-    <div class="col-6">
-        <div class="btn-quick" onclick="quickAction('boost')">
-            <i class="bi bi-fire text-danger"></i>
-            <span>Boost</span>
-        </div>
-    </div>
-    <div class="col-6">
-        <div class="btn-quick" onclick="quickAction('water')">
-            <i class="bi bi-droplet-fill text-info"></i>
-            <span>Varmvatten</span>
-        </div>
-    </div>
-    <div class="col-6">
-        <div class="btn-quick" onclick="quickAction('save')">
-            <i class="bi bi-piggy-bank text-success"></i>
-            <span>Spara</span>
-        </div>
-    </div>
-    <div class="col-6">
-        <div class="btn-quick" onclick="location.href='/settings'">
-            <i class="bi bi-airplane-fill text-warning"></i>
-            <span>Borta</span>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 <script>
+    let planChart = null;
+
     async function updateDashboard() {
         try {
-            // Fetch Metrics
-            const mRes = await fetch('/api/metrics');
-            const mData = await mRes.json();
+            // 1. Status Data
+            const sRes = await fetch('/api/status');
+            if (!sRes.ok) throw new Error("Status API failed");
+            const status = await sRes.json();
             
-            if (mData.success) {
-                const d = mData.data;
-                document.getElementById('indoor-temp').innerText = d.avg_indoor_temp ? d.avg_indoor_temp.toFixed(1) : '--.-';
-                document.getElementById('outdoor-temp').innerText = d.avg_outdoor_temp ? d.avg_outdoor_temp.toFixed(1) + '°' : '--';
-                
-                const offset = d.curve_offset !== null ? d.curve_offset : 0;
-                const sign = offset > 0 ? '+' : '';
-                document.getElementById('curve-info').innerText = `${sign}${offset}`;
-                
-                document.getElementById('cop-value').innerText = d.estimated_cop ? d.estimated_cop.toFixed(1) : '-';
+            const bal = status.gm_balance;
+            const balEl = document.getElementById('gm-balance');
+            balEl.innerText = bal !== undefined ? Math.round(bal) : '--';
+            balEl.className = 'mb-0 fw-bold ' + (bal < -400 ? 'text-warning' : 'text-white');
+            
+            const badge = document.getElementById('gm-mode-badge');
+            badge.innerText = status.gm_mode || '--';
+            let badgeClass = 'bg-secondary';
+            if (status.gm_mode === 'SPEND') badgeClass = 'bg-success';
+            if (status.gm_mode === 'SAVE') badgeClass = 'bg-warning text-dark';
+            badge.className = 'badge mt-1 ' + badgeClass;
+
+            document.getElementById('current-price').innerText = status.current_price !== undefined ? status.current_price.toFixed(2) : '--';
+            document.getElementById('spot-price').innerText = status.spot_price !== undefined ? status.spot_price.toFixed(2) : '--';
+            document.getElementById('indoor-temp').innerText = status.indoor_temp !== null ? status.indoor_temp : '--';
+            document.getElementById('outdoor-temp').innerText = status.outdoor_temp !== null ? status.outdoor_temp : '--';
+            document.getElementById('target-temp').innerText = status.target_temp;
+            document.getElementById('hw-temp').innerText = status.hw_temp !== null ? status.hw_temp : '--';
+
+            // 2. Plan Data
+            const pRes = await fetch('/api/plan');
+            if (pRes.ok) {
+                const data = await pRes.json();
+                renderChart(data);
+                renderTable(data.table);
             }
 
-            // Fetch AI Status
-            const aiRes = await fetch('/api/ai-agent/latest-decision');
-            const aiData = await aiRes.json();
-            
-            if (aiData.success && aiData.data) {
-                const dec = aiData.data;
-                const actionMap = {
-                    'adjust': 'Justering gjord',
-                    'hold': 'Systemet är stabilt',
-                    'investigate': 'Analyserar...'
-                };
-                
-                document.getElementById('ai-action').innerText = actionMap[dec.action] || dec.action;
-                document.getElementById('ai-reason').innerText = dec.reasoning.substring(0, 150) + (dec.reasoning.length > 150 ? '...' : '');
-                
-                const time = new Date(dec.timestamp);
-                const now = new Date();
-                const diffMins = Math.floor((now - time) / 60000);
-                
-                let timeStr = time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                if (diffMins < 60) timeStr += ` (${diffMins} min sen)`;
-                
-                document.getElementById('ai-time').innerText = timeStr;
+            // 3. Log Data
+            const logRes = await fetch('/api/ai-agent/history');
+            if (logRes.ok) {
+                const logs = await logRes.json();
+                const logContainer = document.getElementById('activity-log');
+                logContainer.innerHTML = '';
+                if(logs && logs.length > 0) {
+                    logs.slice(0, 5).forEach(log => {
+                        const item = document.createElement('div');
+                        item.className = 'list-group-item bg-dark text-white border-secondary';
+                        const time = new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        item.innerHTML = `
+                            <div class="d-flex w-100 justify-content-between">
+                                <small class="text-muted">${time}</small>
+                                <small class="badge bg-secondary">${log.action}</small>
+                            </div>
+                            <p class="mb-1 small">${log.reasoning || 'No details'}</p>
+                        `;
+                        logContainer.appendChild(item);
+                    });
+                } else {
+                     logContainer.innerHTML = '<div class="p-3 text-center text-muted">Inga loggar</div>';
+                }
             }
-            
-            // Settings for target temp
-            const sRes = await fetch('/api/settings');
-            const sData = await sRes.json();
-            if (sData.success) {
-                document.getElementById('target-temp').innerText = sData.settings.min_indoor_temp;
-            }
-            
+
         } catch (e) {
-            console.error(e);
+            console.error("Dashboard update error:", e);
         }
     }
 
-    async function quickAction(type) {
-        let endpoint = '';
-        let payload = {};
-        
-        if (type === 'boost') {
-            endpoint = '/api/quick-action/adjust-offset';
-            payload = { delta: 1 };
-            if(!confirm('Vill du öka värmen tillfälligt (+1)?')) return;
-        } else if (type === 'save') {
-            endpoint = '/api/quick-action/adjust-offset';
-            payload = { delta: -1 };
-            if(!confirm('Vill du sänka värmen tillfälligt (-1)?')) return;
-        } else {
-            alert('Funktionen kommer snart!');
+    function renderTable(data) {
+        const tbody = document.getElementById('schedule-table-body');
+        tbody.innerHTML = '';
+        if(!data || !data.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Ingen plan tillgänglig</td></tr>';
             return;
         }
+
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            const time = new Date(row.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            let statusBadge = '<span class="badge bg-secondary">REST</span>';
+            if (row.action === 'RUN' || row.action === 'MUST_RUN') statusBadge = '<span class="badge bg-success">RUN</span>';
+            if (row.action === 'MUST_REST') statusBadge = '<span class="badge bg-danger">STOP</span>';
+            
+            let hwBadge = '<span class="badge bg-secondary">NORM</span>';
+            if (row.hw_mode === 2) hwBadge = '<span class="badge bg-info text-dark">LUX</span>';
+            if (row.hw_mode === 0) hwBadge = '<span class="badge bg-dark border border-secondary text-muted">ECO</span>';
+
+            tr.innerHTML = `
+                <td>${time}</td>
+                <td>${statusBadge}</td>
+                <td>${hwBadge}</td>
+                <td>${row.price.toFixed(2)}</td>
+                <td>${row.outdoor ? row.outdoor.toFixed(1) : '--'}°</td>
+                <td>${row.indoor_sim.toFixed(1)}°</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderChart(data) {
+        if(!data) return;
+        const ctx = document.getElementById('planChart').getContext('2d');
         
-        try {
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if(data.success) {
-                alert('Utförd: ' + data.message);
-                updateDashboard();
-            } else {
-                alert('Fel: ' + data.error);
-            }
-        } catch (e) {
-            alert('Kunde inte utföra åtgärd');
+        const indoorData = [...data.history.indoor, ...data.plan.indoor];
+        const outdoorData = [...data.history.outdoor, ...data.plan.outdoor];
+        const gmData = [...data.history.gm]; 
+        const bankData = data.history.bank ? [...data.history.bank] : []; 
+        const priceData = [...data.plan.price]; 
+        const actionData = [...data.plan.action];
+
+        if (planChart) {
+            planChart.data.datasets[0].data = indoorData;
+            planChart.data.datasets[1].data = outdoorData;
+            planChart.data.datasets[2].data = gmData;
+            planChart.data.datasets[3].data = bankData;
+            planChart.data.datasets[4].data = priceData;
+            planChart.data.datasets[5].data = actionData;
+            planChart.update();
+            return;
         }
+
+        planChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Inne °C',
+                        data: indoorData,
+                        borderColor: '#3b82f6',
+                        borderWidth: 2,
+                        yAxisID: 'yTemp',
+                        pointRadius: 0,
+                        tension: 0.2,
+                        order: 1
+                    },
+                    {
+                        label: 'Ute °C',
+                        data: outdoorData,
+                        borderColor: '#06b6d4',
+                        borderWidth: 2,
+                        yAxisID: 'yTemp',
+                        pointRadius: 0,
+                        tension: 0.2,
+                        order: 2
+                    },
+                    {
+                        label: 'GM (Pump)',
+                        data: gmData,
+                        borderColor: '#8b5cf6', // Lila
+                        borderWidth: 1,
+                        yAxisID: 'yGM',
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        order: 3
+                    },
+                    {
+                        label: 'GM (Total Balans)', // Banken
+                        data: bankData,
+                        borderColor: 'transparent',
+                        backgroundColor: 'rgba(245, 158, 11, 0.2)', // Orange Area
+                        borderWidth: 0,
+                        yAxisID: 'yGM',
+                        pointRadius: 0,
+                        fill: true,
+                        tension: 0.1,
+                        order: 10 
+                    },
+                    {
+                        label: 'Elpris (kr)',
+                        data: priceData,
+                        borderColor: '#9ca3af',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        yAxisID: 'yPrice',
+                        pointRadius: 0,
+                        tension: 0.1,
+                        order: 5
+                    },
+                    {
+                        label: 'Drift (PÅ)',
+                        data: actionData,
+                        type: 'bar',
+                        backgroundColor: 'rgba(16, 185, 129, 0.3)',
+                        yAxisID: 'yAction',
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0,
+                        order: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#ccc', usePointStyle: true, boxWidth: 8 } },
+                    tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(0,0,0,0.9)' }
+                },
+                scales: {
+                    x: { 
+                        type: 'time', 
+                        time: { unit: 'hour', displayFormats:{hour:'HH:mm'} }, 
+                        ticks: { color: '#6b7280', maxTicksLimit: 8 }, 
+                        grid: { display: false } 
+                    },
+                    yTemp: { 
+                        type: 'linear', position: 'left', 
+                        ticks: { color: '#3b82f6' }, 
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                    },
+                    yGM: { 
+                        type: 'linear', position: 'right', 
+                        min: -800, max: 200, 
+                        grid: { display: false },
+                        display: false 
+                    },
+                    yPrice: { 
+                        type: 'linear', position: 'right', 
+                        ticks: { color: '#9ca3af' }, 
+                        grid: { display: false },
+                        min: 0 
+                    },
+                    yAction: { 
+                        type: 'linear', position: 'right', display: false, min: 0, max: 20 
+                    }
+                }
+            }
+        });
     }
 
     updateDashboard();
-    setInterval(updateDashboard, 10000);
+    setInterval(updateDashboard, 60000);
 </script>
 {% endblock %}

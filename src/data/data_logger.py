@@ -114,6 +114,7 @@ class DataLogger:
             total_readings = 0
 
             for device in devices:
+                # Fetch data points from API
                 points = self.client.get_device_points(device.device_id)
 
                 for point in points:
@@ -147,9 +148,16 @@ class DataLogger:
                         parameter_id=parameter.id
                     ).order_by(desc(ParameterReading.timestamp)).first()
 
-                    # If we already have this timestamp (or newer), skip logging
+                    # QM IMPROVEMENT: Robust handling of stuck Nibe timestamps
                     if last_reading and last_reading.timestamp >= timestamp:
-                        continue
+                        if last_reading.value == point['value']:
+                            # Truly stale - no change in time or value
+                            continue
+                        else:
+                            # Stuck timestamp but value CHANGED! 
+                            # We use current time to capture the change and avoid data loss.
+                            logger.warning(f"Stuck timestamp for {parameter.parameter_id} ({timestamp}) but value changed {last_reading.value}->{point['value']}. Forcing log.")
+                            timestamp = datetime.utcnow()
 
                     reading = ParameterReading(
                         device_id=device.id,
@@ -203,7 +211,7 @@ class DataLogger:
 def main():
     import sys
     logger.info("="*80)
-    logger.info("NIBE AUTOTUNER - Data Logger")
+    logger.info("NIBE AUTOTUNER - Data Logger (QM Optimized)")
     logger.info("="*80 + "\n")
 
     logger_service = DataLogger()

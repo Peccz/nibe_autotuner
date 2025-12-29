@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% set active_page = 'home' %}
+
+{% block content %}
+<div class="row mt-2">
+    <!-- Status Card -->
+    <div class="col-12">
+        <div class="card bg-gradient-primary text-white" style="background: linear-gradient(135deg, #1e1e1e 0%, #252525 100%);">
+            <div class="card-body text-center py-4">
+                <div class="d-flex justify-content-center align-items-center mb-2">
+                    <span class="text-muted text-uppercase fw-bold me-2" style="font-size: 0.8rem;">INOMHUS</span>
+                    <i class="bi bi-thermometer-half text-primary"></i>
+                </div>
+                <h1 class="display-1 fw-bold mb-0" id="indoor-temp">--.-</h1>
+                <p class="text-muted mb-4">Mål: <span id="target-temp">--</span>°C</p>
+                
+                <div class="row border-top border-secondary pt-3">
+                    <div class="col-4 border-end border-secondary">
+                        <small class="text-muted d-block" style="font-size: 0.7rem;">UTE</small>
+                        <strong class="fs-5" id="outdoor-temp">--</strong>
+                    </div>
+                    <div class="col-4 border-end border-secondary">
+                        <small class="text-muted d-block" style="font-size: 0.7rem;">OFFSET</small>
+                        <strong class="fs-5" id="curve-info">--</strong>
+                    </div>
+                    <div class="col-4">
+                        <small class="text-muted d-block" style="font-size: 0.7rem;">COP</small>
+                        <strong class="fs-5 text-success" id="cop-value">--</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Status -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header border-0 bg-transparent pb-0 pt-3">
+                <span class="text-label" style="font-size: 0.75rem; color: #666;">AI AGENT</span>
+                <span class="badge bg-primary bg-opacity-10 text-primary" style="font-size: 0.7rem;">Gemini Active</span>
+            </div>
+            <div class="card-body pt-2">
+                <div class="d-flex align-items-start">
+                    <div class="me-3 mt-1">
+                        <span class="status-dot status-ok"></span>
+                    </div>
+                    <div>
+                        <h5 class="card-title fs-6 mb-1" id="ai-action">Väntar på data...</h5>
+                        <p class="card-text text-muted small mb-1" id="ai-reason" style="line-height: 1.4;">Laddar senaste beslutet från agenten.</p>
+                        <small class="text-muted" style="font-size: 0.7rem;" id="ai-time"></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row g-2 mb-4">
+    <div class="col-6">
+        <div class="btn-quick" onclick="quickAction('boost')">
+            <i class="bi bi-fire text-danger"></i>
+            <span>Boost</span>
+        </div>
+    </div>
+    <div class="col-6">
+        <div class="btn-quick" onclick="quickAction('water')">
+            <i class="bi bi-droplet-fill text-info"></i>
+            <span>Varmvatten</span>
+        </div>
+    </div>
+    <div class="col-6">
+        <div class="btn-quick" onclick="quickAction('save')">
+            <i class="bi bi-piggy-bank text-success"></i>
+            <span>Spara</span>
+        </div>
+    </div>
+    <div class="col-6">
+        <div class="btn-quick" onclick="location.href='/settings'">
+            <i class="bi bi-airplane-fill text-warning"></i>
+            <span>Borta</span>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function updateDashboard() {
+        try {
+            // Fetch Metrics
+            const mRes = await fetch('/api/metrics');
+            const mData = await mRes.json();
+            
+            if (mData.success) {
+                const d = mData.data;
+                document.getElementById('indoor-temp').innerText = d.avg_indoor_temp ? d.avg_indoor_temp.toFixed(1) : '--.-';
+                document.getElementById('outdoor-temp').innerText = d.avg_outdoor_temp ? d.avg_outdoor_temp.toFixed(1) + '°' : '--';
+                
+                const offset = d.curve_offset !== null ? d.curve_offset : 0;
+                const sign = offset > 0 ? '+' : '';
+                document.getElementById('curve-info').innerText = `${sign}${offset}`;
+                
+                document.getElementById('cop-value').innerText = d.estimated_cop ? d.estimated_cop.toFixed(1) : '-';
+            }
+
+            // Fetch AI Status
+            const aiRes = await fetch('/api/ai-agent/latest-decision');
+            const aiData = await aiRes.json();
+            
+            if (aiData.success && aiData.data) {
+                const dec = aiData.data;
+                const actionMap = {
+                    'adjust': 'Justering gjord',
+                    'hold': 'Systemet är stabilt',
+                    'investigate': 'Analyserar...'
+                };
+                
+                document.getElementById('ai-action').innerText = actionMap[dec.action] || dec.action;
+                document.getElementById('ai-reason').innerText = dec.reasoning.substring(0, 150) + (dec.reasoning.length > 150 ? '...' : '');
+                
+                const time = new Date(dec.timestamp);
+                const now = new Date();
+                const diffMins = Math.floor((now - time) / 60000);
+                
+                let timeStr = time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                if (diffMins < 60) timeStr += ` (${diffMins} min sen)`;
+                
+                document.getElementById('ai-time').innerText = timeStr;
+            }
+            
+            // Settings for target temp
+            const sRes = await fetch('/api/settings');
+            const sData = await sRes.json();
+            if (sData.success) {
+                document.getElementById('target-temp').innerText = sData.settings.min_indoor_temp;
+            }
+            
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    async function quickAction(type) {
+        let endpoint = '';
+        let payload = {};
+        
+        if (type === 'boost') {
+            endpoint = '/api/quick-action/adjust-offset';
+            payload = { delta: 1 };
+            if(!confirm('Vill du öka värmen tillfälligt (+1)?')) return;
+        } else if (type === 'save') {
+            endpoint = '/api/quick-action/adjust-offset';
+            payload = { delta: -1 };
+            if(!confirm('Vill du sänka värmen tillfälligt (-1)?')) return;
+        } else {
+            alert('Funktionen kommer snart!');
+            return;
+        }
+        
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert('Utförd: ' + data.message);
+                updateDashboard();
+            } else {
+                alert('Fel: ' + data.error);
+            }
+        } catch (e) {
+            alert('Kunde inte utföra åtgärd');
+        }
+    }
+
+    updateDashboard();
+    setInterval(updateDashboard, 10000);
+</script>
+{% endblock %}

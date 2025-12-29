@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% set active_page = 'analytics' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0 text-white">Analys (24h)</h4>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadData()">Uppdatera</button>
+    </div>
+
+    <!-- Temperature Chart -->
+    <div class="card bg-dark text-white mb-3 border-secondary shadow-sm">
+        <div class="card-header border-secondary py-2">
+            <span class="small text-uppercase text-muted">Temperaturer</span>
+        </div>
+        <div class="card-body p-2" style="height: 300px;">
+            <canvas id="tempChart"></canvas>
+        </div>
+    </div>
+
+    <!-- GM Chart -->
+    <div class="card bg-dark text-white mb-3 border-secondary shadow-sm">
+        <div class="card-header border-secondary py-2">
+            <span class="small text-uppercase text-muted">Gradminuter (System)</span>
+        </div>
+        <div class="card-body p-2" style="height: 200px;">
+            <canvas id="gmChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<script>
+    let tempChart = null;
+    let gmChart = null;
+
+    async function loadData() {
+        try {
+            const res = await fetch('/api/analytics/data?hours=24');
+            const data = await res.json();
+            
+            renderTempChart(data);
+            renderGMChart(data);
+        } catch (e) {
+            console.error("Failed to load analytics:", e);
+        }
+    }
+
+    function renderTempChart(data) {
+        const ctx = document.getElementById('tempChart').getContext('2d');
+        if (tempChart) tempChart.destroy();
+
+        tempChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    { label: 'Inne', data: data.indoor, borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 },
+                    { label: 'Ute', data: data.outdoor, borderColor: '#06b6d4', borderWidth: 2, pointRadius: 0 },
+                    { label: 'Fram', data: data.supply, borderColor: '#ef4444', borderWidth: 1, pointRadius: 0, hidden: true },
+                    { label: 'Retur', data: data.return, borderColor: '#f97316', borderWidth: 1, pointRadius: 0, hidden: true }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { type: 'time', time: { unit: 'hour', displayFormats: {hour: 'HH:mm'} }, ticks: { color: '#6b7280' }, grid: { display: false } },
+                    y: { ticks: { color: '#ccc' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                },
+                plugins: { legend: { labels: { color: '#ccc' } } },
+                interaction: { mode: 'index', intersect: false }
+            }
+        });
+    }
+
+    function renderGMChart(data) {
+        const ctx = document.getElementById('gmChart').getContext('2d');
+        if (gmChart) gmChart.destroy();
+
+        gmChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    { label: 'GM', data: data.gm, borderColor: '#10b981', borderWidth: 2, pointRadius: 0, fill: true, backgroundColor: 'rgba(16, 185, 129, 0.1)' }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { type: 'time', time: { unit: 'hour', displayFormats: {hour: 'HH:mm'} }, ticks: { color: '#6b7280' }, grid: { display: false } },
+                    y: { ticks: { color: '#ccc' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                },
+                plugins: { legend: { display: false } },
+                interaction: { mode: 'index', intersect: false }
+            }
+        });
+    }
+
+    loadData();
+</script>
+{% endblock %}

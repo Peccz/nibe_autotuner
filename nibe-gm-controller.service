@@ -1,0 +1,15 @@
+[Unit]
+Description=Nibe Autotuner GM Controller (The Bank)
+After=network.target
+
+[Service]
+Type=simple
+User=peccz
+WorkingDirectory=/home/peccz/nibe_autotuner
+ExecStart=/home/peccz/nibe_autotuner/venv/bin/python src/services/gm_controller.py
+Restart=always
+RestartSec=10
+Environment=PYTHONPATH=/home/peccz/nibe_autotuner/src
+
+[Install]
+WantedBy=multi-user.target

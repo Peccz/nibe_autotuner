@@ -315,6 +315,7 @@ class AIDecisionLog(Base):
     expected_impact = Column(String(500))
     applied = Column(Boolean, default=False)  # Whether change was actually applied
     parameter_change_id = Column(Integer, ForeignKey('parameter_changes.id'))
+    hot_water_demand = Column(Integer, nullable=True) # 0, 1, 2, 3, 4
 
     # Relationships
     parameter = relationship('Parameter')
@@ -372,6 +373,36 @@ class HotWaterUsage(Base):
     def __repr__(self):
         return f"<HWUsage({self.start_time}, drop={self.temp_drop})>"
 
+# --- NYA MODELLER FÖR DETERMINISTISK METOD ---
+
+class GMAccount(Base):
+    __tablename__ = "gm_account"
+    id = Column(Integer, primary_key=True)
+    balance = Column(Float, default=0.0) # Virtual GM balance
+    mode = Column(String, default="NORMAL") # AUTO, SAVE, SPEND
+    last_updated = Column(DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<GMAccount(balance={self.balance}, mode='{self.mode}')>"
+
+class PlannedHeatingSchedule(Base):
+    __tablename__ = "planned_heating_schedule"
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    outdoor_temp = Column(Float)
+    electricity_price = Column(Float)
+    cloud_cover = Column(Float, default=8.0)
+    solar_gain = Column(Float, default=0.0)
+    simulated_indoor_temp = Column(Float)
+    planned_action = Column(String, nullable=False) # MUST_RUN, MUST_REST, RUN, REST, HOLD
+    planned_gm_value = Column(Float) # GM value to write to pump (40940)
+    planned_offset = Column(Float, default=0.0) # Planned offset value
+    planned_hot_water_mode = Column(Integer, default=1) # NEW: 0=Eco, 1=Normal, 2=Lux
+
+    def __repr__(self):
+        return f"<PlannedHeatingSchedule(timestamp='{self.timestamp}', action='{self.planned_action}')>"
+
+
 if __name__ == '__main__':
     # Test database models
     from loguru import logger
@@ -382,7 +413,7 @@ if __name__ == '__main__':
     logger.info(f"✓ Database created successfully!")
     logger.info(f"✓ Tables: {', '.join(Base.metadata.tables.keys())}")
 
-# --- TILLAGDA FÖR ATT MATCHA NYA ROUTERS ---
+# --- TILLAGDA FÖR ATT MATCHA NYA ROUTERS (Dessa används inte av core logik, men kanske av gamla routes) ---
 
 class AIDecision(Base):
     """Unified AI Decision model matching the new router"""

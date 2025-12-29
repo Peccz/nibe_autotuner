@@ -17,6 +17,7 @@ class WeatherForecast:
     precipitation: float  # mm/h
     wind_speed: float  # m/s
     humidity: int  # %
+    cloud_cover: int = 8 # Octas (0-8), default cloudy
 
 
 class SMHIWeatherService:
@@ -83,7 +84,8 @@ class SMHIWeatherService:
                     temperature=params.get('t', 0.0),  # Air temperature
                     precipitation=params.get('pmin', 0.0),  # Min precipitation
                     wind_speed=params.get('ws', 0.0),  # Wind speed
-                    humidity=int(params.get('r', 50))  # Relative humidity
+                    humidity=int(params.get('r', 50)),  # Relative humidity
+                    cloud_cover=int(params.get('tcc_mean', 8)) # Total Cloud Cover
                 )
 
                 forecasts.append(forecast)

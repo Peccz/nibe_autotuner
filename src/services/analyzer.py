@@ -132,7 +132,20 @@ class HeatPumpAnalyzer:
         """Get parameter by API ID string"""
         return self.session.query(Parameter).filter_by(parameter_id=parameter_id).first()
 
+    def get_latest_reading(self, device: Device, parameter_id_str: str) -> Optional[ParameterReading]:
+        self.session.expire_all()
+        param = self.session.query(Parameter).filter_by(parameter_id=parameter_id_str).first()
+        if not param:
+            return None
+
+        reading = self.session.query(ParameterReading).filter_by(
+            device_id=device.id,
+            parameter_id=param.id
+        ).order_by(desc(ParameterReading.timestamp)).first()
+        return reading
+
     def get_latest_value(self, device: Device, parameter_id_str: str) -> Optional[float]:
+        self.session.expire_all() # Force refresh from DB
         try:
             # logger.debug(f"[Analyzer.get_latest_value] Device ID: {device.id}, Param ID Str: '{parameter_id_str}'")
             param = self.session.query(Parameter).filter_by(parameter_id=parameter_id_str).first()
@@ -198,6 +211,7 @@ class HeatPumpAnalyzer:
         hours_back: int = 24,
         end_offset_hours: int = 0
     ) -> EfficiencyMetrics:
+        self.session.expire_all() # Force refresh from DB
         device = self.get_device()
         end_time = datetime.utcnow() - timedelta(hours=end_offset_hours)
         start_time = end_time - timedelta(hours=hours_back)

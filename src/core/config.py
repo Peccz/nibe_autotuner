@@ -5,14 +5,8 @@ This module provides a type-safe, centralized way to manage all application
 configuration through environment variables. Uses Pydantic for validation
 and type checking.
 
-All configuration should be accessed through the `settings` singleton object.
-
-Example:
-    from core.config import settings
-
-    # Access configuration
-    api_key = settings.GOOGLE_API_KEY
-    db_url = settings.DATABASE_URL
+All settings are loaded from .env file and environment variables.
+Environment variables take precedence over .env file values.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -91,6 +85,22 @@ class Settings(BaseSettings):
 
     MOBILE_APP_PORT: int = 5001
     """Mobile PWA server port"""
+
+    # ============================================================================
+    # SmartPlanner Settings (Tuning)
+    # ============================================================================
+    
+    K_GM_PER_DELTA_T_PER_H: float = 0.30 
+    """GM lost per degree-hour difference. Numerically calibrated."""
+
+    COMPRESSOR_HEAT_OUTPUT_C_PER_H: float = 0.18
+    """Degrees Celsius gain per hour when compressor is running. Numerically calibrated."""
+
+    GM_PRODUCTION_PER_HOUR_RUNNING: float = 60.0 
+    """GM produced per hour when compressor is running."""
+
+    OUTDOOR_TEMP_OFFSET_C: float = -0.5
+    """Correction for sensor deviation. Add to forecast to match pump sensor. (e.g. -0.5)"""
 
     # ============================================================================
     # Feature Flags
