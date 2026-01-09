@@ -84,6 +84,10 @@
                     <span class="status-pulse">❄️</span> Frostskydd aktivt - Forcerar luft
                 </div>
                 <div class="flex justify-between items-center">
+                    <span class="text-sm">Framledning (BT2)</span>
+                    <span id="supply-temp" class="font-mono text-blue-400">--°C</span>
+                </div>
+                <div class="flex justify-between items-center">
                     <span class="text-sm">Kompressor</span>
                     <span id="comp-hz" class="font-mono">-- Hz</span>
                 </div>
@@ -118,6 +122,7 @@
             document.getElementById('temp-out').innerText = s.outdoor_temp.toFixed(1) + '°C';
             document.getElementById('hum-down').innerText = 'Fukt: ' + (s.indoor_humidity || '--') + '%';
             document.getElementById('price-now').innerText = (s.current_price * 100).toFixed(0) + ' öre';
+            document.getElementById('supply-temp').innerText = s.supply_temp.toFixed(1) + '°C';
             document.getElementById('evap-temp').innerText = (s.evaporator_temp || '--') + '°C';
             document.getElementById('comp-hz').innerText = s.compressor_freq.toFixed(0) + ' Hz';
             document.getElementById('fan-speed').innerText = s.fan_speed + '%';

@@ -77,8 +77,10 @@ def get_status():
             outdoor = analyzer.get_latest_value(device, '40004')
 
         hw_temp = None
+        supply_temp = None
         if device:
             hw_temp = analyzer.get_latest_value(device, '40013')
+            supply_temp = analyzer.get_latest_value(device, '40008')
 
         account = session.query(GMAccount).first()
         gm_balance = account.balance if account else 0.0
@@ -99,6 +101,7 @@ def get_status():
             'indoor_dexter': round(dexter, 2) if dexter else None,
             'outdoor_temp': round(outdoor, 1) if outdoor else None,
             'hw_temp': round(hw_temp, 1) if hw_temp else None,
+            'supply_temp': round(supply_temp, 1) if supply_temp else None,
             'target_temp': device.target_indoor_temp_min if device else 21.0,
             'gm_balance': round(gm_balance, 0),
             'gm_mode': gm_mode,
