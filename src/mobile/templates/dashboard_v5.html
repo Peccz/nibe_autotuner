@@ -106,6 +106,7 @@
             document.getElementById('temp-down').innerText = s.indoor_downstairs.toFixed(1) + '°C';
             document.getElementById('temp-dexter').innerText = s.indoor_dexter.toFixed(1) + '°C';
             document.getElementById('temp-out').innerText = s.outdoor_temp.toFixed(1) + '°C';
+            document.getElementById('wind-speed').innerText = (s.wind_speed || 0).toFixed(1) + ' m/s';
             document.getElementById('hum-down').innerText = (s.indoor_humidity || '--') + '% RH';
             document.getElementById('supply-temp').innerText = (s.supply_temp || '--') + '°C';
             document.getElementById('comp-hz').innerText = s.compressor_freq.toFixed(0) + ' Hz';

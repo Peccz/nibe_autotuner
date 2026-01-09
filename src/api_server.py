@@ -17,6 +17,7 @@ from data.database import init_db
 from sqlalchemy.orm import sessionmaker
 from services.analyzer import HeatPumpAnalyzer
 from services.price_service import price_service
+from services.weather_service import SMHIWeatherService
 from core.config import settings
 from data.models import Device, Parameter, ParameterReading, PlannedHeatingSchedule, GMAccount
 
@@ -32,12 +33,14 @@ app.add_middleware(
 
 engine = init_db(settings.DATABASE_URL)
 SessionMaker = sessionmaker(bind=engine)
+weather_service = SMHIWeatherService()
 
 # --- MODELS ---
 
 class SystemStatus(BaseModel):
     device_name: str
     outdoor_temp: float
+    wind_speed: Optional[float]
     indoor_downstairs: float
     indoor_dexter: float
     indoor_humidity: Optional[float]
@@ -63,8 +66,8 @@ class DashboardV4Response(BaseModel):
 @app.get("/", response_class=FileResponse)
 @app.get("/dashboard", response_class=FileResponse)
 async def serve_dashboard():
-    """Serve the modern V4 Digital Twin dashboard"""
-    return FileResponse("src/mobile/templates/dashboard_v4.html")
+    """Serve the modern V5 Energy Flow dashboard"""
+    return FileResponse("src/mobile/templates/dashboard_v5.html")
 
 # --- API ENDPOINTS ---
 
@@ -86,9 +89,21 @@ async def get_dashboard_v4():
         
         gm = session.query(GMAccount).first()
         
+        # Fetch wind
+        wind = 0.0
+        try:
+            # Simple approach: Get forecast, take first item. 
+            # Ideally we'd cache this or have a 'current weather' method.
+            forecasts = weather_service.get_forecast(hours_ahead=1)
+            if forecasts:
+                wind = forecasts[0].wind_speed
+        except Exception:
+            logger.warning("Failed to fetch wind speed for dashboard")
+
         status = SystemStatus(
             device_name=device.product_name if device else "Nibe F730",
             outdoor_temp=outdoor,
+            wind_speed=wind,
             indoor_downstairs=in_down,
             indoor_dexter=in_dexter,
             indoor_humidity=hum,
