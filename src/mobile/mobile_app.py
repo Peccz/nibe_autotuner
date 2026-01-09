@@ -13,8 +13,76 @@ from data.performance_model import DailyPerformance
 from services.analyzer import HeatPumpAnalyzer
 from services.price_service import price_service
 
+from sqlalchemy import text
+
 app = Flask(__name__)
 analyzer = HeatPumpAnalyzer()
+
+# --- V4 DASHBOARD ENDPOINT (Ported from FastAPI) ---
+@app.route('/api/v4/dashboard')
+def get_dashboard_v4():
+    session = SessionLocal()
+    device = analyzer.get_device()
+    
+    try:
+        # 1. Status
+        outdoor = analyzer.get_latest_value(device, analyzer.PARAM_OUTDOOR_TEMP) or 0.0
+        in_down = analyzer.get_latest_value(device, 'HA_TEMP_DOWNSTAIRS') or 21.0
+        in_dexter = analyzer.get_latest_value(device, 'HA_TEMP_DEXTER') or 21.0
+        hum = analyzer.get_latest_value(device, 'HA_HUMIDITY_DOWNSTAIRS')
+        evap = analyzer.get_latest_value(device, '40020')
+        comp = analyzer.get_latest_value(device, analyzer.PARAM_COMPRESSOR_FREQ) or 0.0
+        fan = analyzer.get_latest_value(device, '50221')
+        supply = analyzer.get_latest_value(device, analyzer.PARAM_SUPPLY_TEMP) or 0.0
+        
+        gm = session.query(GMAccount).first()
+        
+        status = {
+            "device_name": device.product_name if device else "Nibe F730",
+            "outdoor_temp": outdoor,
+            "indoor_downstairs": in_down,
+            "indoor_dexter": in_dexter,
+            "indoor_humidity": hum,
+            "supply_temp": supply,
+            "evaporator_temp": evap,
+            "compressor_freq": comp,
+            "degree_minutes": analyzer.get_latest_value(device, analyzer.PARAM_DM_CURRENT) or 0.0,
+            "gm_balance": gm.balance if gm else 0.0,
+            "gm_mode": gm.mode if gm else "NORMAL",
+            "current_price": price_service.get_current_price(),
+            "fan_speed": fan,
+            "is_frost_guard_active": (evap is not None and evap < -14.0),
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        }
+
+        # 2. Plan
+        plan_rows = session.query(PlannedHeatingSchedule).order_by(PlannedHeatingSchedule.timestamp.asc()).all()
+        plan_data = [{
+            "time": p.timestamp.isoformat(),
+            "price": p.electricity_price,
+            "temp_out": p.outdoor_temp,
+            "temp_sim_down": p.simulated_indoor_temp,
+            "temp_sim_dexter": p.simulated_dexter_temp,
+            "action": p.planned_action,
+            "offset": p.planned_offset,
+            "wind": p.wind_speed
+        } for p in plan_rows]
+
+        # 3. Tuning
+        try:
+            res = session.execute(text("SELECT parameter_id, value FROM system_tuning")).fetchall()
+            tuning = {row[0]: row[1] for row in res}
+        except Exception:
+            tuning = {}
+
+        return jsonify({
+            "status": status,
+            "plan": plan_data,
+            "tuning": tuning,
+            "recent_savings": 5.87
+        })
+    finally:
+        session.close()
 
 @app.route('/api/performance')
 def get_performance():
