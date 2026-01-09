@@ -41,6 +41,7 @@ class SystemStatus(BaseModel):
     device_name: str
     outdoor_temp: float
     wind_speed: Optional[float]
+    wind_direction: Optional[int]
     indoor_downstairs: float
     indoor_dexter: float
     indoor_humidity: Optional[float]
@@ -90,20 +91,23 @@ async def get_dashboard_v4():
         gm = session.query(GMAccount).first()
         
         # Fetch wind
-        wind = 0.0
+        wind_spd = 0.0
+        wind_dir = 0
         try:
             # Simple approach: Get forecast, take first item. 
             # Ideally we'd cache this or have a 'current weather' method.
             forecasts = weather_service.get_forecast(hours_ahead=1)
             if forecasts:
-                wind = forecasts[0].wind_speed
+                wind_spd = forecasts[0].wind_speed
+                wind_dir = forecasts[0].wind_direction
         except Exception:
-            logger.warning("Failed to fetch wind speed for dashboard")
+            logger.warning("Failed to fetch wind data for dashboard")
 
         status = SystemStatus(
             device_name=device.product_name if device else "Nibe F730",
             outdoor_temp=outdoor,
-            wind_speed=wind,
+            wind_speed=wind_spd,
+            wind_direction=wind_dir,
             indoor_downstairs=in_down,
             indoor_dexter=in_dexter,
             indoor_humidity=hum,

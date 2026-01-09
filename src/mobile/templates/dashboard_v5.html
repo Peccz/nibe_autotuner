@@ -48,7 +48,10 @@
         <div class="glass p-4 rounded-2xl">
             <div class="card-label">Utomhus</div>
             <div class="text-xl font-bold mt-1" id="temp-out">--°C</div>
-            <div class="text-xs text-slate-500 mt-1" id="wind-speed">-- m/s</div>
+            <div class="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                <span id="wind-icon" class="inline-block transition-transform duration-700">⬇</span>
+                <span id="wind-speed">-- m/s</span>
+            </div>
         </div>
         <div class="glass p-4 rounded-2xl">
             <div class="card-label">Framledning</div>
@@ -106,11 +109,26 @@
             document.getElementById('temp-down').innerText = s.indoor_downstairs.toFixed(1) + '°C';
             document.getElementById('temp-dexter').innerText = s.indoor_dexter.toFixed(1) + '°C';
             document.getElementById('temp-out').innerText = s.outdoor_temp.toFixed(1) + '°C';
-            document.getElementById('wind-speed').innerText = (s.wind_speed || 0).toFixed(1) + ' m/s';
             document.getElementById('hum-down').innerText = (s.indoor_humidity || '--') + '% RH';
             document.getElementById('supply-temp').innerText = (s.supply_temp || '--') + '°C';
             document.getElementById('comp-hz').innerText = s.compressor_freq.toFixed(0) + ' Hz';
             document.getElementById('price-now').innerText = (s.current_price * 100).toFixed(0) + ' öre';
+            
+            // Wind
+            const ws = (s.wind_speed || 0).toFixed(1);
+            document.getElementById('wind-speed').innerText = ws + ' m/s';
+            if (s.wind_direction !== undefined) {
+                // Rotate arrow (0=N, 180=S). Standard arrow '⬇' points down (South?). 
+                // Let's assume standard up arrow '⬆' is 0 deg. Wait, I used down arrow.
+                // Let's use a standard transform. 
+                // Wind direction is "coming FROM". So 0 deg (North Wind) comes from North, blows South.
+                // So the arrow should point WITH the wind. 
+                // If wind is 0 deg (N), it blows TO South (180).
+                // Let's rotate the arrow to point in the direction the wind is blowing TO.
+                // Rotation = wind_dir + 180.
+                const rotation = (s.wind_direction + 180) % 360;
+                document.getElementById('wind-icon').style.transform = `rotate(${rotation}deg)`;
+            }
             
             // Dexter Status Logic
             const dStatus = document.getElementById('dexter-status');
