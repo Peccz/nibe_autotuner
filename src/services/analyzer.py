@@ -90,6 +90,10 @@ class HeatPumpAnalyzer:
     PARAM_CALCULATED_SUPPLY_TEMP = '40067'
     PARAM_HOT_WATER_TEMP = '40013'
     PARAM_COMPRESSOR_FREQUENCY = '41778'
+    
+    # High Precision HA Sensors
+    PARAM_HA_TEMP_DOWNSTAIRS = 'HA_TEMP_DOWNSTAIRS'
+    PARAM_HA_TEMP_DEXTER = 'HA_TEMP_DEXTER'
 
     COP_HEATING_ELITE = 4.0
     COP_HEATING_EXCELLENT = 3.5
@@ -219,7 +223,13 @@ class HeatPumpAnalyzer:
         logger.info(f"Calculating metrics from {start_time} to {end_time}")
 
         avg_outdoor = self.calculate_average(device, self.PARAM_OUTDOOR_TEMP, start_time, end_time)
-        avg_indoor = self.calculate_average(device, self.PARAM_INDOOR_TEMP, start_time, end_time)
+        
+        # Priority: IKEA Downstairs Sensor (High Precision)
+        avg_indoor = self.calculate_average(device, self.PARAM_HA_TEMP_DOWNSTAIRS, start_time, end_time)
+        if avg_indoor is None:
+            # Fallback to Nibe standard sensor
+            avg_indoor = self.calculate_average(device, self.PARAM_INDOOR_TEMP, start_time, end_time)
+            
         avg_supply = self.calculate_average(device, self.PARAM_SUPPLY_TEMP, start_time, end_time)
         avg_return = self.calculate_average(device, self.PARAM_RETURN_TEMP, start_time, end_time)
         avg_compressor = self.calculate_average(device, self.PARAM_COMPRESSOR_FREQ, start_time, end_time)

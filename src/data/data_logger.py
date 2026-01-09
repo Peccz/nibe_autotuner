@@ -9,6 +9,7 @@ from sqlalchemy import desc
 
 from integrations.auth import MyUplinkAuth
 from integrations.api_client import MyUplinkClient
+from services.home_assistant_service import HomeAssistantService
 from core.config import settings
 from data.models import (
     System,
@@ -27,6 +28,7 @@ class DataLogger:
         self.session = get_session()
         self.auth = MyUplinkAuth()
         self.client = MyUplinkClient(self.auth)
+        self.ha_service = HomeAssistantService()
 
     def initialize_metadata(self):
         logger.info("Initializing metadata...")
@@ -150,13 +152,22 @@ class DataLogger:
 
                     # QM IMPROVEMENT: Robust handling of stuck Nibe timestamps
                     if last_reading and last_reading.timestamp >= timestamp:
+                        # Calculate age of the last record in our DB
+                        db_age_seconds = (datetime.utcnow() - last_reading.timestamp).total_seconds()
+                        
                         if last_reading.value == point['value']:
-                            # Truly stale - no change in time or value
-                            continue
+                            # Value is same. Should we force a heartbeat log anyway?
+                            if db_age_seconds < 3600: # 1 hour heartbeat
+                                # Truly stale and recently logged - skip
+                                continue
+                            else:
+                                # Force heartbeat log to show system is alive
+                                logger.info(f"Heartbeat log for {parameter.parameter_id} (Value {point['value']} unchanged for 1h)")
+                                timestamp = datetime.utcnow()
                         else:
                             # Stuck timestamp but value CHANGED! 
                             # We use current time to capture the change and avoid data loss.
-                            logger.warning(f"Stuck timestamp for {parameter.parameter_id} ({timestamp}) but value changed {last_reading.value}->{point['value']}. Forcing log.")
+                            logger.info(f"Stuck timestamp for {parameter.parameter_id} ({timestamp}) but value changed {last_reading.value}->{point['value']}. Forcing log.")
                             timestamp = datetime.utcnow()
 
                     reading = ParameterReading(
@@ -173,9 +184,46 @@ class DataLogger:
                 self.session.commit()
 
             if total_readings > 0:
-                logger.info(f"✓ Logged {total_readings} new readings")
+                logger.info(f"✓ Logged {total_readings} new readings from MyUplink")
             else:
-                logger.info("No new data points from API (all stale)")
+                logger.info("No new data points from MyUplink (all stale)")
+
+            # QM ADDITION: Log Home Assistant Sensors (High Precision)
+            try:
+                ha_sensors = self.ha_service.get_all_sensors()
+                ha_timestamp = datetime.utcnow()
+                
+                # Fetch device for mapping (we use the first available device as anchor)
+                device = self.session.query(Device).first()
+                
+                if device and any(ha_sensors.values()):
+                    ha_logged = 0
+                    mapping = {
+                        'HA_TEMP_DOWNSTAIRS': ha_sensors.get('downstairs_temp'),
+                        'HA_TEMP_DEXTER': ha_sensors.get('dexter_temp'),
+                        'HA_HUMIDITY_DOWNSTAIRS': ha_sensors.get('downstairs_humidity'),
+                        'HA_HUMIDITY_DEXTER': ha_sensors.get('dexter_humidity')
+                    }
+                    
+                    for p_id, val in mapping.items():
+                        if val is not None:
+                            parameter = self.session.query(Parameter).filter_by(parameter_id=p_id).first()
+                            if parameter:
+                                reading = ParameterReading(
+                                    device_id=device.id,
+                                    parameter_id=parameter.id,
+                                    timestamp=ha_timestamp,
+                                    value=val
+                                )
+                                self.session.add(reading)
+                                ha_logged += 1
+                    
+                    if ha_logged > 0:
+                        self.session.commit()
+                        logger.info(f"✓ Logged {ha_logged} high-precision readings from Home Assistant")
+            except Exception as e:
+                logger.error(f"Error logging HA readings: {e}")
+                self.session.rollback()
                 
             return total_readings
 

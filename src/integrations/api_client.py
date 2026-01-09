@@ -130,7 +130,7 @@ class MyUplinkClient:
         # These match HeatPumpAnalyzer PARAM_* constants
         critical_ids = [
             '40004', '40033', '40008', '40012', '41778', 
-            '47007', '47011', '40009', '40940', '47021', 
+            '47007', '47011', '40009', '40941', '40940', '47021', 
             '40067', '40013', '43424', '43140', '43146',
             '43420', '43437', '50325', '50345'
         ]
@@ -225,8 +225,8 @@ class MyUplinkClient:
 
 
 def main():
-    """Test the API client with pagination"""
-    logger.info("Starting myUplink API client QM test...")
+    """Test the API client"""
+    logger.info("Starting myUplink API client test...")
 
     try:
         auth = MyUplinkAuth()

@@ -44,6 +44,32 @@ class Settings(BaseSettings):
     """MyUplink OAuth2 token URL"""
 
     # ============================================================================
+    # Home Assistant Configuration
+    # ============================================================================
+
+    HA_URL: Optional[str] = None
+    """Home Assistant API base URL (e.g., http://localhost:8123)"""
+
+    HA_TOKEN: Optional[str] = None
+    """Home Assistant Long-Lived Access Token"""
+
+    HA_SENSOR_DOWNSTAIRS: str = "sensor.timmerflotte_temp_hmd_sensor_temperature_2"
+    """Entity ID for the downstairs IKEA sensor"""
+
+    HA_SENSOR_DEXTER: str = "sensor.timmerflotte_temp_hmd_sensor_temperature"
+    """Entity ID for Dexter's room IKEA sensor"""
+
+    # ============================================================================
+    # House Physics (Multi-zone & Shunt)
+    # ============================================================================
+    
+    SHUNT_LIMIT_C: float = 32.0
+    """Max temperature the downstairs floor heating shunt allows into the floor."""
+
+    DEFAULT_HEATING_CURVE: float = 7.0
+    """The base heating curve set in the Nibe pump."""
+
+    # ============================================================================
     # AI API Keys
     # ============================================================================
 

@@ -58,28 +58,31 @@ class PriceService:
 
     def get_current_price_details(self) -> Dict[str, float]:
         """Returns detailed price info: {'total': float, 'spot': float}"""
+        return self.get_price_details_at(datetime.now())
+
+    def get_price_at(self, dt: datetime) -> float:
+        """Returns the total price at a specific historical datetime"""
+        return self.get_price_details_at(dt)['total']
+
+    def get_price_details_at(self, dt: datetime) -> Dict[str, float]:
+        """Returns detailed price info for a specific datetime"""
         try:
-            now = datetime.now()
-            prices = self._get_prices_for_date(now)
-            
-            spot = 1.0 # Fallback default spot
+            prices = self._get_prices_for_date(dt)
+            spot = 1.0 # Fallback
             if prices:
                 for p in prices:
                     try:
                         start_time = datetime.fromisoformat(p['time_start'])
-                        # Adjust for timezone if necessary (API is often +01:00 or +02:00)
-                        # Ensure comparison is done on same timezone (UTC for now)
-                        if start_time.replace(tzinfo=None).hour == now.hour:
+                        if start_time.hour == dt.hour:
                             spot = float(p['SEK_per_kWh'])
                             break
                     except: continue
             
-            total = self._calculate_total_cost(spot, now)
+            total = self._calculate_total_cost(spot, dt)
             return {'total': total, 'spot': spot}
-
         except Exception as e:
-            logger.error(f"Error fetching electricity price: {e}")
-            return {'total': 1.50, 'spot': 0.50} # General fallback
+            logger.error(f"Error fetching price at {dt}: {e}")
+            return {'total': 1.50, 'spot': 0.50}
 
     def get_prices_today(self) -> List[PricePoint]:
         data = self._get_prices_for_date(datetime.now())

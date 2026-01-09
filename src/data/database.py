@@ -68,22 +68,32 @@ def get_db() -> Generator[Session, None, None]:
 # Database Initialization
 # ============================================================================
 
-def init_db():
+def init_db(database_url: str = settings.DATABASE_URL):
     """
     Initialize database by creating all tables.
     Should be called once when the application starts.
     Note: In production, use a migration tool like Alembic instead.
     """
+    global engine
+    if database_url != settings.DATABASE_URL:
+        engine = create_engine(
+            database_url,
+            connect_args={"check_same_thread": False} if database_url.startswith("sqlite") else {},
+            echo=False
+        )
+
     # Import all models to ensure they're registered with Base
     from data.models import (
         System, Device, Parameter, ParameterReading, ParameterChange, 
         ABTestResult, Recommendation, RecommendationResult, PlannedTest, 
         AIDecisionLog, LearningEvent, HotWaterUsage, GMAccount, 
-        PlannedHeatingSchedule, AIDecision, ABTest
+        PlannedHeatingSchedule, AIDecision, ABTest, SystemTuning
     )
+    from data.performance_model import DailyPerformance
     from data.evaluation_model import AIEvaluation
 
     Base.metadata.create_all(bind=engine)
+    return engine
 
 def get_session() -> Session:
     """

@@ -4,8 +4,8 @@
 {% block content %}
 <div class="container-fluid mt-3">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2>📊 Analys</h2>
-        <select class="form-select w-auto bg-dark text-white border-secondary" id="time-range" onchange="loadCharts()">
+        <h2 class="text-white">📊 Analys & Prestanda</h2>
+        <select class="form-select w-auto bg-dark text-white border-secondary shadow-none" id="time-range" onchange="loadCharts()">
             <option value="24">24h</option>
             <option value="48">48h</option>
             <option value="72">3 dygn</option>
@@ -13,10 +13,36 @@
         </select>
     </div>
 
+    <!-- Savings Report (QM Highlight) -->
+    <div class="card bg-dark text-white mb-4 border-success shadow">
+        <div class="card-header border-success d-flex justify-content-between align-items-center">
+            <span class="text-success fw-bold"><i class="bi bi-piggy-bank"></i> Besparingsrapport</span>
+            <span class="badge bg-success">AI Evaluator 2.0</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="font-size: 0.85rem;">
+                    <thead>
+                        <tr class="text-muted">
+                            <th>Datum</th>
+                            <th>Inne (Snitt)</th>
+                            <th>Verklig kWh</th>
+                            <th>Baseline kWh</th>
+                            <th>Besparing (SEK)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="savings-table-body">
+                        <tr><td colspan="5" class="text-center py-3">Laddar historik...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Chart -->
-    <div class="card bg-dark text-white mb-4">
-        <div class="card-header">
-            Temperaturer
+    <div class="card bg-dark text-white mb-4 border-secondary shadow-sm">
+        <div class="card-header border-secondary">
+            Temperaturtrender
         </div>
         <div class="card-body">
             <div style="height: 300px;">
@@ -26,11 +52,11 @@
     </div>
 
     <!-- COP & Compressor -->
-    <div class="row">
+    <div class="row g-3">
         <div class="col-md-6">
-            <div class="card bg-dark text-white mb-4">
-                <div class="card-header">
-                    Kompressorfrekvens
+            <div class="card bg-dark text-white mb-4 border-secondary shadow-sm">
+                <div class="card-header border-secondary">
+                    Kompressoraktivitet (Hz)
                 </div>
                 <div class="card-body">
                     <div style="height: 200px;">
@@ -40,9 +66,9 @@
             </div>
         </div>
         <div class="col-md-6">
-            <div class="card bg-dark text-white mb-4">
-                <div class="card-header">
-                    COP (Estimerad)
+            <div class="card bg-dark text-white mb-4 border-secondary shadow-sm">
+                <div class="card-header border-secondary">
+                    Effektivitet (COP)
                 </div>
                 <div class="card-body">
                     <div style="height: 200px;">
@@ -56,97 +82,100 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     let charts = {};
 
     async function loadCharts() {
-        const hours = document.getElementById('time-range').value;
-        
+        // Analytics data (existing)
         try {
-            // Load data
-            const [indoor, outdoor, supply, comp, cop] = await Promise.all([
-                fetch(`/api/chart/indoor?hours=${hours}`).then(r => r.json()),
-                fetch(`/api/chart/outdoor?hours=${hours}`).then(r => r.json()),
-                fetch(`/api/chart/supply?hours=${hours}`).then(r => r.json()),
-                fetch(`/api/chart/compressor?hours=${hours}`).then(r => r.json()),
-                fetch(`/api/chart/cop?hours=${hours}`).then(r => r.json())
+            const hours = document.getElementById('time-range').value;
+            const res = await fetch(`/api/analytics/data?hours=${hours}`);
+            const data = await res.json();
+
+            console.log("Analytics Data:", data);
+
+            renderTimeSeriesChart('tempChart', [
+                { label: 'Inne', data: data.indoor, borderColor: '#3b82f6', tension: 0.3 },
+                { label: 'Ute', data: data.outdoor, borderColor: '#10b981', tension: 0.3 },
+                { label: 'Framledning', data: data.supply, borderColor: '#ef4444', tension: 0.3, borderDash: [5,5] }
             ]);
 
-            console.log("Charts Data Loaded:", {indoor, outdoor, supply, comp, cop});
+            renderTimeSeriesChart('compChart', [
+                { label: 'Hz', data: data.gm, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.2 }
+            ]);
 
-            // Temperature Chart
-            if (indoor?.success && outdoor?.success && supply?.success) {
-                renderChart('tempChart', [
-                    { label: 'Inne', data: indoor.data?.values || [], borderColor: '#3b82f6', tension: 0.4 },
-                    { label: 'Ute', data: outdoor.data?.values || [], borderColor: '#10b981', tension: 0.4 },
-                    { label: 'Framledning', data: supply.data?.values || [], borderColor: '#ef4444', tension: 0.4, borderDash: [5, 5] }
-                ], indoor.data?.labels || []);
-            } else {
-                console.warn("Missing temperature data");
-            }
-
-            // Compressor Chart
-            if (comp?.success && comp.data) {
-                renderChart('compChart', [
-                    { label: 'Kompressor (Hz)', data: comp.data.values || [], borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4 }
-                ], comp.data.labels || []);
-            }
-
-            // COP Chart
-            if (cop?.success && cop.data) {
-                renderChart('copChart', [
-                    { label: 'COP', data: cop.data.values || [], borderColor: '#f59e0b', tension: 0.4 }
-                ], cop.data.labels || []);
-            }
-            
+            // Note: COP is not in standard analytics/data yet, skipping for now or adding later
         } catch (e) {
-            console.error("Failed to load charts:", e);
+            console.error("Chart load error:", e);
         }
     }
 
-    function renderChart(canvasId, datasets, labels) {
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        
-        if (charts[canvasId]) charts[canvasId].destroy();
-
-        if (!labels) labels = [];
-
-        const formattedLabels = labels.map(t => {
-            try {
-                return new Date(t).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            } catch (e) {
-                return t;
+    async function loadPerformance() {
+        try {
+            const res = await fetch('/api/performance');
+            const data = await res.json();
+            const tbody = document.getElementById('savings-table-body');
+            tbody.innerHTML = '';
+            
+            if(!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">Ingen data tillgänglig än. Körs kl 05:30.</td></tr>';
+                return;
             }
-        });
+
+            data.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="fw-bold text-light">${p.date}</td>
+                    <td>${p.avg_indoor.toFixed(1)}°C</td>
+                    <td>${p.actual_kwh.toFixed(1)}</td>
+                    <td>${p.baseline_kwh.toFixed(1)}</td>
+                    <td class="text-success fw-bold">+${p.savings_sek.toFixed(2)} kr (${p.savings_percent}%)</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error("Performance load error:", e);
+        }
+    }
+
+    function renderTimeSeriesChart(canvasId, datasets) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        if (charts[canvasId]) charts[canvasId].destroy();
 
         charts[canvasId] = new Chart(ctx, {
             type: 'line',
             data: { 
-                labels: formattedLabels, 
-                datasets: datasets 
+                datasets: datasets.map(ds => ({
+                    ...ds,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }))
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                elements: { point: { radius: 0, hitRadius: 10 } },
                 interaction: { mode: 'index', intersect: false },
-                plugins: { 
-                    legend: { position: 'bottom', labels: { color: '#e5e7eb' } }
-                },
+                plugins: { legend: { display: true, labels: { color: '#ccc', boxWidth: 10 } } },
                 scales: {
                     x: { 
-                        ticks: { maxTicksLimit: 8, color: '#9ca3af' }, 
-                        grid: { color: 'rgba(255,255,255,0.05)' } 
+                        type: 'time', 
+                        time: { unit: 'hour' },
+                        ticks: { color: '#6b7280', maxTicksLimit: 6 },
+                        grid: { display: false }
                     },
                     y: { 
-                        ticks: { color: '#9ca3af' },
-                        grid: { color: 'rgba(255,255,255,0.05)' } 
+                        ticks: { color: '#6b7280' },
+                        grid: { color: 'rgba(255,255,255,0.05)' }
                     }
                 }
             }
         });
     }
 
+    // Initial load
     loadCharts();
+    loadPerformance();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 {% endblock %}
