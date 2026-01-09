@@ -10,6 +10,7 @@ from sqlalchemy import desc
 from integrations.auth import MyUplinkAuth
 from integrations.api_client import MyUplinkClient
 from services.home_assistant_service import HomeAssistantService
+from services.weather_service import SMHIWeatherService
 from core.config import settings
 from data.models import (
     System,
@@ -29,6 +30,7 @@ class DataLogger:
         self.auth = MyUplinkAuth()
         self.client = MyUplinkClient(self.auth)
         self.ha_service = HomeAssistantService()
+        self.weather_service = SMHIWeatherService()
 
     def initialize_metadata(self):
         logger.info("Initializing metadata...")
@@ -223,6 +225,38 @@ class DataLogger:
                         logger.info(f"✓ Logged {ha_logged} high-precision readings from Home Assistant")
             except Exception as e:
                 logger.error(f"Error logging HA readings: {e}")
+                self.session.rollback()
+
+            # QM ADDITION: Log External Weather Data (For Physics Learning)
+            try:
+                forecasts = self.weather_service.get_forecast(hours_ahead=1)
+                if forecasts and device:
+                    weather = forecasts[0]
+                    w_timestamp = datetime.utcnow()
+                    w_logged = 0
+                    
+                    mapping = {
+                        'EXT_WIND_SPEED': weather.wind_speed,
+                        'EXT_WIND_DIRECTION': weather.wind_direction
+                    }
+                    
+                    for p_id, val in mapping.items():
+                        parameter = self.session.query(Parameter).filter_by(parameter_id=p_id).first()
+                        if parameter:
+                            reading = ParameterReading(
+                                device_id=device.id,
+                                parameter_id=parameter.id,
+                                timestamp=w_timestamp,
+                                value=float(val)
+                            )
+                            self.session.add(reading)
+                            w_logged += 1
+                    
+                    if w_logged > 0:
+                        self.session.commit()
+                        logger.info(f"✓ Logged {w_logged} external weather readings")
+            except Exception as e:
+                logger.error(f"Error logging weather readings: {e}")
                 self.session.rollback()
                 
             return total_readings
