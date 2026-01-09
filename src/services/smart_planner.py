@@ -89,10 +89,15 @@ class SmartPlanner:
         weather_forecast = self.weather_service.get_forecast(hours_ahead=48)
         weather_forecast_dict = {f.timestamp.replace(minute=0, second=0, microsecond=0, tzinfo=timezone.utc).isoformat(): f for f in weather_forecast}
         
+        # Calculate baseline temp (avg of next 24h) to compare against
+        avg_temp_baseline = sum([f.temperature for f in weather_forecast[:24]]) / max(1, len(weather_forecast[:24]))
+        
+        price_forecast_yesterday = self.price_service.get_prices_yesterday()
         price_forecast_today = self.price_service.get_prices_today()
         price_forecast_tomorrow = self.price_service.get_prices_tomorrow()
+        
         all_prices_data: Dict[str, float] = {}
-        for p in price_forecast_today + price_forecast_tomorrow:
+        for p in price_forecast_yesterday + price_forecast_today + price_forecast_tomorrow:
             utc_key = p.time_start.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0).isoformat()
             all_prices_data[utc_key] = p.price_per_kwh
             
@@ -111,7 +116,39 @@ class SmartPlanner:
             humidity = forecast.humidity if forecast else 50.0
             wind_speed = forecast.wind_speed if forecast else 0.0
             wind_dir = forecast.wind_direction if forecast else 0
-            price = all_prices_data.get(iso_ts, avg_price)
+            
+            # --- Price Fallback & Prediction ---
+            price = all_prices_data.get(iso_ts)
+            if price is None:
+                # Fallback: Use same hour from today/yesterday
+                fallback_ts = (current_time - timedelta(days=1)).isoformat()
+                base_price = all_prices_data.get(fallback_ts, avg_price)
+                
+                # --- FACTOR 1: WIND ---
+                sensitivity = self.tuning.get('price_wind_sensitivity', 0.0)
+                predicted_drop = 0.0
+                if sensitivity > 0 and wind_speed > 0:
+                    predicted_drop = wind_speed * sensitivity
+                
+                # --- FACTOR 2: WEEKEND/HOLIDAY ---
+                weekend_factor = 1.0
+                if current_time.weekday() >= 5:
+                    weekend_discount = self.tuning.get('weekend_discount_factor', 0.90)
+                    weekend_factor = weekend_discount
+
+                # --- FACTOR 3: TEMPERATURE ---
+                temp_sens = self.tuning.get('price_temp_sensitivity', 0.0)
+                predicted_hike = 0.0
+                if temp_sens > 0 and out_temp < 0:
+                    # If it's colder than baseline, price goes up.
+                    # Baseline is the avg of next 24h (approx "today").
+                    # Delta: (TodayAvg - TomorrowSpecific).
+                    # Ex: Today -2, Tomorrow -10. Delta = -2 - (-10) = 8. Hike = 8 * sens.
+                    delta_c = avg_temp_baseline - out_temp
+                    if delta_c > 0:
+                        predicted_hike = delta_c * temp_sens
+
+                price = max(0.01, (base_price * weekend_factor) - predicted_drop + predicted_hike)
             
             # --- COP SHIELD (Defrost Penalty) ---
             if out_temp < 5.0 and humidity > 80.0:

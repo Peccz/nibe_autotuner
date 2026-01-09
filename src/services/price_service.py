@@ -84,6 +84,11 @@ class PriceService:
             logger.error(f"Error fetching price at {dt}: {e}")
             return {'total': 1.50, 'spot': 0.50}
 
+    def get_prices_yesterday(self) -> List[PricePoint]:
+        yesterday = datetime.now() - timedelta(days=1)
+        data = self._get_prices_for_date(yesterday)
+        return self._parse_prices(data)
+
     def get_prices_today(self) -> List[PricePoint]:
         data = self._get_prices_for_date(datetime.now())
         return self._parse_prices(data)

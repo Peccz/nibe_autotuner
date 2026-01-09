@@ -124,17 +124,34 @@ async def get_dashboard_v4():
         )
 
         # 2. Plan
+        heating_curve = analyzer.get_latest_value(device, analyzer.PARAM_HEATING_CURVE) or 7.0
+        
         plan_rows = session.query(PlannedHeatingSchedule).order_by(PlannedHeatingSchedule.timestamp.asc()).all()
-        plan_data = [{
-            "time": p.timestamp.isoformat(),
-            "price": p.electricity_price,
-            "temp_out": p.outdoor_temp,
-            "temp_sim_down": p.simulated_indoor_temp,
-            "temp_sim_dexter": p.simulated_dexter_temp,
-            "action": p.planned_action,
-            "offset": p.planned_offset,
-            "wind": p.wind_speed
-        } for p in plan_rows]
+        plan_data = []
+        for p in plan_rows:
+            # Calculate Predicted Supply Temp
+            # Formula: 20 + ((20 - Out) * Curve * 0.15) + Offset
+            base_supply = 20 + ((20 - (p.outdoor_temp or 0)) * heating_curve * 0.15)
+            # Add planned offset (if action is RUN/REST, offset might be non-zero)
+            # If planned_action is REST, we assume offset is effectively lower (or pump stops)
+            # But let's show the *Target* supply temp.
+            offset = p.planned_offset if p.planned_offset is not None else 0.0
+            
+            # If action is REST, the pump might not run, but the target would be low.
+            # Let's visualize the "Active Target".
+            pred_supply = base_supply + offset
+            
+            plan_data.append({
+                "time": p.timestamp.isoformat(),
+                "price": p.electricity_price,
+                "temp_out": p.outdoor_temp,
+                "temp_sim_down": p.simulated_indoor_temp,
+                "temp_sim_dexter": p.simulated_dexter_temp,
+                "predicted_supply": round(pred_supply, 1),
+                "action": p.planned_action,
+                "offset": p.planned_offset,
+                "wind": p.wind_speed
+            })
 
         # 3. Tuning
         res = session.execute(text("SELECT parameter_id, value FROM system_tuning")).fetchall()

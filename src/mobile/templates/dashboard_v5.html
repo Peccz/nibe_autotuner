@@ -79,11 +79,23 @@
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-green-500/20 border border-green-500/30 rounded-sm"></div> <span class="text-slate-400">Billig El</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-red-500/20 border border-red-500/30 rounded-sm"></div> <span class="text-slate-400">Dyr El</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-0.5 border-t border-dashed border-purple-400"></div> <span class="text-slate-400">Temp Dexter (Snabb)</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-3 h-1 bg-orange-500"></div> <span class="text-orange-200 font-bold">Framledning (Mål)</span></div>
             </div>
         </div>
         
         <div class="h-80 w-full relative">
             <canvas id="energyChart"></canvas>
+        </div>
+    </div>
+
+    <!-- THE SCIENTIST: AI Calibration -->
+    <div class="glass p-6 rounded-3xl mb-8">
+        <h3 class="card-label mb-4 text-slate-400">The Scientist - Inlärning & Kalibrering</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="tuning-params">
+            <!-- Params injected by JS -->
+        </div>
+        <div class="mt-4 pt-4 border-t border-white/5 text-[10px] text-slate-500 italic">
+            AI analysera husets respons varje natt kl 03:00 och justerar fysikmodellen.
         </div>
     </div>
 
@@ -106,7 +118,32 @@
             const res = await fetch('/api/v4/dashboard');
             const data = await res.json();
             updateMetrics(data.status);
+            updateTuning(data.tuning);
             renderEnergyChart(data.plan);
+        }
+
+        function updateTuning(tuning) {
+            const div = document.getElementById('tuning-params');
+            div.innerHTML = '';
+            const params = [
+                {k: 'price_wind_sensitivity', l: 'Vind-Känslighet (Pris)'},
+                {k: 'price_temp_sensitivity', l: 'Temp-Känslighet (Pris)'},
+                {k: 'weekend_discount_factor', l: 'Helg-Rabatt'},
+                {k: 'wind_direction_west_factor', l: 'Västvind-Faktor'},
+                {k: 'thermal_leakage', l: 'Värmeläckage'},
+                {k: 'rad_efficiency', l: 'Radiator-Effekt'}
+            ];
+            
+            params.forEach(p => {
+                if(tuning[p.k]) {
+                    div.innerHTML += `
+                        <div class="bg-white/5 p-3 rounded-xl">
+                            <div class="text-[9px] text-slate-500 uppercase tracking-wider mb-1">${p.l}</div>
+                            <div class="text-lg font-bold text-slate-200">${tuning[p.k].toFixed(3)}</div>
+                        </div>
+                    `;
+                }
+            });
         }
 
         function updateMetrics(s) {
@@ -155,12 +192,15 @@
             // 1. Prepare Data Series
             const tempDown = plan.map(p => p.temp_sim_down);
             const tempDexter = plan.map(p => p.temp_sim_dexter);
+            const tempSupply = plan.map(p => p.predicted_supply);
             const prices = plan.map(p => p.price * 100); // Öre
             const maxPrice = Math.max(...prices);
             
-            // Calculate Median Price for better color context
+            // Calculate Median and Percentiles for better color context
             const sortedPrices = [...prices].sort((a, b) => a - b);
-            const medianPrice = sortedPrices[Math.floor(sortedPrices.length / 2)];
+            const lowThreshold = sortedPrices[Math.floor(sortedPrices.length * 0.33)];
+            const highThreshold = sortedPrices[Math.floor(sortedPrices.length * 0.66)];
+            const minPrice = sortedPrices[0];
 
             // 2. Construct "Heating Blocks" (Energy Injection)
             // We use a bar chart mapped to a hidden Y-axis to create background blocks
@@ -177,11 +217,11 @@
             const baseHeatingData = heatingBlocks.map(b => b.type === 'BASE' ? b.y : 0);
             const boostHeatingData = heatingBlocks.map(b => b.type === 'BOOST' ? b.y : 0);
 
-            // 3. Price Coloring (Relative to Day's Median)
+            // 3. Price Coloring (Dynamic Percentiles)
             const priceColors = prices.map(price => {
-                if (price <= medianPrice * 0.9) return 'rgba(34, 197, 94, 0.15)'; // Green (Cheap)
-                if (price >= medianPrice * 1.2) return 'rgba(239, 68, 68, 0.15)'; // Red (Expensive)
-                return 'rgba(234, 179, 8, 0.1)'; // Yellow (Normal)
+                if (price <= lowThreshold) return 'rgba(34, 197, 94, 0.15)'; // Green (Bottom 33%)
+                if (price >= highThreshold) return 'rgba(239, 68, 68, 0.15)'; // Red (Top 33%)
+                return 'rgba(234, 179, 8, 0.1)'; // Yellow (Middle 33%)
             });
 
             if (energyChart) energyChart.destroy();
@@ -245,6 +285,18 @@
                             yAxisID: 'yTemp',
                             order: 0
                         }
+                        // LAYER 4: Supply Temp (The "Gas Pedal")
+                        {
+                            label: 'Framledning (Mål)',
+                            data: tempSupply,
+                            type: 'line',
+                            borderColor: '#f97316', // Brighter Orange-500
+                            borderWidth: 2.5,       // Thicker
+                            pointRadius: 0,
+                            tension: 0.4,           // Smoother
+                            yAxisID: 'ySupply',
+                            order: 0
+                        }
                     ]
                 },
                 options: {
@@ -271,6 +323,14 @@
                             grid: { color: 'rgba(255,255,255,0.05)' },
                             ticks: { color: '#94a3b8', callback: v => v + '°C' }
                         },
+                        ySupply: {
+                            type: 'linear',
+                            position: 'right',
+                            min: 20,
+                            max: 60,
+                            grid: { display: false },
+                            ticks: { display: false } // Clean look
+                        },
                         yActivity: {
                             display: false, 
                             min: 0,
@@ -285,7 +345,7 @@
                                 color: '#ca8a04', 
                                 callback: v => v + ' ö' 
                             },
-                            min: 0,
+                            min: minPrice * 0.9, // Zoom in on the lowest price
                             // Use almost full height (1.1x max) to maximize visibility of differences
                             max: maxPrice * 1.1 
                         }
