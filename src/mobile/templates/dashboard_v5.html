@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nibe Autotuner V5 - Energy Flow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #e2e8f0; }
+        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+        .card-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 600; }
+        .value-huge { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+        .value-sub { font-size: 0.85rem; color: #94a3b8; margin-top: 0.25rem; }
+        
+        /* Heating Pulse Animation */
+        @keyframes heatPulse { 0% { opacity: 0.3; } 50% { opacity: 0.6; } 100% { opacity: 0.3; } }
+        .heating-active { animation: heatPulse 3s infinite ease-in-out; }
+    </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen">
+
+    <!-- TOP ROW: The Result (Temperatures) -->
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <!-- Zone 1: Downstairs (Slab) -->
+        <div class="glass p-5 rounded-3xl relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-10 text-6xl">🏡</div>
+            <div class="card-label mb-2">Zon 1: Nere (Betongplatta)</div>
+            <div class="value-huge text-blue-400" id="temp-down">--°C</div>
+            <div class="value-sub flex items-center gap-2">
+                <span>Mål: 21.0°C</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-white/5" id="hum-down">--% RH</span>
+            </div>
+        </div>
+
+        <!-- Zone 2: Dexter (Radiators) -->
+        <div class="glass p-5 rounded-3xl relative overflow-hidden border-l-2 border-purple-500/50">
+            <div class="absolute top-0 right-0 p-4 opacity-10 text-6xl">🛌</div>
+            <div class="card-label mb-2">Zon 2: Dexter (Radiatorer)</div>
+            <div class="value-huge text-purple-400" id="temp-dexter">--°C</div>
+            <div class="value-sub text-purple-300/60" id="dexter-status">Väntar på värme...</div>
+        </div>
+    </div>
+
+    <!-- MIDDLE ROW: The Machine & Cost -->
+    <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="glass p-4 rounded-2xl">
+            <div class="card-label">Utomhus</div>
+            <div class="text-xl font-bold mt-1" id="temp-out">--°C</div>
+            <div class="text-xs text-slate-500 mt-1" id="wind-speed">-- m/s</div>
+        </div>
+        <div class="glass p-4 rounded-2xl">
+            <div class="card-label">Framledning</div>
+            <div class="text-xl font-bold text-orange-400 mt-1" id="supply-temp">--°C</div>
+            <div class="text-xs text-slate-500 mt-1" id="comp-hz">-- Hz</div>
+        </div>
+        <div class="glass p-4 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900">
+            <div class="card-label">Elpris Nu</div>
+            <div class="text-xl font-bold text-yellow-400 mt-1" id="price-now">-- öre</div>
+            <div class="text-xs text-yellow-500/50 mt-1">Spotpris</div>
+        </div>
+    </div>
+
+    <!-- VISUALIZATION: The Energy Narrative -->
+    <div class="glass p-6 rounded-3xl mb-8">
+        <div class="flex justify-between items-end mb-4">
+            <div>
+                <h2 class="text-lg font-bold text-white">Energi-Puls & Termisk Respons</h2>
+                <p class="text-xs text-slate-400 mt-1">Visar hur systemet laddar huset (Block) baserat på elpris (Botten) och hur värmen stiger (Linjer).</p>
+            </div>
+            <div class="flex gap-3 text-xs font-mono">
+                <div class="flex items-center gap-1"><div class="w-3 h-3 bg-blue-500/30 rounded-sm"></div> Grundvärme</div>
+                <div class="flex items-center gap-1"><div class="w-3 h-3 bg-orange-500/40 rounded-sm"></div> Spetsvärme (Dexter)</div>
+            </div>
+        </div>
+        
+        <div class="h-80 w-full relative">
+            <canvas id="energyChart"></canvas>
+        </div>
+    </div>
+
+    <!-- LOGIC EXPLAINER -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-500">
+        <div class="glass p-4 rounded-xl">
+            <strong class="text-slate-300 block mb-1">First Principle: Termisk Tröghet</strong>
+            Systemet "laddar" betongplattan (Zon 1) när elpriset är lågt (Gröna fält). Värmen lagras och avges långsamt över dygnet.
+        </div>
+        <div class="glass p-4 rounded-xl">
+            <strong class="text-slate-300 block mb-1">First Principle: Direktverkan</strong>
+            Zon 2 (Dexter) har låg tröghet. Här krävs "Spetsvärme" (Orange block) med högre framledningstemp exakt när behovet finns, oavsett tröghet.
+        </div>
+    </div>
+
+    <script>
+        // --- DATA FETCHING & RENDERING ---
+        
+        async function loadData() {
+            const res = await fetch('/api/v4/dashboard');
+            const data = await res.json();
+            updateMetrics(data.status);
+            renderEnergyChart(data.plan);
+        }
+
+        function updateMetrics(s) {
+            document.getElementById('temp-down').innerText = s.indoor_downstairs.toFixed(1) + '°C';
+            document.getElementById('temp-dexter').innerText = s.indoor_dexter.toFixed(1) + '°C';
+            document.getElementById('temp-out').innerText = s.outdoor_temp.toFixed(1) + '°C';
+            document.getElementById('hum-down').innerText = (s.indoor_humidity || '--') + '% RH';
+            document.getElementById('supply-temp').innerText = (s.supply_temp || '--') + '°C';
+            document.getElementById('comp-hz').innerText = s.compressor_freq.toFixed(0) + ' Hz';
+            document.getElementById('price-now').innerText = (s.current_price * 100).toFixed(0) + ' öre';
+            
+            // Dexter Status Logic
+            const dStatus = document.getElementById('dexter-status');
+            if (s.indoor_dexter < 19.8) {
+                dStatus.innerHTML = '<span class="text-orange-400">Begär Spetsvärme!</span>';
+            } else {
+                dStatus.innerHTML = '<span class="text-green-400/60">Temperatur OK</span>';
+            }
+        }
+
+        let energyChart;
+
+        function renderEnergyChart(plan) {
+            const ctx = document.getElementById('energyChart').getContext('2d');
+            const labels = plan.map(p => {
+                const d = new Date(p.time);
+                return d.getHours() + ':00';
+            });
+
+            // 1. Prepare Data Series
+            const tempDown = plan.map(p => p.temp_sim_down);
+            const tempDexter = plan.map(p => p.temp_sim_dexter);
+            const prices = plan.map(p => p.price * 100); // Convert to öre
+            
+            // 2. Construct "Heating Blocks" (Energy Injection)
+            // We use a bar chart mapped to a hidden Y-axis to create background blocks
+            const heatingBlocks = plan.map(p => {
+                if (p.action === 'RUN' || p.action === 'MUST_RUN') {
+                    // Check intent: Is this Base load or Boost?
+                    // Heuristic: If offset > 2, it's a Boost
+                    if (p.offset > 2) return { y: 100, type: 'BOOST' }; // 100% height
+                    return { y: 100, type: 'BASE' };
+                }
+                return { y: 0, type: 'NONE' };
+            });
+
+            const baseHeatingData = heatingBlocks.map(b => b.type === 'BASE' ? b.y : 0);
+            const boostHeatingData = heatingBlocks.map(b => b.type === 'BOOST' ? b.y : 0);
+
+            // 3. Price Coloring (Green to Red gradient)
+            const priceColors = prices.map(price => {
+                // Simple heuristic: < 50 öre = Green, > 150 = Red
+                if (price < 50) return 'rgba(34, 197, 94, 0.2)'; // Green low
+                if (price > 150) return 'rgba(239, 68, 68, 0.2)'; // Red high
+                return 'rgba(234, 179, 8, 0.1)'; // Yellow mid
+            });
+
+            if (energyChart) energyChart.destroy();
+
+            energyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        // LAYER 1: Heating Action (Background Blocks)
+                        {
+                            label: 'Grundvärme (Laddning)',
+                            data: baseHeatingData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.15)', // Soft Blue
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0,
+                            yAxisID: 'yActivity',
+                            order: 3
+                        },
+                        {
+                            label: 'Spetsvärme (Boost)',
+                            data: boostHeatingData,
+                            backgroundColor: 'rgba(249, 115, 22, 0.25)', // Soft Orange
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0,
+                            yAxisID: 'yActivity',
+                            order: 2
+                        },
+                        // LAYER 2: Price "Terrain" (Bottom Bars)
+                        {
+                            label: 'Elpris (öre)',
+                            data: prices,
+                            backgroundColor: priceColors,
+                            borderRadius: 4,
+                            barPercentage: 0.6,
+                            yAxisID: 'yPrice',
+                            order: 4
+                        },
+                        // LAYER 3: Thermal Response (Lines)
+                        {
+                            label: 'Temp Nere (Trög)',
+                            data: tempDown,
+                            type: 'line',
+                            borderColor: '#60a5fa', // Blue-400
+                            borderWidth: 3,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            yAxisID: 'yTemp',
+                            order: 1
+                        },
+                        {
+                            label: 'Temp Dexter (Snabb)',
+                            data: tempDexter,
+                            type: 'line',
+                            borderColor: '#c084fc', // Purple-400
+                            borderWidth: 3,
+                            borderDash: [5, 5], // Dashed to show volatility
+                            tension: 0.2,
+                            pointRadius: 0,
+                            yAxisID: 'yTemp',
+                            order: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#e2e8f0',
+                            bodyColor: '#94a3b8',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#64748b' } },
+                        yTemp: {
+                            type: 'linear',
+                            position: 'left',
+                            min: 19,
+                            max: 23,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#94a3b8', callback: v => v + '°C' }
+                        },
+                        yActivity: {
+                            display: false, // Hidden axis for the background blocks
+                            min: 0,
+                            max: 100
+                        },
+                        yPrice: {
+                            display: false, // Hidden axis, just for scaling the price bars at bottom
+                            min: 0,
+                            max: 400 // Scale so bars stay low
+                        }
+                    }
+                }
+            });
+        }
+
+        loadData();
+        setInterval(loadData, 60000); // Refresh every minute
+    </script>
+</body>
+</html>

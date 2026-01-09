@@ -38,7 +38,7 @@ def index():
 
 @app.route('/dashboard')
 def dashboard():
-    return render_template('dashboard_v4.html')
+    return render_template('dashboard_v5.html')
 
 @app.route('/analytics')
 def analytics():

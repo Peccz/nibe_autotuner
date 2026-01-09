@@ -113,6 +113,7 @@ async def get_dashboard_v4():
             "temp_sim_down": p.simulated_indoor_temp,
             "temp_sim_dexter": p.simulated_dexter_temp,
             "action": p.planned_action,
+            "offset": p.planned_offset,
             "wind": p.wind_speed
         } for p in plan_rows]
 
