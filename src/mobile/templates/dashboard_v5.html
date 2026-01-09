@@ -77,6 +77,7 @@
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-orange-500/40 rounded-sm"></div> <span class="text-slate-400">Spetsvärme (Zon 2)</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-1 bg-blue-400"></div> <span class="text-slate-400">Temp Nere (Trög)</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-green-500/20 border border-green-500/30 rounded-sm"></div> <span class="text-slate-400">Billig El</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-slate-500/20 border border-slate-500/30 rounded-sm"></div> <span class="text-slate-400">Utetemp (Yta)</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-red-500/20 border border-red-500/30 rounded-sm"></div> <span class="text-slate-400">Dyr El</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-0.5 border-t border-dashed border-purple-400"></div> <span class="text-slate-400">Temp Dexter (Snabb)</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-1 bg-orange-500"></div> <span class="text-orange-200 font-bold">Framledning (Mål)</span></div>
@@ -193,7 +194,8 @@
             const tempDown = plan.map(p => p.temp_sim_down);
             const tempDexter = plan.map(p => p.temp_sim_dexter);
             const tempSupply = plan.map(p => p.predicted_supply);
-            const prices = plan.map(p => p.price * 100); // Öre
+            const tempOut = plan.map(p => p.temp_out); // NEW
+            const prices = plan.map(p => p.price * 100); 
             const maxPrice = Math.max(...prices);
             
             // Calculate Median and Percentiles for better color context
@@ -231,6 +233,20 @@
                 data: {
                     labels: labels,
                     datasets: [
+                        // LAYER 0: Outdoor Temp (Context - Filled Area)
+                        {
+                            label: 'Utetemp',
+                            data: tempOut,
+                            type: 'line',
+                            backgroundColor: 'rgba(148, 163, 184, 0.1)', // Slate-400 very transparent
+                            borderColor: 'rgba(148, 163, 184, 0.3)',
+                            borderWidth: 1,
+                            fill: true,
+                            pointRadius: 0,
+                            tension: 0.4,
+                            yAxisID: 'yOut',
+                            order: 10
+                        },
                         // LAYER 1: Heating Action (Foreground Blocks - moved to front via order)
                         {
                             label: 'Grundvärme (Laddning)',
@@ -330,6 +346,13 @@
                             max: 60,
                             grid: { display: false },
                             ticks: { display: false } // Clean look
+                        },
+                        yOut: {
+                            type: 'linear',
+                            position: 'left',
+                            display: false, // Hidden axis
+                            min: -15,
+                            max: 35 // Keep it low in the chart
                         },
                         yActivity: {
                             display: false, 
