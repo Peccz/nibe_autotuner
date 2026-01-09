@@ -228,24 +228,43 @@
 
             if (energyChart) energyChart.destroy();
 
+            // Create Gradient for Supply Temp
+            const gradientSupply = ctx.createLinearGradient(0, 0, 0, 400);
+            gradientSupply.addColorStop(0, 'rgba(249, 115, 22, 0.2)'); // Orange top
+            gradientSupply.addColorStop(1, 'rgba(249, 115, 22, 0.0)'); // Transparent bottom
+
             energyChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
                     datasets: [
-                        // LAYER 0: Outdoor Temp (Context - Filled Area)
+                        // LAYER 0: Outdoor Temp (Context - Filled Area from bottom)
                         {
                             label: 'Utetemp',
                             data: tempOut,
                             type: 'line',
-                            backgroundColor: 'rgba(148, 163, 184, 0.1)', // Slate-400 very transparent
-                            borderColor: 'rgba(148, 163, 184, 0.3)',
+                            backgroundColor: 'rgba(71, 85, 105, 0.15)', // Slate-600
+                            borderColor: 'rgba(71, 85, 105, 0.2)',
                             borderWidth: 1,
-                            fill: true,
+                            fill: 'start', // Always fill from the bottom of the axis
                             pointRadius: 0,
                             tension: 0.4,
                             yAxisID: 'yOut',
                             order: 10
+                        },
+                        // LAYER 4: Supply Temp (The "Energy Volume" - Background)
+                        {
+                            label: 'Framledning (Mål)',
+                            data: tempSupply,
+                            type: 'line',
+                            backgroundColor: gradientSupply,
+                            borderColor: '#f97316', // Orange-500
+                            borderWidth: 2,
+                            fill: true,
+                            pointRadius: 0,
+                            tension: 0.4,
+                            yAxisID: 'ySupply',
+                            order: 5 // Behind room temps (which are order 0/1)
                         },
                         // LAYER 1: Heating Action (Foreground Blocks - moved to front via order)
                         {
@@ -299,18 +318,6 @@
                             tension: 0.2,
                             pointRadius: 0,
                             yAxisID: 'yTemp',
-                            order: 0
-                        },
-                        // LAYER 4: Supply Temp (The "Gas Pedal")
-                        {
-                            label: 'Framledning (Mål)',
-                            data: tempSupply,
-                            type: 'line',
-                            borderColor: '#f97316', // Brighter Orange-500
-                            borderWidth: 2.5,       // Thicker
-                            pointRadius: 0,
-                            tension: 0.4,           // Smoother
-                            yAxisID: 'ySupply',
                             order: 0
                         }
                     ]
