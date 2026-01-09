@@ -158,6 +158,10 @@
             const prices = plan.map(p => p.price * 100); // Öre
             const maxPrice = Math.max(...prices);
             
+            // Calculate Median Price for better color context
+            const sortedPrices = [...prices].sort((a, b) => a - b);
+            const medianPrice = sortedPrices[Math.floor(sortedPrices.length / 2)];
+
             // 2. Construct "Heating Blocks" (Energy Injection)
             // We use a bar chart mapped to a hidden Y-axis to create background blocks
             const heatingBlocks = plan.map(p => {
@@ -173,12 +177,11 @@
             const baseHeatingData = heatingBlocks.map(b => b.type === 'BASE' ? b.y : 0);
             const boostHeatingData = heatingBlocks.map(b => b.type === 'BOOST' ? b.y : 0);
 
-            // 3. Price Coloring (Green to Red gradient)
+            // 3. Price Coloring (Relative to Day's Median)
             const priceColors = prices.map(price => {
-                // Simple heuristic: < 50 öre = Green, > 150 = Red
-                if (price < 50) return 'rgba(34, 197, 94, 0.2)'; // Green low
-                if (price > 150) return 'rgba(239, 68, 68, 0.2)'; // Red high
-                return 'rgba(234, 179, 8, 0.1)'; // Yellow mid
+                if (price <= medianPrice * 0.9) return 'rgba(34, 197, 94, 0.15)'; // Green (Cheap)
+                if (price >= medianPrice * 1.2) return 'rgba(239, 68, 68, 0.15)'; // Red (Expensive)
+                return 'rgba(234, 179, 8, 0.1)'; // Yellow (Normal)
             });
 
             if (energyChart) energyChart.destroy();
@@ -188,54 +191,55 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        // LAYER 1: Heating Action (Background Blocks)
+                        // LAYER 1: Heating Action (Foreground Blocks - moved to front via order)
                         {
                             label: 'Grundvärme (Laddning)',
                             data: baseHeatingData,
-                            backgroundColor: 'rgba(59, 130, 246, 0.15)', // Soft Blue
-                            barPercentage: 1.0,
-                            categoryPercentage: 1.0,
-                            yAxisID: 'yActivity',
-                            order: 3
-                        },
-                        {
-                            label: 'Spetsvärme (Boost)',
-                            data: boostHeatingData,
-                            backgroundColor: 'rgba(249, 115, 22, 0.25)', // Soft Orange
+                            backgroundColor: 'rgba(59, 130, 246, 0.3)', // Stronger Blue
                             barPercentage: 1.0,
                             categoryPercentage: 1.0,
                             yAxisID: 'yActivity',
                             order: 2
                         },
-                        // LAYER 2: Price "Terrain" (Bottom Bars)
+                        {
+                            label: 'Spetsvärme (Boost)',
+                            data: boostHeatingData,
+                            backgroundColor: 'rgba(249, 115, 22, 0.4)', // Stronger Orange
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0,
+                            yAxisID: 'yActivity',
+                            order: 1
+                        },
+                        // LAYER 2: Price "Terrain" (Background - very tall but transparent)
                         {
                             label: 'Elpris (öre)',
                             data: prices,
                             backgroundColor: priceColors,
-                            borderRadius: 4,
-                            barPercentage: 0.6,
+                            borderRadius: 0,
+                            barPercentage: 1.0, // Connect them like a wall
+                            categoryPercentage: 1.0,
                             yAxisID: 'yPrice',
-                            order: 4
+                            order: 3
                         },
-                        // LAYER 3: Thermal Response (Lines)
+                        // LAYER 3: Thermal Response (Lines on top)
                         {
                             label: 'Temp Nere (Trög)',
                             data: tempDown,
                             type: 'line',
-                            borderColor: '#60a5fa', // Blue-400
+                            borderColor: '#60a5fa', 
                             borderWidth: 3,
                             tension: 0.4,
                             pointRadius: 0,
                             yAxisID: 'yTemp',
-                            order: 1
+                            order: 0
                         },
                         {
                             label: 'Temp Dexter (Snabb)',
                             data: tempDexter,
                             type: 'line',
-                            borderColor: '#c084fc', // Purple-400
+                            borderColor: '#c084fc', 
                             borderWidth: 3,
-                            borderDash: [5, 5], // Dashed to show volatility
+                            borderDash: [5, 5], 
                             tension: 0.2,
                             pointRadius: 0,
                             yAxisID: 'yTemp',
@@ -250,7 +254,7 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
                             titleColor: '#e2e8f0',
                             bodyColor: '#94a3b8',
                             borderColor: 'rgba(255,255,255,0.1)',
@@ -268,7 +272,7 @@
                             ticks: { color: '#94a3b8', callback: v => v + '°C' }
                         },
                         yActivity: {
-                            display: false, // Hidden axis for the background blocks
+                            display: false, 
                             min: 0,
                             max: 100
                         },
@@ -282,8 +286,8 @@
                                 callback: v => v + ' ö' 
                             },
                             min: 0,
-                            // Keep bars in bottom 1/3 by setting axis max to 3x the highest price
-                            max: Math.max(100, maxPrice * 3) 
+                            // Use almost full height (1.1x max) to maximize visibility of differences
+                            max: maxPrice * 1.1 
                         }
                     }
                 }
