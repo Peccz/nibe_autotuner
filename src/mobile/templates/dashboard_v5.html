@@ -252,19 +252,18 @@
                             yAxisID: 'yOut',
                             order: 10
                         },
-                        // LAYER 4: Supply Temp (The "Energy Volume" - Background)
+                        // LAYER 4: Supply Temp (The "Gas Pedal" - Thin Line)
                         {
                             label: 'Framledning (Mål)',
                             data: tempSupply,
                             type: 'line',
-                            backgroundColor: gradientSupply,
                             borderColor: '#f97316', // Orange-500
-                            borderWidth: 2,
-                            fill: true,
+                            borderWidth: 1.5,       // Thin
+                            fill: false,            // No fill
                             pointRadius: 0,
                             tension: 0.4,
                             yAxisID: 'ySupply',
-                            order: 5 // Behind room temps (which are order 0/1)
+                            order: 0 // On top
                         },
                         // LAYER 1: Heating Action (Foreground Blocks - moved to front via order)
                         {
