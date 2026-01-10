@@ -268,42 +268,97 @@
                             label: 'Utetemp',
                             data: tempOut,
                             type: 'line',
-                            backgroundColor: 'rgba(71, 85, 105, 0.15)', // Slate-600
+                            backgroundColor: 'rgba(71, 85, 105, 0.15)', 
                             borderColor: 'rgba(71, 85, 105, 0.2)',
                             borderWidth: 1,
-                            fill: 'start', // Always fill from the bottom of the axis
+                            fill: 'start',
                             pointRadius: 0,
                             tension: 0.4,
                             yAxisID: 'yOut',
                             order: 10
                         },
-                                                // LAYER 4: Supply Temp (Split)
-                                                {
-                                                    label: 'Framledning (Rad)',
-                                                    data: supplyDexter,
-                                                    type: 'line',
-                                                    borderColor: '#f97316', // Orange-500
-                                                    borderWidth: 1.5,
-                                                    fill: false,
-                                                    pointRadius: 0,
-                                                    tension: 0.4,
-                                                    yAxisID: 'ySupply',
-                                                    order: 0
-                                                },
-                                                {
-                                                    label: 'Framledning (Golv)',
-                                                    data: supplyDown,
-                                                    type: 'line',
-                                                    borderColor: '#22d3ee', // Cyan-400
-                                                    borderWidth: 1.5,
-                                                    borderDash: [2, 2],     // Dashed
-                                                    fill: false,
-                                                    pointRadius: 0,
-                                                    tension: 0.4,
-                                                    yAxisID: 'ySupply',
-                                                    order: 0
-                                                }
-                                            ]                },
+                        // LAYER 1: Heating Action (Minimal Strip)
+                        {
+                            label: 'Drift (Laddning)',
+                            data: baseHeatingData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)', 
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0,
+                            yAxisID: 'yActivity',
+                            order: 5
+                        },
+                        {
+                            label: 'Drift (Boost)',
+                            data: boostHeatingData,
+                            backgroundColor: 'rgba(249, 115, 22, 0.8)', 
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0,
+                            yAxisID: 'yActivity',
+                            order: 5
+                        },
+                        // LAYER 2: Price "Terrain"
+                        {
+                            label: 'Elpris (öre)',
+                            data: prices,
+                            backgroundColor: priceColors,
+                            borderRadius: 0,
+                            barPercentage: 1.0, 
+                            categoryPercentage: 1.0,
+                            yAxisID: 'yPrice',
+                            order: 20
+                        },
+                        // LAYER 3: Thermal Response (Indoor Temps)
+                        {
+                            label: 'Temp Nere (Trög)',
+                            data: tempDown,
+                            type: 'line',
+                            borderColor: '#22d3ee', // Cyan
+                            borderWidth: 3,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            yAxisID: 'yTemp',
+                            order: 1
+                        },
+                        {
+                            label: 'Temp Dexter (Snabb)',
+                            data: tempDexter,
+                            type: 'line',
+                            borderColor: '#c084fc', // Purple
+                            borderWidth: 3,
+                            borderDash: [5, 5], 
+                            tension: 0.2,
+                            pointRadius: 0,
+                            yAxisID: 'yTemp',
+                            order: 0
+                        },
+                        // LAYER 4: Supply Temp (Split)
+                        {
+                            label: 'Framledning (Rad)',
+                            data: supplyDexter,
+                            type: 'line',
+                            borderColor: '#f97316', // Orange
+                            borderWidth: 1.5,
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0.4,
+                            yAxisID: 'ySupply',
+                            order: 0
+                        },
+                        {
+                            label: 'Framledning (Golv)',
+                            data: supplyDown,
+                            type: 'line',
+                            borderColor: '#22d3ee', // Cyan
+                            borderWidth: 1.5,
+                            borderDash: [2, 2],
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0.4,
+                            yAxisID: 'ySupply',
+                            order: 0
+                        }
+                    ]
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
