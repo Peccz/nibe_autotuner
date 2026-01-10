@@ -209,33 +209,37 @@
         let energyChart;
 
         function renderEnergyChart(plan) {
+            if (!plan || plan.length === 0) return;
+
             const ctx = document.getElementById('energyChart').getContext('2d');
-            const labels = plan.map(p => {
-                const d = new Date(p.time);
-                return d.getHours() + ':00';
-            });
+            const labels = plan.map(p => new Date(p.time).getHours() + ':00');
 
             // 1. Prepare Data Series
             const tempDown = plan.map(p => p.temp_sim_down);
             const tempDexter = plan.map(p => p.temp_sim_dexter);
-            const supplyDown = plan.map(p => p.supply_down);     // NEW
-            const supplyDexter = plan.map(p => p.supply_dexter); // NEW
+            const supplyDown = plan.map(p => p.supply_down);
+            const supplyDexter = plan.map(p => p.supply_dexter);
+            const tempOut = plan.map(p => p.temp_out);
             const prices = plan.map(p => p.price * 100); 
-            const maxPrice = Math.max(...prices);
+            
+            // Calculate Min/Max Price safely
+            let maxPrice = 100;
+            let minPrice = 0;
+            if (prices.length > 0) {
+                maxPrice = Math.max(...prices);
+                const sorted = [...prices].sort((a, b) => a - b);
+                minPrice = sorted[0];
+            }
             
             // Calculate Median and Percentiles for better color context
             const sortedPrices = [...prices].sort((a, b) => a - b);
-            const lowThreshold = sortedPrices[Math.floor(sortedPrices.length * 0.33)];
-            const highThreshold = sortedPrices[Math.floor(sortedPrices.length * 0.66)];
-            const minPrice = sortedPrices[0];
+            const lowThreshold = sortedPrices[Math.floor(sortedPrices.length * 0.33)] || 0;
+            const highThreshold = sortedPrices[Math.floor(sortedPrices.length * 0.66)] || 100;
 
-            // 2. Construct "Heating Blocks" (Energy Injection)
-            // We use a bar chart mapped to a hidden Y-axis to create background blocks
+            // 2. Construct "Heating Blocks"
             const heatingBlocks = plan.map(p => {
                 if (p.action === 'RUN' || p.action === 'MUST_RUN') {
-                    // Check intent: Is this Base load or Boost?
-                    // Heuristic: If offset > 2, it's a Boost
-                    if (p.offset > 2) return { y: 100, type: 'BOOST' }; // 100% height
+                    if (p.offset > 2) return { y: 100, type: 'BOOST' }; 
                     return { y: 100, type: 'BASE' };
                 }
                 return { y: 0, type: 'NONE' };
@@ -244,11 +248,11 @@
             const baseHeatingData = heatingBlocks.map(b => b.type === 'BASE' ? b.y : 0);
             const boostHeatingData = heatingBlocks.map(b => b.type === 'BOOST' ? b.y : 0);
 
-            // 3. Price Coloring (Dynamic Percentiles)
+            // 3. Price Coloring
             const priceColors = prices.map(price => {
-                if (price <= lowThreshold) return 'rgba(34, 197, 94, 0.15)'; // Green (Bottom 33%)
-                if (price >= highThreshold) return 'rgba(239, 68, 68, 0.15)'; // Red (Top 33%)
-                return 'rgba(234, 179, 8, 0.1)'; // Yellow (Middle 33%)
+                if (price <= lowThreshold) return 'rgba(34, 197, 94, 0.15)'; 
+                if (price >= highThreshold) return 'rgba(239, 68, 68, 0.15)'; 
+                return 'rgba(234, 179, 8, 0.1)'; 
             });
 
             if (energyChart) energyChart.destroy();
@@ -258,7 +262,7 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        // LAYER 0: Outdoor Temp (Context - Filled Area from bottom)
+                        // LAYER 0: Outdoor Temp
                         {
                             label: 'Utetemp',
                             data: tempOut,
@@ -272,7 +276,7 @@
                             yAxisID: 'yOut',
                             order: 10
                         },
-                        // LAYER 1: Heating Action (Minimal Strip)
+                        // LAYER 1: Heating Action
                         {
                             label: 'Drift (Laddning)',
                             data: baseHeatingData,
@@ -291,7 +295,7 @@
                             yAxisID: 'yActivity',
                             order: 5
                         },
-                        // LAYER 2: Price "Terrain"
+                        // LAYER 2: Price
                         {
                             label: 'Elpris (öre)',
                             data: prices,
@@ -302,12 +306,12 @@
                             yAxisID: 'yPrice',
                             order: 20
                         },
-                        // LAYER 3: Thermal Response (Indoor Temps)
+                        // LAYER 3: Indoor Temps
                         {
                             label: 'Temp Nere (Trög)',
                             data: tempDown,
                             type: 'line',
-                            borderColor: '#22d3ee', // Cyan
+                            borderColor: '#22d3ee', 
                             borderWidth: 3,
                             tension: 0.4,
                             pointRadius: 0,
@@ -318,7 +322,7 @@
                             label: 'Temp Dexter (Snabb)',
                             data: tempDexter,
                             type: 'line',
-                            borderColor: '#c084fc', // Purple
+                            borderColor: '#c084fc', 
                             borderWidth: 3,
                             borderDash: [5, 5], 
                             tension: 0.2,
@@ -331,7 +335,7 @@
                             label: 'Framledning (Rad)',
                             data: supplyDexter,
                             type: 'line',
-                            borderColor: '#f97316', // Orange
+                            borderColor: '#f97316', 
                             borderWidth: 1.5,
                             fill: false,
                             pointRadius: 0,
@@ -343,7 +347,7 @@
                             label: 'Framledning (Golv)',
                             data: supplyDown,
                             type: 'line',
-                            borderColor: '#22d3ee', // Cyan
+                            borderColor: '#22d3ee', 
                             borderWidth: 1.5,
                             borderDash: [2, 2],
                             fill: false,
@@ -376,7 +380,7 @@
                             min: 19,
                             max: 23,
                             grid: { color: 'rgba(255,255,255,0.05)' },
-                            ticks: { color: '#94a3b8', callback: v => v + '°C' }
+                            ticks: { color: '#e2e8f0', callback: v => v + '°' }
                         },
                         ySupply: {
                             type: 'linear',
@@ -384,19 +388,19 @@
                             min: 20,
                             max: 60,
                             grid: { display: false },
-                            ticks: { display: false } // Clean look
+                            ticks: { display: false } 
                         },
                         yOut: {
                             type: 'linear',
                             position: 'left',
-                            display: false, // Hidden axis
+                            display: false,
                             min: -15,
-                            max: 35 // Keep it low in the chart
+                            max: 35 
                         },
                         yActivity: {
                             display: false, 
                             min: 0,
-                            max: 2000 // 100/2000 = 5% height
+                            max: 2000
                         },
                         yPrice: {
                             type: 'linear',
@@ -407,8 +411,7 @@
                                 color: '#ca8a04', 
                                 callback: v => v + ' ö' 
                             },
-                            min: minPrice * 0.9, // Zoom in on the lowest price
-                            // Use almost full height (1.1x max) to maximize visibility of differences
+                            min: minPrice * 0.9,
                             max: maxPrice * 1.1 
                         }
                     }
