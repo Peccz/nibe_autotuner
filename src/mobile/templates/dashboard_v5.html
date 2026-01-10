@@ -253,11 +253,6 @@
 
             if (energyChart) energyChart.destroy();
 
-            // Create Gradient for Supply Temp
-            const gradientSupply = ctx.createLinearGradient(0, 0, 0, 400);
-            gradientSupply.addColorStop(0, 'rgba(249, 115, 22, 0.2)'); // Orange top
-            gradientSupply.addColorStop(1, 'rgba(249, 115, 22, 0.0)'); // Transparent bottom
-
             energyChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
