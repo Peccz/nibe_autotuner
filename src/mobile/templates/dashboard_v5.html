@@ -79,8 +79,9 @@
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-green-500/20 border border-green-500/30 rounded-sm"></div> <span class="text-slate-400">Billig El</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-slate-500/20 border border-slate-500/30 rounded-sm"></div> <span class="text-slate-400">Utetemp (Yta)</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-red-500/20 border border-red-500/30 rounded-sm"></div> <span class="text-slate-400">Dyr El</span></div>
-                <div class="flex items-center gap-1.5"><div class="w-3 h-0.5 border-t border-dashed border-purple-400"></div> <span class="text-slate-400">Temp Dexter (Snabb)</span></div>
-                <div class="flex items-center gap-1.5"><div class="w-3 h-1 bg-orange-500"></div> <span class="text-orange-200 font-bold">Framledning (Mål)</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-3 h-0.5 border-t border-dashed border-purple-400"></div> <span class="text-slate-400">Temp Dexter</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-3 h-0.5 bg-orange-500"></div> <span class="text-orange-200 font-bold">Fram (Rad)</span></div>
+                <div class="flex items-center gap-1.5"><div class="w-3 h-0.5 border-t border-dashed border-cyan-400"></div> <span class="text-cyan-200">Fram (Golv)</span></div>
             </div>
         </div>
         
@@ -92,9 +93,21 @@
     <!-- THE SCIENTIST: AI Calibration -->
     <div class="glass p-6 rounded-3xl mb-8">
         <h3 class="card-label mb-4 text-slate-400">The Scientist - Inlärning & Kalibrering</h3>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="tuning-params">
-            <!-- Params injected by JS -->
+        
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Left Column: Global & Zone 1 -->
+            <div>
+                <h4 class="text-[10px] font-bold text-cyan-400 mb-3 uppercase tracking-wider border-b border-cyan-500/20 pb-1">Globalt & Zon 1 (Nere)</h4>
+                <div class="grid grid-cols-2 gap-3" id="tuning-zone1"></div>
+            </div>
+
+            <!-- Right Column: Zone 2 -->
+            <div>
+                <h4 class="text-[10px] font-bold text-purple-400 mb-3 uppercase tracking-wider border-b border-purple-500/20 pb-1">Zon 2 (Dexter)</h4>
+                <div class="grid grid-cols-2 gap-3" id="tuning-zone2"></div>
+            </div>
         </div>
+
         <div class="mt-4 pt-4 border-t border-white/5 text-[10px] text-slate-500 italic">
             AI analysera husets respons varje natt kl 03:00 och justerar fysikmodellen.
         </div>
@@ -124,27 +137,39 @@
         }
 
         function updateTuning(tuning) {
-            const div = document.getElementById('tuning-params');
-            div.innerHTML = '';
-            const params = [
+            const div1 = document.getElementById('tuning-zone1');
+            const div2 = document.getElementById('tuning-zone2');
+            div1.innerHTML = '';
+            div2.innerHTML = '';
+
+            const params1 = [
                 {k: 'price_wind_sensitivity', l: 'Vind-Känslighet (Pris)'},
                 {k: 'price_temp_sensitivity', l: 'Temp-Känslighet (Pris)'},
                 {k: 'weekend_discount_factor', l: 'Helg-Rabatt'},
-                {k: 'wind_direction_west_factor', l: 'Västvind-Faktor'},
                 {k: 'thermal_leakage', l: 'Värmeläckage'},
+                {k: 'wind_sensitivity', l: 'Vindkänslighet'}
+            ];
+
+            const params2 = [
+                {k: 'thermal_leakage_dexter', l: 'Värmeläckage'},
+                {k: 'wind_sensitivity_dexter', l: 'Vindkänslighet'},
+                {k: 'wind_direction_west_factor', l: 'Västvind-Faktor'},
                 {k: 'rad_efficiency', l: 'Radiator-Effekt'}
             ];
             
-            params.forEach(p => {
+            const renderParam = (div, p) => {
                 if(tuning[p.k]) {
                     div.innerHTML += `
-                        <div class="bg-white/5 p-3 rounded-xl">
-                            <div class="text-[9px] text-slate-500 uppercase tracking-wider mb-1">${p.l}</div>
-                            <div class="text-lg font-bold text-slate-200">${tuning[p.k].toFixed(3)}</div>
+                        <div class="bg-white/5 p-2.5 rounded-xl">
+                            <div class="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">${p.l}</div>
+                            <div class="text-base font-bold text-slate-200">${tuning[p.k].toFixed(3)}</div>
                         </div>
                     `;
                 }
-            });
+            };
+
+            params1.forEach(p => renderParam(div1, p));
+            params2.forEach(p => renderParam(div2, p));
         }
 
         function updateMetrics(s) {
@@ -193,8 +218,8 @@
             // 1. Prepare Data Series
             const tempDown = plan.map(p => p.temp_sim_down);
             const tempDexter = plan.map(p => p.temp_sim_dexter);
-            const tempSupply = plan.map(p => p.predicted_supply);
-            const tempOut = plan.map(p => p.temp_out); // NEW
+            const supplyDown = plan.map(p => p.supply_down);     // NEW
+            const supplyDexter = plan.map(p => p.supply_dexter); // NEW
             const prices = plan.map(p => p.price * 100); 
             const maxPrice = Math.max(...prices);
             
@@ -252,75 +277,33 @@
                             yAxisID: 'yOut',
                             order: 10
                         },
-                        // LAYER 4: Supply Temp (The "Gas Pedal" - Thin Line)
-                        {
-                            label: 'Framledning (Mål)',
-                            data: tempSupply,
-                            type: 'line',
-                            borderColor: '#f97316', // Orange-500
-                            borderWidth: 1.5,       // Thin
-                            fill: false,            // No fill
-                            pointRadius: 0,
-                            tension: 0.4,
-                            yAxisID: 'ySupply',
-                            order: 0 // On top
-                        },
-                        // LAYER 1: Heating Action (Foreground Blocks - moved to front via order)
-                        {
-                            label: 'Grundvärme (Laddning)',
-                            data: baseHeatingData,
-                            backgroundColor: 'rgba(59, 130, 246, 0.3)', // Stronger Blue
-                            barPercentage: 1.0,
-                            categoryPercentage: 1.0,
-                            yAxisID: 'yActivity',
-                            order: 2
-                        },
-                        {
-                            label: 'Spetsvärme (Boost)',
-                            data: boostHeatingData,
-                            backgroundColor: 'rgba(249, 115, 22, 0.4)', // Stronger Orange
-                            barPercentage: 1.0,
-                            categoryPercentage: 1.0,
-                            yAxisID: 'yActivity',
-                            order: 1
-                        },
-                        // LAYER 2: Price "Terrain" (Background - very tall but transparent)
-                        {
-                            label: 'Elpris (öre)',
-                            data: prices,
-                            backgroundColor: priceColors,
-                            borderRadius: 0,
-                            barPercentage: 1.0, // Connect them like a wall
-                            categoryPercentage: 1.0,
-                            yAxisID: 'yPrice',
-                            order: 3
-                        },
-                        // LAYER 3: Thermal Response (Lines on top)
-                        {
-                            label: 'Temp Nere (Trög)',
-                            data: tempDown,
-                            type: 'line',
-                            borderColor: '#60a5fa', 
-                            borderWidth: 3,
-                            tension: 0.4,
-                            pointRadius: 0,
-                            yAxisID: 'yTemp',
-                            order: 0
-                        },
-                        {
-                            label: 'Temp Dexter (Snabb)',
-                            data: tempDexter,
-                            type: 'line',
-                            borderColor: '#c084fc', 
-                            borderWidth: 3,
-                            borderDash: [5, 5], 
-                            tension: 0.2,
-                            pointRadius: 0,
-                            yAxisID: 'yTemp',
-                            order: 0
-                        }
-                    ]
-                },
+                                                // LAYER 4: Supply Temp (Split)
+                                                {
+                                                    label: 'Framledning (Rad)',
+                                                    data: supplyDexter,
+                                                    type: 'line',
+                                                    borderColor: '#f97316', // Orange-500
+                                                    borderWidth: 1.5,
+                                                    fill: false,
+                                                    pointRadius: 0,
+                                                    tension: 0.4,
+                                                    yAxisID: 'ySupply',
+                                                    order: 0
+                                                },
+                                                {
+                                                    label: 'Framledning (Golv)',
+                                                    data: supplyDown,
+                                                    type: 'line',
+                                                    borderColor: '#22d3ee', // Cyan-400
+                                                    borderWidth: 1.5,
+                                                    borderDash: [2, 2],     // Dashed
+                                                    fill: false,
+                                                    pointRadius: 0,
+                                                    tension: 0.4,
+                                                    yAxisID: 'ySupply',
+                                                    order: 0
+                                                }
+                                            ]                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,

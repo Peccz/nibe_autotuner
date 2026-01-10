@@ -57,7 +57,7 @@ class SmartPlanner:
                 'solar_gain_coeff': 0.04,
                 'wind_direction_west_factor': 1.2,
                 'internal_heat_gain': 0.015,
-                'actual_shunt_limit': 32.0
+                'actual_shunt_limit': 29.0
             }
             for k, v in defaults.items():
                 if k not in tuning: tuning[k] = v
@@ -189,10 +189,20 @@ class SmartPlanner:
                 active_offset = p_hour.planned_offset if p_hour.planned_action == "REST" else (p_hour.planned_offset or 3.0)
                 predicted_supply = (base_curve * (20 - p_hour.outdoor_temp) * 0.15) + 22 + active_offset
                 
-                # Cooling Physics (Wind-aware)
+                # Cooling Physics (Wind-aware) - FULL ZONE SEPARATION
                 wind_factor = self._get_wind_factor(p_hour.wind_direction)
-                loss_down = (cur_down - p_hour.outdoor_temp) * self.tuning['thermal_leakage']
-                loss_dexter = (cur_dexter - p_hour.outdoor_temp) * self.tuning['thermal_leakage'] * 1.3 * wind_factor * (1 + p_hour.wind_speed * self.tuning['wind_sensitivity'])
+                
+                # --- ZONE 1: DOWNSTAIRS (Slab) ---
+                # Uses base parameters (legacy names)
+                wind_sens_down = self.tuning['wind_sensitivity']
+                loss_down = (cur_down - p_hour.outdoor_temp) * self.tuning['thermal_leakage'] * (1 + p_hour.wind_speed * wind_sens_down)
+                
+                # --- ZONE 2: DEXTER (Radiators) ---
+                # Uses specific parameters or falls back to base * multipliers
+                base_leak_dexter = self.tuning.get('thermal_leakage_dexter', self.tuning['thermal_leakage'] * 1.3)
+                wind_sens_dexter = self.tuning.get('wind_sensitivity_dexter', self.tuning['wind_sensitivity'] * 1.5) # More exposed
+                
+                loss_dexter = (cur_dexter - p_hour.outdoor_temp) * base_leak_dexter * wind_factor * (1 + p_hour.wind_speed * wind_sens_dexter)
                 
                 if p_hour.planned_action == "RUN":
                     eff_supply_down = min(predicted_supply, shunt_limit)
@@ -204,12 +214,22 @@ class SmartPlanner:
                     cur_down -= loss_down
                     cur_dexter -= loss_dexter
                 
-                cur_down += p_hour.solar_gain + self.tuning.get('internal_heat_gain', 0.015)
-                cur_dexter += p_hour.solar_gain + self.tuning.get('internal_heat_gain', 0.015)
+                # Solar & Internal Gains (Separated)
+                solar_coeff_down = self.tuning['solar_gain_coeff']
+                solar_coeff_dexter = self.tuning.get('solar_gain_dexter', solar_coeff_down)
+                
+                internal_down = self.tuning.get('internal_heat_gain', 0.015)
+                internal_dexter = self.tuning.get('internal_gain_dexter', internal_down * 0.8) # Less activity upstairs
+                
+                cur_down += (p_hour.solar_gain * (solar_coeff_down / 0.04)) + internal_down
+                cur_dexter += (p_hour.solar_gain * (solar_coeff_dexter / 0.04)) + internal_dexter
                 
                 # Failure detection
-                dyn_min_down = target_min_temp - (0.5 if (p_hour.electricity_price / avg_price) > 1.5 else 0)
-                dyn_min_dexter = 19.5 - (0.8 if (p_hour.electricity_price / avg_price) > 1.5 else 0)
+                # Comfort offset applies to both zones
+                offset = self.device.comfort_adjustment_offset or 0.0
+                
+                dyn_min_down = (target_min_temp + offset) - (0.5 if (p_hour.electricity_price / avg_price) > 1.5 else 0)
+                dyn_min_dexter = (19.5 + offset) - (0.5 if (p_hour.electricity_price / avg_price) > 1.5 else 0) # Reduced penalty to 0.5
                 
                 if (cur_down < dyn_min_down or cur_dexter < dyn_min_dexter) and worst_fail_idx == -1:
                     worst_fail_idx = i

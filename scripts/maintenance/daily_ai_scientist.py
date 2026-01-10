@@ -161,11 +161,17 @@ Current Tuning: {json.dumps(current_tuning)}
 Yesterday's Summary: {json.dumps(summary)}
     
     Goal: Update these factors based on the observed response:
-    - 'thermal_leakage': Overall heat loss rate.
+    - 'thermal_leakage': Heat loss rate for downstairs (Zon 1).
+    - 'thermal_leakage_dexter': Heat loss rate for Dexter's room (Zon 2).
     - 'rad_efficiency': How much 1C of supply delta heats Dexter's room.
-    - 'wind_direction_west_factor': Does west wind cool Dexter's room faster? (Use EXT_WIND_DIRECTION/SPEED)
-    - 'thermal_inertia_lag': Minutes of delay before room reacts to pump.
-    - 'internal_heat_gain': Base C/h rise from resident activity.
+    - 'slab_efficiency': How much 1C of supply delta heats Downstairs.
+    - 'wind_sensitivity': Wind impact on Downstairs cooling.
+    - 'wind_sensitivity_dexter': Wind impact on Dexter cooling.
+    - 'wind_direction_west_factor': Does west wind cool Dexter's room faster? (Multiplier).
+    - 'solar_gain_coeff': Solar impact Downstairs.
+    - 'solar_gain_dexter': Solar impact Dexter.
+    - 'internal_heat_gain': Base C/h rise Downstairs.
+    - 'internal_gain_dexter': Base C/h rise Dexter.
     
     Respond ONLY with JSON.
     """
@@ -175,8 +181,17 @@ Yesterday's Summary: {json.dumps(summary)}
     
     response = model.generate_content(prompt)
     new_values = json.loads(response.text.strip('`json \n'))
+    
+    # List of allowed params to update/create
+    allowed_params = [
+        'thermal_leakage', 'thermal_leakage_dexter', 'rad_efficiency', 'slab_efficiency',
+        'wind_sensitivity', 'wind_sensitivity_dexter', 'wind_direction_west_factor',
+        'solar_gain_coeff', 'solar_gain_dexter', 'internal_heat_gain', 'internal_gain_dexter',
+        'thermal_inertia_lag'
+    ]
+
     for pid, val in new_values.items():
-        if pid in current_tuning or pid in ['wind_direction_west_factor', 'rad_efficiency']: # Allow creating new known keys
+        if pid in current_tuning or pid in allowed_params: 
             conn.execute("INSERT OR REPLACE INTO system_tuning (parameter_id, value, description) VALUES (?, ?, ?)", 
                          (pid, float(val), 'AI Calibrated'))
             logger.info(f"  ✓ Calibrated {pid} -> {val}")

@@ -57,16 +57,31 @@ def get_dashboard_v4():
 
         # 2. Plan
         plan_rows = session.query(PlannedHeatingSchedule).order_by(PlannedHeatingSchedule.timestamp.asc()).all()
-        plan_data = [{
-            "time": p.timestamp.isoformat(),
-            "price": p.electricity_price,
-            "temp_out": p.outdoor_temp,
-            "temp_sim_down": p.simulated_indoor_temp,
-            "temp_sim_dexter": p.simulated_dexter_temp,
-            "action": p.planned_action,
-            "offset": p.planned_offset,
-            "wind": p.wind_speed
-        } for p in plan_rows]
+        
+        # Get Curve
+        heating_curve = analyzer.get_latest_value(device, analyzer.PARAM_HEATING_CURVE) or 7.0
+        
+        plan_data = []
+        for p in plan_rows:
+            base_supply = 20 + ((20 - (p.outdoor_temp or 0)) * heating_curve * 0.15)
+            offset = p.planned_offset if p.planned_offset is not None else 0.0
+            pred_supply = base_supply + offset
+            
+            supply_down = min(pred_supply, 29.0)
+            supply_dexter = pred_supply
+            
+            plan_data.append({
+                "time": p.timestamp.isoformat(),
+                "price": p.electricity_price,
+                "temp_out": p.outdoor_temp,
+                "temp_sim_down": p.simulated_indoor_temp,
+                "temp_sim_dexter": p.simulated_dexter_temp,
+                "supply_down": round(supply_down, 1),
+                "supply_dexter": round(supply_dexter, 1),
+                "action": p.planned_action,
+                "offset": p.planned_offset,
+                "wind": p.wind_speed
+            })
 
         # 3. Tuning
         try:

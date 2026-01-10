@@ -141,6 +141,11 @@ async def get_dashboard_v4():
             # Let's visualize the "Active Target".
             pred_supply = base_supply + offset
             
+            # Shunt logic for Zone 1
+            shunt_limit = 29.0
+            supply_down = min(pred_supply, shunt_limit)
+            supply_dexter = pred_supply
+            
             plan_data.append({
                 "time": p.timestamp.isoformat(),
                 "price": p.electricity_price,
@@ -148,6 +153,8 @@ async def get_dashboard_v4():
                 "temp_sim_down": p.simulated_indoor_temp,
                 "temp_sim_dexter": p.simulated_dexter_temp,
                 "predicted_supply": round(pred_supply, 1),
+                "supply_down": round(supply_down, 1),     # NEW
+                "supply_dexter": round(supply_dexter, 1), # NEW
                 "action": p.planned_action,
                 "offset": p.planned_offset,
                 "wind": p.wind_speed
