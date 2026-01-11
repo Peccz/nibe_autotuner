@@ -156,22 +156,27 @@ def calibrate_physics(conn):
     summary = df.groupby('parameter_id')['value'].agg(['mean', 'min', 'max']).to_dict()
     
     prompt = f"""
-    You are a building physics expert. Calibrate this house model.
-Current Tuning: {json.dumps(current_tuning)}
-Yesterday's Summary: {json.dumps(summary)}
+    You are a building physics expert. Calibrate this house model based on observed data.
     
-    Goal: Update these factors based on the observed response:
-    - 'thermal_leakage': Heat loss rate for downstairs (Zon 1).
-    - 'thermal_leakage_dexter': Heat loss rate for Dexter's room (Zon 2).
-    - 'rad_efficiency': How much 1C of supply delta heats Dexter's room.
-    - 'slab_efficiency': How much 1C of supply delta heats Downstairs.
-    - 'wind_sensitivity': Wind impact on Downstairs cooling.
-    - 'wind_sensitivity_dexter': Wind impact on Dexter cooling.
-    - 'wind_direction_west_factor': Does west wind cool Dexter's room faster? (Multiplier).
-    - 'solar_gain_coeff': Solar impact Downstairs.
-    - 'solar_gain_dexter': Solar impact Dexter.
-    - 'internal_heat_gain': Base C/h rise Downstairs.
-    - 'internal_gain_dexter': Base C/h rise Dexter.
+    Current Tuning: {json.dumps(current_tuning)}
+    Yesterday's Summary: {json.dumps(summary)}
+    
+    HIERARCHICAL CALIBRATION STRATEGY:
+    1. BASELINE (Leakage): Look at periods when pump was OFF/LOW. Calibrate 'thermal_leakage' first.
+    2. EFFICIENCY (Heating): Look at periods when pump was RUNNING. With the new leakage, calibrate 'rad_efficiency' & 'slab_efficiency'.
+    3. DISTURBANCES: Finally, fine-tune 'wind_sensitivity' and 'solar_gain' to explain remaining errors.
+    
+    CONSTRAINTS:
+    - Do NOT change values by more than 20% in a single run (stability).
+    - If unsure, keep current value.
+    
+    Goal: Update these factors:
+    - 'thermal_leakage' & 'thermal_leakage_dexter'
+    - 'rad_efficiency' & 'slab_efficiency'
+    - 'wind_sensitivity' & 'wind_sensitivity_dexter'
+    - 'wind_direction_west_factor'
+    - 'solar_gain_coeff' & 'solar_gain_dexter'
+    - 'inter_zone_transfer'
     
     Respond ONLY with JSON.
     """
@@ -187,7 +192,7 @@ Yesterday's Summary: {json.dumps(summary)}
         'thermal_leakage', 'thermal_leakage_dexter', 'rad_efficiency', 'slab_efficiency',
         'wind_sensitivity', 'wind_sensitivity_dexter', 'wind_direction_west_factor',
         'solar_gain_coeff', 'solar_gain_dexter', 'internal_heat_gain', 'internal_gain_dexter',
-        'thermal_inertia_lag'
+        'thermal_inertia_lag', 'inter_zone_transfer'
     ]
 
     for pid, val in new_values.items():

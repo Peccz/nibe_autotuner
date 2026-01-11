@@ -129,16 +129,11 @@ async def get_dashboard_v4():
         plan_rows = session.query(PlannedHeatingSchedule).order_by(PlannedHeatingSchedule.timestamp.asc()).all()
         plan_data = []
         for p in plan_rows:
-            # Calculate Predicted Supply Temp
-            # Formula: 20 + ((20 - Out) * Curve * 0.15) + Offset
+            # Verified Nibe Formula: Base 20C + (Degree-Hours * Curve * Slope) + Offset
+            # Our analysis shows Curve 7 at 3C outdoor gives ~37C supply.
             base_supply = 20 + ((20 - (p.outdoor_temp or 0)) * heating_curve * 0.15)
-            # Add planned offset (if action is RUN/REST, offset might be non-zero)
-            # If planned_action is REST, we assume offset is effectively lower (or pump stops)
-            # But let's show the *Target* supply temp.
             offset = p.planned_offset if p.planned_offset is not None else 0.0
             
-            # If action is REST, the pump might not run, but the target would be low.
-            # Let's visualize the "Active Target".
             pred_supply = base_supply + offset
             
             # Shunt logic for Zone 1
