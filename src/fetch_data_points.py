@@ -112,3 +112,4 @@ def fetch_all_data_points():
 
 if __name__ == '__main__':
     fetch_all_data_points()
+

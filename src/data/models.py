@@ -279,3 +279,4 @@ class HotWaterUsage(Base):
     temp_drop = Column(Float)
     weekday = Column(Integer)
     hour = Column(Integer)
+

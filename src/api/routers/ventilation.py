@@ -39,3 +39,4 @@ def get_ventilation_status(db: Session = Depends(get_db)):
                 "reasoning": "Data unavailable, showing default status."
             }
         }
+

@@ -267,3 +267,4 @@ if __name__ == "__main__":
     
     for r in results:
         print(f"{r.timestamp.strftime('%Y-%m-%d %H:%M'):<20} | {r.outdoor_temp:>5.1f} | {r.indoor_temp:>5.1f} | {r.ai_decision:<10} | {r.ai_reasoning[:40]}...")
+

@@ -138,3 +138,4 @@ class PriceService:
 
 # Singleton instance
 price_service = PriceService()
+

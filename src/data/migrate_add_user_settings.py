@@ -151,3 +151,4 @@ if __name__ == '__main__':
         logger.error("Migration failed!")
         logger.error("=" * 80)
         sys.exit(1)
+

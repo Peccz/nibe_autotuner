@@ -78,3 +78,4 @@ def check_history_detail():
 
 if __name__ == '__main__':
     check_history_detail()
+

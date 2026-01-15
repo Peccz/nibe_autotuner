@@ -159,3 +159,4 @@ class HotWaterPatternAnalyzer:
         wd = timestamp.weekday()
         hr = timestamp.hour
         return self.usage_map.get((wd, hr), 0.0)
+

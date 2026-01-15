@@ -292,3 +292,4 @@ if __name__ == '__main__':
 
     # Test with summer/spring
     compare_models(15, 25, 23)
+

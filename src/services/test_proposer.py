@@ -163,3 +163,4 @@ class TestProposer:
             reasoning=f"Scientific Mode ({variation['type'].upper()}): {variation['expected']}",
             instruction=variation.get('instruction')
         )
+

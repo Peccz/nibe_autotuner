@@ -338,3 +338,4 @@ def quick_analyze(
     """
     agent = GeminiAgent(api_key=api_key)
     return agent.analyze_and_recommend(metrics, [], {})
+

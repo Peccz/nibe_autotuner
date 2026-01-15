@@ -437,3 +437,4 @@ class SmartOptimizer:
         suggestions.sort(key=lambda s: (priority_order[s.priority], -s.confidence))
 
         return suggestions[:3]  # Return top 3
+

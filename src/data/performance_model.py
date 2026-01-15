@@ -34,3 +34,4 @@ class DailyPerformance(Base):
 
     def __repr__(self):
         return f"<DailyPerf(date={self.date}, savings={self.savings_sek:.2f} SEK)>"
+

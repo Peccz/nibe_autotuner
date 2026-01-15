@@ -223,3 +223,4 @@ def import_all_csv_files(data_input_dir: str = './data_input'):
 
 if __name__ == '__main__':
     import_all_csv_files()
+

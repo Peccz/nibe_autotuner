@@ -61,3 +61,4 @@ if __name__ == "__main__":
     print(f"Testing HA Connection to {settings.HA_URL}...")
     sensors = service.get_all_sensors()
     print(f"Sensor Values: {sensors}")
+
