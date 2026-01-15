@@ -1,52 +1,24 @@
-# CodeRabbit Configuration for Nibe Autotuner
-version: "0.1"
-
+# CodeRabbit Configuration
 reviews:
-  profile: "chill" # 'chill', 'assertive', or 'stricter'
+  profile: "chill"
   request_changes_workflow: false
   high_level_summary: true
   auto_review:
     enabled: true
     drafts: false
   
-  # Tools to help the AI analysis
   tools:
     ast-grep:
       enabled: true
     ruff:
-      enabled: true # Python linter
+      enabled: true
 
-  # Focus areas for the review
   path_filters:
-    - "!data/**"       # Ignore database files
-    - "!logs/**"       # Ignore log files
-    - "!venv/**"       # Ignore virtual environment
-    - "!**/*.png"      # Ignore images
-    - "!**/*.json"     # Ignore large json dumps
+    - "!data/**"
+    - "!logs/**"
+    - "!venv/**"
+    - "!**/*.png"
+    - "!**/*.json"
 
 chat:
   auto_reply: true
-
-# Custom instructions for the AI reviewer
-system_prompt: |
-  You are a Senior IoT Software Engineer reviewing the 'Nibe Autotuner' project.
-  This system controls a physical heat pump (Nibe F730) via a Raspberry Pi.
-  
-  **CRITICAL REVIEW INSTRUCTIONS:**
-  1. **Safety First:** Prioritize reviewing logic that controls heating hardware. Look for bugs that could cause:
-     - Freezing pipes (system stopping in winter).
-     - Overheating (supply temp > 60C or indoor temp > 25C).
-     - Infinite loops in `SmartPlanner` or `GMController`.
-  
-  2. **Logic & Physics:** Pay close attention to `src/services/smart_planner.py` and `scripts/maintenance/daily_ai_scientist.py`. 
-     - Verify that the math for energy calculation looks sound.
-     - Check that 'The Scientist' calibration logic doesn't allow parameters to drift to extreme values.
-  
-  3. **Database:** Ensure SQLite connections are closed properly to prevent locking on the Raspberry Pi.
-  
-  4. **Language:** You may provide reviews in English, but be aware the code comments and variable names might be mixed English/Swedish.
-
-  5. **Context:** The system uses 'Offset' manipulation to control the heat pump. 
-     - Offset 0 = Normal
-     - Offset +4 = Boost
-     - Offset 1 = Economy Charge

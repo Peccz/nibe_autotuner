@@ -148,7 +148,7 @@ class SmartPlanner:
         return states
 
     def plan_next_24h(self) -> List[HourlyPlan]:
-        logger.info("Starting SmartPlanner V7.0 (Granular Optimization)...")
+        logger.info("Starting SmartPlanner V7.0 (Granular Optimization) - Audit Build")
 
         if not self.device:
             self.device = self.analyzer.get_device()
