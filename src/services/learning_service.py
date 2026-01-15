@@ -190,3 +190,4 @@ class LearningService:
                 "cooling_rate_0c": -0.15,
                 "error": str(e)
             }
+

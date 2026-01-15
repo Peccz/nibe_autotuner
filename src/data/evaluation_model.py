@@ -32,3 +32,4 @@ class AIEvaluation(Base):
 
     def __repr__(self):
         return f"<AIEval(id={self.id}, score={self.outcome_score}, verdict='{self.verdict}')>"
+

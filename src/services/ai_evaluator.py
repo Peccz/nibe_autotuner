@@ -177,3 +177,4 @@ if __name__ == "__main__":
             print(f"Error: {e}")
     else:
         evaluator.evaluate_yesterday()
+

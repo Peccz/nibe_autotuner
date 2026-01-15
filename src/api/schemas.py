@@ -228,3 +228,4 @@ class SettingsResponse(BaseModel):
     """Settings API response"""
     success: bool = True
     settings: UserSettingsSchema
+

@@ -426,3 +426,4 @@ class SmartPlanner:
 if __name__ == "__main__":
     planner = SmartPlanner()
     planner.plan_next_24h()
+

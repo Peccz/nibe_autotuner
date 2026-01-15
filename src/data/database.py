@@ -106,3 +106,4 @@ def get_session() -> Session:
         Session: SQLAlchemy database session
     """
     return SessionLocal()
+

@@ -79,3 +79,4 @@ class SafetyGuard:
                 return True, f"Dampened change {diff} to {step}", new_val
 
         return True, "Decision validates safe", None
+

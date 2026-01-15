@@ -33,3 +33,4 @@ def get_plot(plot_type: str, db: Session = Depends(get_db)):
         return StreamingResponse(buf, media_type="image/png")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Plot generation failed: {str(e)}")
+

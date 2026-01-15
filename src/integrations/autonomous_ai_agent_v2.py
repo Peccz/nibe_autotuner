@@ -447,3 +447,4 @@ Planned Action: '{planned_action_for_hour}'
         except Exception as e:
             logger.error(f"Failed to log decision: {e}")
             self.db.rollback()
+

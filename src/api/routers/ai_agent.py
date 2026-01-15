@@ -89,3 +89,4 @@ def get_learning_stats(db: Session = Depends(get_db)):
         "total_tests_run": count,
         "insights_generated": 0
     }
+
