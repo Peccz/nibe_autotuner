@@ -162,13 +162,16 @@ def calibrate_physics(conn):
     Yesterday's Summary: {json.dumps(summary)}
     
     HIERARCHICAL CALIBRATION STRATEGY:
-    1. BASELINE (Leakage): Look at periods when pump was OFF/LOW. Calibrate 'thermal_leakage' first.
-    2. EFFICIENCY (Heating): Look at periods when pump was RUNNING. With the new leakage, calibrate 'rad_efficiency' & 'slab_efficiency'.
-    3. DISTURBANCES: Finally, fine-tune 'wind_sensitivity' and 'solar_gain' to explain remaining errors.
+    1. BASELINE (Leakage): Look at periods when pump was OFF/LOW. Calibrate 'thermal_leakage' (C/h per DeltaT). Note: Wind impact is now SQUARE law (WindSpeed^2).
+    2. EFFICIENCY (Heating): Look at periods when pump was RUNNING. Calibrate 'rad_efficiency' & 'slab_efficiency'. 
+       Note: We now use a POWER LAW: Gain = coeff * (Supply - Indoor)^1.3 for rads, and ^1.1 for slab.
+    3. DISTURBANCES: Fine-tune 'wind_sensitivity' (coeff for Wind^2) and 'solar_gain'.
     
     CONSTRAINTS:
     - Do NOT change values by more than 20% in a single run (stability).
-    - If unsure, keep current value.
+    - rad_efficiency (new scale) should be around 0.002 - 0.010.
+    - slab_efficiency (new scale) should be around 0.001 - 0.005.
+    - wind_sensitivity (new scale) should be around 0.0001 - 0.001.
     
     Goal: Update these factors:
     - 'thermal_leakage' & 'thermal_leakage_dexter'

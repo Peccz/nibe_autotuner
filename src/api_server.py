@@ -131,7 +131,8 @@ async def get_dashboard_v4():
         for p in plan_rows:
             # Verified Nibe Formula: Base 20C + (Degree-Hours * Curve * Slope) + Offset
             # Our analysis shows Curve 7 at 3C outdoor gives ~37C supply.
-            base_supply = 20 + ((20 - (p.outdoor_temp or 0)) * heating_curve * 0.15)
+            # Using 0.12 factor based on Stockholm DUT -20 settings.
+            base_supply = 20 + ((20 - (p.outdoor_temp or 0)) * heating_curve * 0.12)
             offset = p.planned_offset if p.planned_offset is not None else 0.0
             
             pred_supply = base_supply + offset

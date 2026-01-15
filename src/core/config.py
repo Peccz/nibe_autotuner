@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     SHUNT_LIMIT_C: float = 32.0
     """Max temperature the downstairs floor heating shunt allows into the floor."""
 
-    DEFAULT_HEATING_CURVE: float = 7.0
+    DEFAULT_HEATING_CURVE: float = 6.0
     """The base heating curve set in the Nibe pump."""
 
     # ============================================================================
