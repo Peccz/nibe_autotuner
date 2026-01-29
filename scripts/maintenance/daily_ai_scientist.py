@@ -1,209 +1,166 @@
 """
-Scientist Module: Advanced AI Calibration V4.0
-Calibrates wind direction factors, thermal lag, and internal heat gain.
+Scientist Module: Advanced AI Calibration V6.0 (Stability & Isolation)
+Implements robust control theory to calibrate house physics without drift.
 """
 import sys
 import os
 import json
-import requests
-from datetime import datetime, timedelta, timezone
-from loguru import logger
 import sqlite3
 import pandas as pd
-import google.generativeai as genai
+import numpy as np
+from datetime import datetime, timedelta
+from loguru import logger
 
 sys.path.append('src')
 from core.config import settings
 
-def calibrate_price_model(conn):
-    """
-    Learn the correlation between Weather (Wind) and Electricity Price.
-    Generates 'price_wind_sensitivity' and 'price_base_curve'.
-    """
-    logger.info("  -> Calibrating Price Prediction Model...")
-    
-    # 1. Fetch last 7 days of prices (SE3)
-    history_days = 7
-    prices = []
-    
-    try:
-        today = datetime.now()
-        for i in range(history_days):
-            d = today - timedelta(days=i)
-            d_str = d.strftime('%Y/%m-%d')
-            url = f"https://www.elprisetjustnu.se/api/v1/prices/{d_str}_SE3.json"
-            res = requests.get(url, timeout=5)
-            if res.status_code == 200:
-                data = res.json()
-                for p in data:
-                    prices.append({
-                        'time': p['time_start'],
-                        'price': p['SEK_per_kWh']
-                    })
-    except Exception as e:
-        logger.warning(f"Failed to fetch price history: {e}")
-        return
+# --- CONSTANTS & SAFETY BOUNDS ---
+MIN_LEAKAGE = 0.005
+MAX_LEAKAGE = 0.015
+MIN_RAD_EFF = 0.005
+MAX_RAD_EFF = 0.020
 
-    if not prices: return
+# Inertia: How much of the NEW value do we accept per day? (0.1 = 10%)
+LEARNING_RATE = 0.10 
 
-    # 2. Fetch/Estimate Weather history
-    # Ideally we query DB, but for now we assume a general wind pattern or fetch history if possible.
-    # To keep it simple for V1: We send the price curve to AI and ask it to extract the
-    # "Wind Sensitivity" assuming standard correlation, or just the Daily Profile.
-    
-    # We will aggregate prices by hour to get the "Base Profile"
-    df = pd.DataFrame(prices)
-    df['time'] = pd.to_datetime(df['time'])
-    df['hour'] = df['time'].dt.hour
-    
-    hourly_avg = df.groupby('hour')['price'].mean().tolist()
-    avg_price_week = df['price'].mean()
-    
-    # Normalized curve (1.0 = average)
-    base_curve = [p / avg_price_week for p in hourly_avg]
-    
-    # 3. Ask AI to refine
-    prompt = f"""
-    Analyze this electricity price data (SE3, Sweden) for the last {history_days} days.
-    Hourly Average Curve (Normalized): {json.dumps(base_curve)}
-    Average Price: {avg_price_week} SEK/kWh.
-    
-    Task:
-    1. 'price_wind_sensitivity': Estimate a coefficient (factor). How much does high wind typically lower the price in this region? (Standard assumption: 0.02 to 0.10).
-    2. 'weekend_discount_factor': How much lower are prices on Sat/Sun/Holidays vs Weekdays? (e.g. 0.85 means 15% cheaper).
-    3. 'price_temp_sensitivity': Estimate price increase per degree C drop below zero (SEK/kWh/°C). (Standard: 0.05 - 0.20).
-    
-    Respond ONLY with JSON: {{ "price_wind_sensitivity": float, "weekend_discount_factor": float, "price_temp_sensitivity": float }}
-    """
-    
-    model = genai.GenerativeModel('gemini-2.5-flash') # Use Flash for speed
-    try:
-        response = model.generate_content(prompt)
-        res_json = json.loads(response.text.strip('`json \n'))
-        
-        # Save Sensitivity
-        val = res_json.get('price_wind_sensitivity', 0.05)
-        conn.execute("INSERT OR REPLACE INTO system_tuning (parameter_id, value, description) VALUES (?, ?, ?)", 
-                     ('price_wind_sensitivity', val, 'Price reduction factor per m/s wind'))
-        
-        # Save Weekend Discount
-        weekend_factor = res_json.get('weekend_discount_factor', 0.90)
-        conn.execute("INSERT OR REPLACE INTO system_tuning (parameter_id, value, description) VALUES (?, ?, ?)", 
-                     ('weekend_discount_factor', weekend_factor, 'Price multiplier for weekends/holidays'))
-
-        # Save Temp Sensitivity
-        temp_sens = res_json.get('price_temp_sensitivity', 0.10)
-        conn.execute("INSERT OR REPLACE INTO system_tuning (parameter_id, value, description) VALUES (?, ?, ?)", 
-                     ('price_temp_sensitivity', temp_sens, 'Price increase per degree colder'))
-        
-        logger.info(f"  ✓ Calibrated Price Model: WindSens={val}, Weekend={weekend_factor}, TempSens={temp_sens}")
-        conn.commit()
-        
-    except Exception as e:
-        logger.error(f"AI Price Calibration failed: {e}")
-
-def run_daily_calibration():
-    logger.info("Starting Multi-Zone AI Calibration (Scientist 4.0)...")
-    
-    if not settings.GOOGLE_API_KEY: return
-
-    # Resolve DB path from settings
+def get_db_connection():
     db_path = settings.DATABASE_URL.replace('sqlite:///', '')
     if not os.path.isabs(db_path):
-        # Handle relative paths (e.g., ./data/...)
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         if db_path.startswith('./'):
             db_path = os.path.join(project_root, db_path[2:])
         else:
             db_path = os.path.join(project_root, db_path)
+    return sqlite3.connect(db_path)
 
-    conn = sqlite3.connect(db_path)
+def analyze_cooling_regime(df):
+    """
+    Isolates periods where:
+    1. Compressor is OFF (< 5Hz)
+    2. Night time (01:00 - 05:00) -> No Sun, No Activity
+    3. No rapid drops (> 0.5C/h) -> No Open Windows
+    """
+    # Filter for Night & Off
+    mask = (df.index.hour >= 1) & (df.index.hour <= 5) & \
+           (df['41778'] < 5) & \
+           (df.get('SOLAR_GAIN', 0) < 5)
     
-    # 1. Run Physics Calibration
-    try:
-        calibrate_physics(conn)
-    except Exception as e:
-        logger.error(f"Physics calibration error: {e}")
+    segment = df[mask]
+    if len(segment) < 6: # Need at least 30 mins of data
+        return None, None
 
-    # 2. Run Price Model Calibration
-    try:
-        calibrate_price_model(conn)
-    except Exception as e:
-        logger.error(f"Price calibration error: {e}")
-
-    conn.close()
-
-def calibrate_physics(conn):
-    start_time = datetime.utcnow() - timedelta(hours=24)
+    # Calculate Drop
+    start_temp = segment['HA_TEMP_DEXTER'].iloc[0]
+    end_temp = segment['HA_TEMP_DEXTER'].iloc[-1]
+    duration_h = (segment.index[-1] - segment.index[0]).total_seconds() / 3600
     
-    # Load all relevant data
+    if duration_h < 0.5: return None, None
+
+    temp_drop = start_temp - end_temp
+    
+    # Anomaly Detection: Window Open?
+    drop_rate = temp_drop / duration_h
+    if drop_rate > 0.5:
+        logger.warning(f"  ⚠️ Anomalous drop rate ({drop_rate:.2f} C/h). Ignoring (Window?).")
+        return None, None
+        
+    if drop_rate < 0:
+        logger.warning(f"  ⚠️ Temp rose during cooling phase. Ignoring (Internal heat?).")
+        return None, None
+
+    # Calculate K-value (Leakage)
+    # Formula: Rate = k * DeltaT
+    avg_indoor = segment['HA_TEMP_DEXTER'].mean()
+    avg_outdoor = segment['40004'].mean()
+    delta_t = avg_indoor - avg_outdoor
+    
+    if delta_t < 5: return None, None # Too warm outside to measure leakage accurately
+
+    k_leakage = drop_rate / delta_t
+    return k_leakage, "Valid Night Cooling"
+
+def analyze_heating_regime(df):
+    """
+    Isolates periods where:
+    1. Compressor is RUNNING (> 40Hz)
+    2. Heating Curve is active (Supply > 30C)
+    3. Duration > 1h
+    """
+    mask = (df['41778'] > 40) & (df['40008'] > 30)
+    segment = df[mask]
+    
+    if len(segment) < 12: # Need 1 hour
+        return None
+
+    # Calculate Rise
+    start_temp = segment['HA_TEMP_DEXTER'].iloc[0]
+    end_temp = segment['HA_TEMP_DEXTER'].iloc[-1]
+    duration_h = (segment.index[-1] - segment.index[0]).total_seconds() / 3600
+    
+    rise_rate = (end_temp - start_temp) / duration_h
+    
+    # Physics: Rise = (Input - Loss) / Mass
+    # Input = k_rad * (Supply - Indoor)^1.3
+    # We approximate: k_rad = (RiseRate + Loss) / DeltaT_Emitter^1.3
+    # Note: We need current leakage estimate for this.
+    return None # TODO: Implement advanced solver. For now, we trust Manual Rad Efficiency.
+
+def apply_stability_filter(current_val, measured_val, param_name):
+    """
+    Applies constraints and smoothing.
+    """
+    if measured_val is None:
+        return current_val
+    
+    # 1. Hard Bounds
+    if param_name == 'thermal_leakage_dexter':
+        if measured_val < MIN_LEAKAGE: measured_val = MIN_LEAKAGE
+        if measured_val > MAX_LEAKAGE: measured_val = MAX_LEAKAGE
+    
+    # 2. Moving Average (Inertia)
+    new_val = (current_val * (1 - LEARNING_RATE)) + (measured_val * LEARNING_RATE)
+    
+    logger.info(f"  ⚖️ Stability: {param_name} | Old: {current_val:.5f} | Raw: {measured_val:.5f} | New: {new_val:.5f}")
+    return new_val
+
+def run_calibration():
+    logger.info("Starting Scientist V6.0 (Stability Edition)...")
+    conn = get_db_connection()
+    
+    # Load Data
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(hours=24)
     query = """
     SELECT r.timestamp, p.parameter_id, r.value 
     FROM parameter_readings r 
     JOIN parameters p ON r.parameter_id = p.id 
     WHERE r.timestamp >= ? 
-    AND p.parameter_id IN ('HA_TEMP_DOWNSTAIRS', 'HA_TEMP_DEXTER', '40004', '41778', 'EXT_WIND_SPEED', 'EXT_WIND_DIRECTION')
+    AND p.parameter_id IN ('HA_TEMP_DOWNSTAIRS', 'HA_TEMP_DEXTER', '40004', '41778', '40008', 'SOLAR_GAIN')
+    ORDER BY r.timestamp ASC
     """
     df = pd.read_sql_query(query, conn, params=(start_time,))
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    pivoted = df.pivot_table(index='timestamp', columns='parameter_id', values='value').ffill().dropna()
     
-    if df.empty:
-        logger.warning("No data for physics calibration.")
-        return
+    # --- 1. Calibrate Leakage (Dexter) ---
+    current_leak = conn.execute("SELECT value FROM system_tuning WHERE parameter_id='thermal_leakage_dexter'").fetchone()
+    current_leak = current_leak[0] if current_leak else 0.009
+    
+    raw_leak, reason = analyze_cooling_regime(pivoted)
+    
+    if raw_leak:
+        new_leak = apply_stability_filter(current_leak, raw_leak, 'thermal_leakage_dexter')
+        conn.execute("INSERT OR REPLACE INTO system_tuning (parameter_id, value, description) VALUES (?, ?, ?)",
+                     ('thermal_leakage_dexter', new_leak, f"V6: {reason}"))
+        conn.commit()
+        logger.success(f"Updated Leakage: {new_leak:.5f}")
+    else:
+        logger.info("No valid cooling regime found. Keeping leakage constant.")
 
-    tuning_res = conn.execute("SELECT parameter_id, value FROM system_tuning").fetchall()
-    current_tuning = {row[0]: row[1] for row in tuning_res}
-    
-    summary = df.groupby('parameter_id')['value'].agg(['mean', 'min', 'max']).to_dict()
-    
-    prompt = f"""
-    You are a building physics expert. Calibrate this house model based on observed data.
-    
-    Current Tuning: {json.dumps(current_tuning)}
-    Yesterday's Summary: {json.dumps(summary)}
-    
-    HIERARCHICAL CALIBRATION STRATEGY:
-    1. BASELINE (Leakage): Look at periods when pump was OFF/LOW. Calibrate 'thermal_leakage' (C/h per DeltaT). Note: Wind impact is now SQUARE law (WindSpeed^2).
-    2. EFFICIENCY (Heating): Look at periods when pump was RUNNING. Calibrate 'rad_efficiency' & 'slab_efficiency'. 
-       Note: We now use a POWER LAW: Gain = coeff * (Supply - Indoor)^1.3 for rads, and ^1.1 for slab.
-    3. DISTURBANCES: Fine-tune 'wind_sensitivity' (coeff for Wind^2) and 'solar_gain'.
-    
-    CONSTRAINTS:
-    - Do NOT change values by more than 20% in a single run (stability).
-    - rad_efficiency (new scale) should be around 0.002 - 0.010.
-    - slab_efficiency (new scale) should be around 0.001 - 0.005.
-    - wind_sensitivity (new scale) should be around 0.0001 - 0.001.
-    
-    Goal: Update these factors:
-    - 'thermal_leakage' & 'thermal_leakage_dexter'
-    - 'rad_efficiency' & 'slab_efficiency'
-    - 'wind_sensitivity' & 'wind_sensitivity_dexter'
-    - 'wind_direction_west_factor'
-    - 'solar_gain_coeff' & 'solar_gain_dexter'
-    - 'inter_zone_transfer'
-    
-    Respond ONLY with JSON.
-    """
+    # --- 2. Calibrate Leakage (Downstairs) ---
+    # TODO: Similar logic for downstairs if needed.
 
-    genai.configure(api_key=settings.GOOGLE_API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    
-    response = model.generate_content(prompt)
-    new_values = json.loads(response.text.strip('`json \n'))
-    
-    # List of allowed params to update/create
-    allowed_params = [
-        'thermal_leakage', 'thermal_leakage_dexter', 'rad_efficiency', 'slab_efficiency',
-        'wind_sensitivity', 'wind_sensitivity_dexter', 'wind_direction_west_factor',
-        'solar_gain_coeff', 'solar_gain_dexter', 'internal_heat_gain', 'internal_gain_dexter',
-        'thermal_inertia_lag', 'inter_zone_transfer'
-    ]
-
-    for pid, val in new_values.items():
-        if pid in current_tuning or pid in allowed_params: 
-            conn.execute("INSERT OR REPLACE INTO system_tuning (parameter_id, value, description) VALUES (?, ?, ?)", 
-                         (pid, float(val), 'AI Calibrated'))
-            logger.info(f"  ✓ Calibrated {pid} -> {val}")
-    conn.commit()
+    conn.close()
 
 if __name__ == "__main__":
-    run_daily_calibration()
+    run_calibration()

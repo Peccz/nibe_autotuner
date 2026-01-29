@@ -5,11 +5,11 @@ After=network.target
 [Service]
 Type=simple
 User=peccz
-WorkingDirectory=/home/peccz/AI/nibe_autotuner
-Environment="PATH=/home/peccz/AI/nibe_autotuner/venv/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH=/home/peccz/AI/nibe_autotuner/src"
+WorkingDirectory=/home/peccz/nibe_autotuner
+Environment="PATH=/home/peccz/nibe_autotuner/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/home/peccz/nibe_autotuner/src"
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/home/peccz/AI/nibe_autotuner/venv/bin/python src/api_server.py
+ExecStart=/home/peccz/nibe_autotuner/venv/bin/uvicorn api.api_server:app --host 0.0.0.0 --port 8000
 
 Restart=always
 RestartSec=10
