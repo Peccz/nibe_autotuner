@@ -22,12 +22,14 @@ class GMController:
     PARAM_VP_BANK = 'VP_GM_BANK' # Virtual Parameter for History Logging
     
     # Safety Limits
-    MIN_BALANCE = -3000 
+    MIN_BALANCE = -600  # Tightened from -3000 to prevent runaway heating
     MAX_BALANCE = 500   
     
     # Pump Safety Limits
     HEATER_SAFETY_LIMIT = -350 
     
+    # Target Temperature for Anti-Windup
+    CONTROL_TARGET = 21.0    
     def __init__(self):
         self.db = SessionLocal()
         self.auth = MyUplinkAuth()
@@ -150,13 +152,14 @@ class GMController:
         current_hw_temp = get_val('40013')
         current_real_hw_mode = get_val(self.PARAM_HW_DEMAND_WRITE)
         current_real_vent_mode = get_val(self.PARAM_VENTILATION_WRITE)
-
+        current_indoor_temp = get_val('40033') # BT50
 
         # 2. Update Balance
         if self.last_written_gm is not None:
             delta = current_pump_gm - self.last_written_gm
+            # If the jump is huge, it means someone manually reset the pump. Sync bank.
             if abs(delta) > 100:
-                logger.warning(f"Large GM jump ({delta:.1f}). Syncing.")
+                logger.warning(f"Extreme GM jump ({delta:.1f}). Syncing bank to pump.")
                 account.balance = current_pump_gm 
                 self.last_written_gm = current_pump_gm 
             else:
@@ -181,30 +184,46 @@ class GMController:
             PlannedHeatingSchedule.timestamp > current_time_utc - timedelta(hours=1)
         ).order_by(PlannedHeatingSchedule.timestamp.desc()).first()
 
-        planned_action = current_hour_plan.planned_action if current_hour_plan else account.mode
+        planned_action = current_hour_plan.planned_action if current_hour_plan else "REST"
         planned_hw_mode = current_hour_plan.planned_hot_water_mode if current_hour_plan else 1 
 
-        # --- EMERGENCY HW OVERRIDE (Forced from GMController) ---
-        if current_hw_temp is not None and current_hw_temp < 41.0: # If real temp is low
-            if planned_hw_mode != 2: # and plan is not already LUX
+        # --- SAFETY OVERRIDES ---
+        # 1. BASTU-VAKT: If temp > 23.5, force REST and clear bank
+        if current_indoor_temp is not None and current_indoor_temp > 23.5:
+            logger.warning(f"🚨 BASTU-VAKT: Temp is {current_indoor_temp:.1f}°C. Forcing stop and resetting bank.")
+            planned_action = 'MUST_REST'
+            account.balance = 100.0 # Force bank to positive
+            self.db.add(account)
+
+        # 2. ANTI-WINDUP: If temp > Target, don't accumulate heat debt
+        if current_indoor_temp is not None and current_indoor_temp > self.CONTROL_TARGET:
+            if account.balance < current_pump_gm:
+                logger.info(f"⚖️ Comfort Reset: In:{current_indoor_temp:.1f} > {self.CONTROL_TARGET}. Resetting debt ({account.balance:.0f} -> {current_pump_gm:.0f})")
+                account.balance = current_pump_gm
+                self.db.add(account)
+
+        # 3. EMERGENCY HW OVERRIDE
+        if current_hw_temp is not None and current_hw_temp < 41.0: 
+            if planned_hw_mode != 2: 
                 logger.warning(f"Emergency HW Boost: Temp is {current_hw_temp:.1f}°C. Forcing LUX.")
-                planned_hw_mode = 2 # Force LUX
+                planned_hw_mode = 2 
 
-        target_vent_mode = 3.0 if planned_hw_mode == 2 else 0.0 # Use Mode 3 (65%) for Lux
+        target_vent_mode = 3.0 if planned_hw_mode == 2 else 0.0 
 
-        logger.info(f"Status: GM={current_pump_gm:.0f}, Bal={account.balance:.0f}. Plan: {planned_action}, HW: {planned_hw_mode}, Vent: {target_vent_mode}")
+        logger.info(f"Status: GM={current_pump_gm:.0f}, Bal={account.balance:.0f}. Plan: {planned_action}, In:{current_indoor_temp}")
 
         # 4. Execute Strategy
         value_to_write_gm = current_pump_gm
 
-        if planned_action in ['MUST_RUN', 'RUN']:
+        # Standardize actions (Handle legacy SAVE/SPEND)
+        if planned_action in ['MUST_RUN', 'RUN', 'SPEND']:
             value_to_write_gm = account.balance
             if value_to_write_gm > -60: 
                 value_to_write_gm = -100 
             if value_to_write_gm < self.HEATER_SAFETY_LIMIT:
                 value_to_write_gm = self.HEATER_SAFETY_LIMIT
             
-        elif planned_action in ['MUST_REST', 'REST']:
+        elif planned_action in ['MUST_REST', 'REST', 'SAVE']:
             value_to_write_gm = 100 
 
         elif planned_action in ['HOLD', 'NORMAL']:

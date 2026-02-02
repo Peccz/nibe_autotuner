@@ -16,12 +16,13 @@ from services.price_service import price_service
 from sqlalchemy import text
 
 app = Flask(__name__)
-analyzer = HeatPumpAnalyzer()
+# analyzer = HeatPumpAnalyzer() <-- REMOVED GLOBAL INSTANCE
 
 # --- V4 DASHBOARD ENDPOINT (Ported from FastAPI) ---
 @app.route('/api/v4/dashboard')
 def get_dashboard_v4():
     session = SessionLocal()
+    analyzer = HeatPumpAnalyzer() # Create fresh analyzer
     device = analyzer.get_device()
     
     try:
@@ -143,6 +144,7 @@ def settings_page():
 @app.route('/api/status')
 def get_status():
     session = SessionLocal()
+    analyzer = HeatPumpAnalyzer() # Fresh instance
     try:
         device = session.query(Device).first()
         metrics = analyzer.calculate_metrics(hours_back=1)
@@ -206,11 +208,14 @@ def get_plan():
         
         def get_readings(param_id):
             pid = session.query(Parameter).filter_by(parameter_id=param_id).first()
-            if not pid: return []
+            if not pid: 
+                print(f"DEBUG: Param {param_id} not found")
+                return []
             readings = (session.query(ParameterReading)
                 .filter(ParameterReading.parameter_id == pid.id)
                 .filter(ParameterReading.timestamp >= history_start)
                 .order_by(ParameterReading.timestamp).all())
+            print(f"DEBUG: Param {param_id} (ID {pid.id}) -> Found {len(readings)} readings")
             return [{'x': r.timestamp.isoformat() + 'Z', 'y': r.value} for r in readings]
 
         # 1. History
