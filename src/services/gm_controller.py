@@ -1,3 +1,8 @@
+"""
+Deterministic Energy Bank V10.0
+Manages heat pump operation by simulating Degree Minutes (GM) locally.
+Calculates energy debt based on Supply Target vs Actual.
+"""
 import time
 import sys
 import os
@@ -12,34 +17,30 @@ from data.models import GMAccount, Device, PlannedHeatingSchedule, Parameter, Pa
 from services.analyzer import HeatPumpAnalyzer
 from integrations.api_client import MyUplinkClient
 from integrations.auth import MyUplinkAuth
+from core.config import settings
 
 class GMController:
     # Constants
-    PARAM_GM_READ = '40941' # Degree Minutes (Read Only)
-    PARAM_GM_WRITE = '40940' # Degree Minutes (Writeable)
-    PARAM_HW_DEMAND_WRITE = '47041' # Hot Water Demand
-    PARAM_VENTILATION_WRITE = '50005' # Increased Ventilation (0=Off, 1=On... 3=Max)
-    PARAM_VP_BANK = 'VP_GM_BANK' # Virtual Parameter for History Logging
+    PARAM_GM_READ = '40941' 
+    PARAM_GM_WRITE = '40940' 
+    PARAM_SUPPLY_READ = '40008' # BT2
+    PARAM_OUTDOOR_READ = '40004' # BT1
+    PARAM_INDOOR_READ = '40033' # BT50
+    PARAM_VP_BANK = 'VP_GM_BANK'
     
-    # Safety Limits
-    MIN_BALANCE = -600  # Tightened from -3000 to prevent runaway heating
-    MAX_BALANCE = 500   
+    # Physical Limits
+    MIN_BALANCE = -2000 # Allow deep debt for electric heater
+    MAX_BALANCE = 200   # Max heat surplus
     
-    # Pump Safety Limits
-    HEATER_SAFETY_LIMIT = -350 
+    # Nibe Settings
+    PUMP_START_THRESHOLD = -200 # Pump starts at -200 GM
     
-    # Target Temperature for Anti-Windup
-    CONTROL_TARGET = 21.0    
     def __init__(self):
         self.db = SessionLocal()
         self.auth = MyUplinkAuth()
         self.client = MyUplinkClient(self.auth)
         self.analyzer = HeatPumpAnalyzer()
-        
-        self._get_account()
-        self._ensure_virtual_param()
-        
-        # State tracking
+        self.last_tick_time = None
         self.last_written_gm = None
 
     def _get_account(self):
@@ -50,214 +51,103 @@ class GMController:
             self.db.commit()
         return account
 
-    def _ensure_virtual_param(self):
-        """Ensure the virtual parameter exists in DB for logging"""
-        try:
-            p = self.db.query(Parameter).filter_by(parameter_id=self.PARAM_VP_BANK).first()
-            if not p:
-                logger.info("Creating virtual parameter for GM Bank History")
-                p = Parameter(
-                    parameter_id=self.PARAM_VP_BANK,
-                    parameter_name='GM Bank Balance',
-                    parameter_unit='GM',
-                    writable=False
-                )
-                self.db.add(p)
-                self.db.commit()
-        except Exception as e:
-            logger.error(f"Failed to init virtual param: {e}")
-
-    def log_bank_history(self, device_db_id, balance):
-        """Log balance to history"""
-        try:
-            p = self.db.query(Parameter).filter_by(parameter_id=self.PARAM_VP_BANK).first()
-            if not p: return
-            
-            reading = ParameterReading(
-                device_id=device_db_id,
-                parameter_id=p.id,
-                timestamp=datetime.utcnow(),
-                value=balance
-            )
-            self.db.add(reading)
-        except Exception as e:
-            logger.error(f"Failed to log bank history: {e}")
-
-    def get_pump_value(self, device_id, param_id):
-        try:
-            val = self.client.get_point_data(device_id, param_id)
-            return float(val['value'])
-        except Exception as e:
-            # logger.error(f"Failed to read {param_id}: {e}")
-            return None
-
-    def set_pump_gm(self, device_id, value):
-        try:
-            val_int = int(round(value))
-            if self.last_written_gm is None or abs(self.last_written_gm - value) > 1.0:
-                self.client.set_point_value(device_id, self.PARAM_GM_WRITE, val_int)
-                self.last_written_gm = value
-                logger.info(f"  -> Wrote GM {val_int} to pump (Bank Bal: {self._get_account().balance:.1f}).")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to write pump GM: {e}")
-            return False
-
-    def set_hw_demand(self, device_id, value):
-        try:
-            self.client.set_point_value(device_id, self.PARAM_HW_DEMAND_WRITE, int(value))
-            logger.info(f"  -> Wrote HW Demand {value} to pump.")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to write HW Demand: {e}")
-            return False
-
-    def set_ventilation(self, device_id, value):
-        try:
-            self.client.set_point_value(device_id, self.PARAM_VENTILATION_WRITE, int(value))
-            logger.info(f"  -> Wrote Ventilation {value} to pump.")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to write Ventilation: {e}")
-            return False
-
     def run_tick(self):
-        """Run one logic tick (e.g. every minute)"""
-        
-        # 1. Get Context
+        now = datetime.now(timezone.utc)
         account = self._get_account()
         device = self.db.query(Device).first()
-        if not device:
-            logger.warning("No device found")
-            return
+        if not device: return
 
-        # QM OPTIMIZATION: Fetch ALL points in ONE call instead of 4 separate calls
+        # 1. Fetch Fresh Data
         try:
             all_points = self.client.get_device_points(device.device_id)
-            points_dict = {str(p['parameterId']): p for p in all_points}
+            p = {str(item['parameterId']): item for item in all_points}
         except Exception as e:
-            logger.error(f"Failed to fetch points from API: {e}")
+            logger.error(f"API Fetch failed: {e}")
             return
 
-        # Helper to get value from our fetched list
-        def get_val(pid):
-            p = points_dict.get(str(pid))
-            return float(p['value']) if p else None
+        def get_val(pid, default=0.0):
+            return float(p[pid]['value']) if pid in p else default
 
-        current_pump_gm = get_val(self.PARAM_GM_READ)
-        if current_pump_gm is None: 
-            logger.error("Failed to read current pump GM from point list, skipping tick.")
-            return 
-        
-        current_hw_temp = get_val('40013')
-        current_real_hw_mode = get_val(self.PARAM_HW_DEMAND_WRITE)
-        current_real_vent_mode = get_val(self.PARAM_VENTILATION_WRITE)
-        current_indoor_temp = get_val('40033') # BT50
+        cur_supply = get_val(self.PARAM_SUPPLY_READ)
+        cur_outdoor = get_val(self.PARAM_OUTDOOR_READ)
+        cur_indoor = get_val(self.PARAM_INDOOR_READ)
+        cur_pump_gm = get_val(self.PARAM_GM_READ)
 
-        # 2. Update Balance
-        if self.last_written_gm is not None:
-            delta = current_pump_gm - self.last_written_gm
-            # If the jump is huge, it means someone manually reset the pump. Sync bank.
-            if abs(delta) > 100:
-                logger.warning(f"Extreme GM jump ({delta:.1f}). Syncing bank to pump.")
-                account.balance = current_pump_gm 
-                self.last_written_gm = current_pump_gm 
-            else:
-                account.balance += delta 
-            
-            if account.balance < self.MIN_BALANCE: account.balance = self.MIN_BALANCE
-            elif account.balance > self.MAX_BALANCE: account.balance = self.MAX_BALANCE
-                
-            self.db.add(account)
-        else:
-            logger.info("First run: Syncing balance.")
-            account.balance = current_pump_gm
-            self.last_written_gm = current_pump_gm
-            self.db.add(account)
-            self.db.commit()
-            return
-
-        # 3. Get Plan
-        current_time_utc = datetime.now(timezone.utc)
-        current_hour_plan = self.db.query(PlannedHeatingSchedule).filter(
-            PlannedHeatingSchedule.timestamp <= current_time_utc,
-            PlannedHeatingSchedule.timestamp > current_time_utc - timedelta(hours=1)
+        # 2. Get Current Plan/Offset
+        plan = self.db.query(PlannedHeatingSchedule).filter(
+            PlannedHeatingSchedule.timestamp <= now,
+            PlannedHeatingSchedule.timestamp > now - timedelta(hours=1)
         ).order_by(PlannedHeatingSchedule.timestamp.desc()).first()
+        
+        offset = plan.planned_offset if plan else 0.0
+        action = plan.planned_action if plan else "RUN"
 
-        planned_action = current_hour_plan.planned_action if current_hour_plan else "REST"
-        planned_hw_mode = current_hour_plan.planned_hot_water_mode if current_hour_plan else 1 
+        # 3. Calculate Target & Delta
+        # Formula: 20 + (20-Out) * Curve * 0.12 + Offset
+        target_supply = 20 + (20 - cur_outdoor) * settings.DEFAULT_HEATING_CURVE * 0.12 + offset
+        
+        # Calculate time since last tick (usually 1.0 min)
+        if self.last_tick_time:
+            dt_min = (now - self.last_tick_time).total_seconds() / 60.0
+        else:
+            dt_min = 1.0
+        
+        delta_gm = (cur_supply - target_supply) * dt_min
+        
+        # 4. Update Bank Balance
+        # Logic: We only accumulate DEBT if it's not too warm inside
+        if cur_indoor < 22.0 or delta_gm > 0:
+            account.balance += delta_gm
+        
+        # Clamp Balance
+        account.balance = max(self.MIN_BALANCE, min(self.MAX_BALANCE, account.balance))
+        
+        # 5. SAFETY OVERRIDES
+        # Bastu-vakt: Force positive balance if very hot
+        if cur_indoor > 23.5:
+            logger.warning(f"🚨 BASTU-VAKT: {cur_indoor}C. Resetting bank.")
+            account.balance = 100.0
+            action = "MUST_REST"
 
-        # --- SAFETY OVERRIDES ---
-        # 1. BASTU-VAKT: If temp > 23.5, force REST and clear bank
-        if current_indoor_temp is not None and current_indoor_temp > 23.5:
-            logger.warning(f"🚨 BASTU-VAKT: Temp is {current_indoor_temp:.1f}°C. Forcing stop and resetting bank.")
-            planned_action = 'MUST_REST'
-            account.balance = 100.0 # Force bank to positive
-            self.db.add(account)
-
-        # 2. ANTI-WINDUP: If temp > Target, don't accumulate heat debt
-        if current_indoor_temp is not None and current_indoor_temp > self.CONTROL_TARGET:
-            if account.balance < current_pump_gm:
-                logger.info(f"⚖️ Comfort Reset: In:{current_indoor_temp:.1f} > {self.CONTROL_TARGET}. Resetting debt ({account.balance:.0f} -> {current_pump_gm:.0f})")
-                account.balance = current_pump_gm
-                self.db.add(account)
-
-        # 3. EMERGENCY HW OVERRIDE
-        if current_hw_temp is not None and current_hw_temp < 41.0: 
-            if planned_hw_mode != 2: 
-                logger.warning(f"Emergency HW Boost: Temp is {current_hw_temp:.1f}°C. Forcing LUX.")
-                planned_hw_mode = 2 
-
-        target_vent_mode = 3.0 if planned_hw_mode == 2 else 0.0 
-
-        logger.info(f"Status: GM={current_pump_gm:.0f}, Bal={account.balance:.0f}. Plan: {planned_action}, In:{current_indoor_temp}")
-
-        # 4. Execute Strategy
-        value_to_write_gm = current_pump_gm
-
-        # Standardize actions (Handle legacy SAVE/SPEND)
-        if planned_action in ['MUST_RUN', 'RUN', 'SPEND']:
-            value_to_write_gm = account.balance
-            if value_to_write_gm > -60: 
-                value_to_write_gm = -100 
-            if value_to_write_gm < self.HEATER_SAFETY_LIMIT:
-                value_to_write_gm = self.HEATER_SAFETY_LIMIT
+        # 6. Exekvering (Determine what to write to pump)
+        if action in ['MUST_REST', 'REST']:
+            # Force stop: write a positive value
+            gm_to_write = 100
+        else:
+            # Normal/Run: write our simulated truth
+            # Nibe GM requires stepValue (often 10)
+            gm_to_write = int(round(account.balance / 10.0) * 10)
             
-        elif planned_action in ['MUST_REST', 'REST', 'SAVE']:
-            value_to_write_gm = 100 
-
-        elif planned_action in ['HOLD', 'NORMAL']:
-            value_to_write_gm = account.balance
-            if value_to_write_gm < self.HEATER_SAFETY_LIMIT:
-                value_to_write_gm = self.HEATER_SAFETY_LIMIT
-
-        # --- Write to Pump ---
-        # GM Parameter
-        self.set_pump_gm(device.device_id, value_to_write_gm)
-        
-        # HW Demand Parameter (47041)
-        if current_real_hw_mode is None or int(current_real_hw_mode) != planned_hw_mode:
-            logger.info(f"HW Mode Mismatch (Pump:{current_real_hw_mode} != Plan:{planned_hw_mode}). Correcting...")
-            self.set_hw_demand(device.device_id, planned_hw_mode)
+            # Ensure pump starts if we have debt
+            if action == 'RUN' and gm_to_write > self.PUMP_START_THRESHOLD and gm_to_write < 0:
+                # If we want to run but debt hasn't reached -200 yet, 
+                # we don't force it. We let the debt grow naturally.
+                # BUT if user wants MUST_RUN, we force it.
+                pass
             
-        # Ventilation Parameter (50005)
-        if current_real_vent_mode is None or int(current_real_vent_mode) != target_vent_mode:
-            logger.info(f"Vent Mode Mismatch (Pump:{current_real_vent_mode} != Plan:{target_vent_mode}). Correcting...")
-            self.set_ventilation(device.device_id, target_vent_mode)
-        
-        # LOG HISTORY
-        self.log_bank_history(device.id, account.balance)
-        
+            if action == 'MUST_RUN':
+                gm_to_write = min(gm_to_write, self.PUMP_START_THRESHOLD - 10)
+
+        # 7. Write to Pump
+        try:
+            if self.last_written_gm is None or abs(self.last_written_gm - gm_to_write) >= 1.0:
+                self.client.set_point_value(device.device_id, self.PARAM_GM_WRITE, gm_to_write)
+                self.last_written_gm = gm_to_write
+                logger.info(f"GM Update: Wrote {gm_to_write} (Target:{target_supply:.1f}C, Actual:{cur_supply:.1f}C, Debt:{account.balance:.1f})")
+        except Exception as e:
+            logger.error(f"Write failed: {e}")
+
+        self.last_tick_time = now
         self.db.add(account)
         self.db.commit()
 
     def run_loop(self):
-        logger.info("Starting GM Controller...")
+        logger.info("GM Controller V10.0 (Deterministic Bank) started.")
         while True:
             try:
                 self.run_tick()
             except Exception as e:
-                logger.error(f"Crash in GM Controller loop: {e}")
+                logger.error(f"Loop error: {e}")
                 self.db.rollback()
             time.sleep(60)
 
