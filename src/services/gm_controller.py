@@ -34,6 +34,8 @@ class GMController:
     
     # Nibe Settings
     PUMP_START_THRESHOLD = -200 # Pump starts at -200 GM
+    EL_HEATER_START_LIMIT = -400 # Estimated limit where electric heater kicks in
+    CRITICAL_TEMP_LIMIT = 19.0 # Below this, allow electric heater
     
     def __init__(self):
         self.db = SessionLocal()
@@ -92,7 +94,13 @@ class GMController:
         else:
             dt_min = 1.0
         
-        delta_gm = (cur_supply - target_supply) * dt_min
+        diff_temp = cur_supply - target_supply
+        
+        # TURBO MODE: If we are far behind target, accumulate debt faster to wake up compressor
+        multiplier = 1.0
+        if diff_temp < -5.0: multiplier = 3.0 # Tripple speed if > 5 degrees behind
+        
+        delta_gm = diff_temp * dt_min * multiplier
         
         # 4. Update Bank Balance
         # Logic: We only accumulate DEBT if it's not too warm inside
@@ -115,18 +123,20 @@ class GMController:
             gm_to_write = 100
         else:
             # Normal/Run: write our simulated truth
-            # Nibe GM requires stepValue (often 10)
-            gm_to_write = int(round(account.balance / 10.0) * 10)
+            raw_gm = int(round(account.balance))
+            
+            # SMART THROTTLE (V11): Block Electric Heater unless critical
+            # If temp > 19.0, clamp GM to stay above heater limit (-400)
+            # We use -350 to be safe.
+            if cur_indoor > self.CRITICAL_TEMP_LIMIT and raw_gm < (self.EL_HEATER_START_LIMIT + 50):
+                gm_to_write = self.EL_HEATER_START_LIMIT + 50 # e.g. -350
+                if self.last_written_gm != gm_to_write:
+                    logger.info(f"🛡️ Smart Throttle: Clamping GM to {gm_to_write} to avoid heater (Temp {cur_indoor} > {self.CRITICAL_TEMP_LIMIT})")
+            else:
+                gm_to_write = raw_gm
             
             # Ensure pump starts if we have debt
             if action == 'RUN' and gm_to_write > self.PUMP_START_THRESHOLD and gm_to_write < 0:
-                # If we want to run but debt hasn't reached -200 yet, 
-                # we don't force it. We let the debt grow naturally.
-                # BUT if user wants MUST_RUN, we force it.
-                pass
-            
-            if action == 'MUST_RUN':
-                gm_to_write = min(gm_to_write, self.PUMP_START_THRESHOLD - 10)
 
         # 7. Write to Pump
         try:
