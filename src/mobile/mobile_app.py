@@ -100,6 +100,104 @@ def get_dashboard_v4():
     finally:
         session.close()
 
+# --- V6 DASHBOARD (Deterministic) ---
+@app.route('/api/v6/dashboard')
+def get_dashboard_v6():
+    session = SessionLocal()
+    analyzer = HeatPumpAnalyzer() # Fresh instance
+    device = analyzer.get_device()
+    
+    try:
+        # 1. LIVE STATUS
+        outdoor = analyzer.get_latest_value(device, analyzer.PARAM_OUTDOOR_TEMP) or 0.0
+        in_down = analyzer.get_latest_value(device, 'HA_TEMP_DOWNSTAIRS')
+        in_dexter = analyzer.get_latest_value(device, 'HA_TEMP_DEXTER')
+        
+        # Determine actual control temperature (Logic mirror from SmartPlanner)
+        target_temp = 21.5
+        min_dexter = 20.0
+        
+        control_temp = in_down if in_down else (in_dexter if in_dexter else 21.0)
+        priority_msg = "Normal (Nere)"
+        
+        if in_dexter and in_dexter < min_dexter:
+             dexter_equiv = in_dexter + 1.5
+             if dexter_equiv < (in_down or 99):
+                 control_temp = dexter_equiv
+                 priority_msg = "Säkerhet (Dexter)"
+
+        supply = analyzer.get_latest_value(device, analyzer.PARAM_SUPPLY_TEMP) or 0.0
+        gm = session.query(GMAccount).first()
+        gm_balance = gm.balance if gm else 0.0
+        
+        # Get Tuning Params
+        try:
+            res = session.execute(text("SELECT parameter_id, value FROM system_tuning")).fetchall()
+            tuning = {row[0]: row[1] for row in res}
+        except: tuning = {}
+        
+        kp = tuning.get('control_kp', 2.5)
+        keco = tuning.get('control_keco', 3.0)
+        bias = tuning.get('control_bias', 0.0)
+        
+        # Calculate Logic Breakdown
+        error = target_temp - control_temp
+        p_term = error * kp
+        # Eco term requires price avg, skipping for realtime calc, showing only P-term impact
+        
+        # 2. PLAN & HISTORY (Chart)
+        now = datetime.utcnow()
+        hist_start = now - timedelta(hours=24)
+        
+        # Fetch History
+        def get_series(param_id):
+            pid = session.query(Parameter).filter_by(parameter_id=param_id).first()
+            if not pid: return []
+            readings = session.query(ParameterReading).filter(
+                ParameterReading.parameter_id == pid.id,
+                ParameterReading.timestamp >= hist_start
+            ).order_by(ParameterReading.timestamp).all()
+            return [{'x': r.timestamp.isoformat() + 'Z', 'y': r.value} for r in readings]
+
+        series_indoor = get_series('HA_TEMP_DOWNSTAIRS')
+        series_dexter = get_series('HA_TEMP_DEXTER')
+        series_gm = get_series('40941') # Pump GM
+        
+        # Fetch Plan
+        plan_rows = session.query(PlannedHeatingSchedule).filter(
+            PlannedHeatingSchedule.timestamp >= now
+        ).order_by(PlannedHeatingSchedule.timestamp).all()
+        
+        plan_offset = [{'x': p.timestamp.isoformat() + 'Z', 'y': p.planned_offset} for p in plan_rows]
+        plan_price = [{'x': p.timestamp.isoformat() + 'Z', 'y': p.electricity_price} for p in plan_rows]
+
+        return jsonify({
+            "status": {
+                "control_temp": round(control_temp, 2),
+                "target_temp": target_temp,
+                "outdoor": outdoor,
+                "supply": supply,
+                "gm_actual": analyzer.get_latest_value(device, '40941') or 0,
+                "gm_target": round(gm_balance, 0),
+                "priority": priority_msg
+            },
+            "logic": {
+                "error": round(error, 2),
+                "p_term": round(p_term, 2),
+                "kp": kp,
+                "bias": bias
+            },
+            "chart": {
+                "indoor": series_indoor,
+                "dexter": series_dexter,
+                "gm": series_gm,
+                "offset": plan_offset,
+                "price": plan_price
+            }
+        })
+    finally:
+        session.close()
+
 @app.route('/api/performance')
 def get_performance():
     session = SessionLocal()
@@ -122,7 +220,7 @@ def index():
 
 @app.route('/dashboard')
 def dashboard():
-    return render_template('dashboard_v5.html')
+    return render_template('dashboard_v6.html')
 
 @app.route('/analytics')
 def analytics():

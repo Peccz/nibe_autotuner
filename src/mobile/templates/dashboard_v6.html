@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% set active_page = 'dashboard' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    
+    <!-- HEADER: The Verdict -->
+    <div class="card bg-dark text-white border-secondary mb-3 shadow">
+        <div class="card-body text-center">
+            <h6 class="text-muted text-uppercase mb-1">Styrmodell (V8.1)</h6>
+            <div class="row align-items-center">
+                <div class="col-4 border-end border-secondary">
+                    <h1 class="display-4 fw-bold text-primary mb-0" id="val-temp">--</h1>
+                    <small class="text-muted">Inne (°C)</small>
+                </div>
+                <div class="col-4 border-end border-secondary">
+                    <h1 class="display-4 fw-bold mb-0" id="val-target">--</h1>
+                    <small class="text-muted">Mål (°C)</small>
+                </div>
+                <div class="col-4">
+                    <h1 class="display-4 fw-bold text-success mb-0" id="val-offset">--</h1>
+                    <small class="text-muted">Offset</small>
+                </div>
+            </div>
+            <div class="mt-3 badge bg-secondary" id="val-priority">--</div>
+        </div>
+    </div>
+
+    <!-- LOGIC: The Calculation -->
+    <div class="card bg-dark text-white border-secondary mb-3">
+        <div class="card-header border-secondary py-1">
+            <small class="text-uppercase text-muted">Logik</small>
+        </div>
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center" style="font-family: monospace;">
+                <span>(Felet <span class="text-warning" id="logic-error">--</span> × Kp <span class="text-info" id="logic-kp">--</span>)</span>
+                <span>+</span>
+                <span>(Eco + Bias <span class="text-info" id="logic-bias">--</span>)</span>
+                <span>=</span>
+                <span class="fw-bold text-success" id="logic-result">--</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- STATUS: The Machine -->
+    <div class="row g-2 mb-3">
+        <div class="col-6">
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-body p-2 text-center">
+                    <small class="text-muted">GM (Är / Bör)</small>
+                    <div class="fs-4 fw-bold">
+                        <span id="gm-actual">--</span> / <span id="gm-target" class="text-secondary">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-body p-2 text-center">
+                    <small class="text-muted">Framledning</small>
+                    <div class="fs-4 fw-bold text-warning" id="val-supply">--</div>
+                    <small class="text-muted" id="val-outdoor">Ute: --</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CHART: The Future -->
+    <div class="card bg-dark text-white border-secondary mb-3" style="height: 350px;">
+        <div class="card-body p-2">
+            <canvas id="mainChart"></canvas>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<script>
+    let chart = null;
+
+    async function update() {
+        try {
+            const res = await fetch('/api/v6/dashboard');
+            const data = await res.json();
+            
+            // 1. Update Values
+            document.getElementById('val-temp').innerText = data.status.control_temp.toFixed(1);
+            document.getElementById('val-target').innerText = data.status.target_temp.toFixed(1);
+            document.getElementById('val-priority').innerText = data.status.priority;
+            document.getElementById('val-supply').innerText = data.status.supply.toFixed(1) + '°';
+            document.getElementById('val-outdoor').innerText = 'Ute: ' + data.status.outdoor.toFixed(1) + '°';
+            document.getElementById('gm-actual').innerText = data.status.gm_actual.toFixed(0);
+            document.getElementById('gm-target').innerText = data.status.gm_target.toFixed(0);
+            
+            // Logic
+            document.getElementById('logic-error').innerText = data.logic.error.toFixed(2);
+            document.getElementById('logic-kp').innerText = data.logic.kp.toFixed(1);
+            document.getElementById('logic-bias').innerText = data.logic.bias.toFixed(1);
+            
+            // Calculate implied offset (approx)
+            const pTerm = data.logic.p_term;
+            // Eco is dynamic, hard to show here exactly without passing it, but we can show final from plan
+            const nextOffset = data.chart.offset.length > 0 ? data.chart.offset[0].y : 0;
+            document.getElementById('val-offset').innerText = (nextOffset > 0 ? '+' : '') + nextOffset;
+            document.getElementById('logic-result').innerText = nextOffset;
+
+            // 2. Chart
+            renderChart(data.chart);
+
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function renderChart(data) {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if (chart) {
+            chart.data.datasets[0].data = data.indoor;
+            chart.data.datasets[1].data = data.dexter;
+            chart.data.datasets[2].data = data.offset;
+            chart.update();
+            return;
+        }
+
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Nere (°C)',
+                        data: data.indoor,
+                        borderColor: '#3b82f6', // Blue
+                        borderWidth: 2,
+                        yAxisID: 'yTemp',
+                        pointRadius: 0,
+                        tension: 0.2
+                    },
+                    {
+                        label: 'Dexter (°C)',
+                        data: data.dexter,
+                        borderColor: '#06b6d4', // Cyan
+                        borderWidth: 2,
+                        yAxisID: 'yTemp',
+                        pointRadius: 0,
+                        tension: 0.2
+                    },
+                    {
+                        label: 'Planerad Offset',
+                        data: data.offset,
+                        type: 'bar',
+                        backgroundColor: (ctx) => {
+                            const v = ctx.raw?.y;
+                            return v < 0 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(34, 197, 94, 0.5)';
+                        },
+                        yAxisID: 'yOffset',
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { type: 'time', time: { unit: 'hour', displayFormats:{hour:'HH:mm'} }, grid: { color: '#333' } },
+                    yTemp: { position: 'left', min: 17, max: 24, grid: { color: '#333' } },
+                    yOffset: { position: 'right', min: -10, max: 10, grid: { display: false } }
+                },
+                plugins: { legend: { labels: { color: '#fff' } } }
+            }
+        });
+    }
+
+    update();
+    setInterval(update, 30000);
+</script>
+{% endblock %}

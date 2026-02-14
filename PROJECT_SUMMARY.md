@@ -49,3 +49,14 @@ Generated: sön  1 feb 2026 19:59:27 CET
 - **GM Controller:** Holds the 'Bank' logic. Safety overrides (Bastu-Vakt, Anti-Windup) are critical.
 - **Weakness:** High dependency on HA sensor freshness. GM sync tolerance (500) is too loose.
 
+## Upgrade to V12.0 (Proactive Control)
+- **Problem:** P-controller is reactive and lags behind rapid outdoor temperature drops.
+- **Solution:** Add D-Term (Trend) and Weather Feed-forward (Forecast).
+- **Kd (Derivative):** Reacts to rate of indoor temp change.
+- **Kw (Weather):** Anticipates outdoor temp drops using SMHI data.
+
+## V12.0: The Deterministic Optimizer
+- **Method:** Price/COP Ranking & Thermal Buffering.
+- **Proactive:** Uses 24h price and weather forecast to pre-heat.
+- **Safety:** Enforces comfort limits by raising 'water level' of acceptable price.
+
