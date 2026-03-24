@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% set active_page = 'dashboard' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <!-- Top Status Row -->
+    <div class="row g-2 mb-3">
+        <!-- GM Bank -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark text-white h-100 border-secondary shadow-sm">
+                <div class="card-body text-center p-2">
+                    <small class="text-muted text-uppercase" style="font-size:0.7rem;">GM Bank</small>
+                    <div class="d-flex align-items-center justify-content-center mt-1">
+                        <h2 class="mb-0 fw-bold" id="gm-balance">--</h2>
+                    </div>
+                    <span class="badge mt-1" id="gm-mode-badge">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Price -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark text-white h-100 border-secondary shadow-sm">
+                <div class="card-body text-center p-2">
+                    <small class="text-muted text-uppercase" style="font-size:0.7rem;">Elpris</small>
+                    <div class="d-flex align-items-center justify-content-center mt-1">
+                        <h2 class="mb-0 fw-bold" id="current-price">--</h2>
+                        <span class="ms-1 small text-muted">kr</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Indoor -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark text-white h-100 border-secondary shadow-sm">
+                <div class="card-body text-center p-2">
+                    <small class="text-muted text-uppercase" style="font-size:0.7rem;">Inne</small>
+                    <div class="d-flex align-items-center justify-content-center mt-1">
+                        <h2 class="mb-0 fw-bold" id="indoor-temp">--</h2>
+                        <span class="ms-1 small text-muted">°C</span>
+                    </div>
+                    <small class="text-success" style="font-size:0.7rem;">Mål: <span id="target-temp">--</span>°C</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Outdoor -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark text-white h-100 border-secondary shadow-sm">
+                <div class="card-body text-center p-2">
+                    <small class="text-muted text-uppercase" style="font-size:0.7rem;">Ute</small>
+                    <div class="d-flex align-items-center justify-content-center mt-1">
+                        <h2 class="mb-0 fw-bold" id="outdoor-temp">--</h2>
+                        <span class="ms-1 small text-muted">°C</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chart: The Plan -->
+    <div class="card bg-dark text-white mb-3 border-secondary shadow-sm">
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center py-2">
+            <span class="fw-bold"><i class="bi bi-graph-up"></i> 24h Värmeplan</span>
+            <small class="text-muted" style="font-size:0.7rem;">Deterministisk Modell</small>
+        </div>
+        <div class="card-body p-2" style="height: 300px; position: relative;">
+            <canvas id="planChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Detailed Plan Table (Collapsible) -->
+    <div class="accordion mb-4" id="planAccordion">
+        <div class="accordion-item bg-dark border-secondary">
+            <h2 class="accordion-header" id="headingOne">
+                <button class="accordion-button collapsed bg-dark text-white shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                    <i class="bi bi-list-ul me-2"></i> Visa Detaljerad Tabell
+                </button>
+            </h2>
+            <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#planAccordion">
+                <div class="accordion-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm mb-0" style="font-size: 0.85rem;">
+                            <thead>
+                                <tr class="text-muted">
+                                    <th>Tid</th>
+                                    <th>Status</th>
+                                    <th>Pris</th>
+                                    <th>Inne (Sim)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="schedule-table-body">
+                                <tr><td colspan="4" class="text-center py-2">Laddar plan...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Activity Log -->
+    <div class="card bg-dark text-white mb-4 shadow-sm">
+        <div class="card-header border-secondary">
+            <span><i class="bi bi-activity"></i> Logg</span>
+        </div>
+        <div class="list-group list-group-flush list-group-dark" id="activity-log">
+            <!-- Items injected by JS -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let planChart = null;
+
+    async function updateDashboard() {
+        try {
+            // 1. Status Data
+            const sRes = await fetch('/api/status');
+            const status = await sRes.json();
+            
+            // GM Balance
+            const bal = status.gm_balance;
+            const balEl = document.getElementById('gm-balance');
+            balEl.innerText = bal;
+            balEl.className = 'mb-0 fw-bold ' + (bal < -400 ? 'text-warning' : 'text-white');
+            
+            // GM Mode Badge
+            const badge = document.getElementById('gm-mode-badge');
+            badge.innerText = status.gm_mode;
+            let badgeClass = 'bg-secondary';
+            if (status.gm_mode === 'SPEND') badgeClass = 'bg-success';
+            if (status.gm_mode === 'SAVE') badgeClass = 'bg-warning text-dark';
+            badge.className = 'badge mt-1 ' + badgeClass;
+
+            // Temps & Price
+            document.getElementById('current-price').innerText = status.current_price;
+            document.getElementById('indoor-temp').innerText = status.indoor_temp !== null ? status.indoor_temp : '--';
+            document.getElementById('outdoor-temp').innerText = status.outdoor_temp !== null ? status.outdoor_temp : '--';
+            document.getElementById('target-temp').innerText = status.target_temp;
+
+            // 2. Plan Data (Chart & Table)
+            const pRes = await fetch('/api/plan');
+            const planData = await pRes.json();
+            renderChart(planData);
+            renderTable(planData);
+            
+            // 3. Activity Log (Standard)
+            const logRes = await fetch('/api/ai-agent/history');
+            const logs = await logRes.json();
+            const logContainer = document.getElementById('activity-log');
+            logContainer.innerHTML = '';
+            
+            if(logs && logs.length > 0) {
+                logs.slice(0, 5).forEach(log => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item bg-dark text-white border-secondary';
+                    const time = new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    item.innerHTML = `
+                        <div class="d-flex w-100 justify-content-between">
+                            <small class="text-muted">${time}</small>
+                            <small class="badge bg-secondary">${log.action}</small>
+                        </div>
+                        <p class="mb-1 small">${log.reasoning || 'No details'}</p>
+                    `;
+                    logContainer.appendChild(item);
+                });
+            } else {
+                 logContainer.innerHTML = '<div class="p-3 text-center text-muted">Inga loggar</div>';
+            }
+
+        } catch (e) {
+            console.error("Dashboard update error:", e);
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('schedule-table-body');
+        tbody.innerHTML = '';
+        if(!data || !data.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Ingen plan tillgänglig</td></tr>';
+            return;
+        }
+
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            const time = new Date(row.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            let statusBadge = '<span class="badge bg-secondary">REST</span>';
+            if (row.action === 'RUN' || row.action === 'MUST_RUN') statusBadge = '<span class="badge bg-success">RUN</span>';
+            if (row.action === 'MUST_REST') statusBadge = '<span class="badge bg-danger">STOP</span>';
+            
+            tr.innerHTML = `
+                <td>${time}</td>
+                <td>${statusBadge}</td>
+                <td>${row.price.toFixed(2)}</td>
+                <td>${row.indoor_sim.toFixed(1)}°</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderChart(data) {
+        if(!data || !data.length) return;
+        const ctx = document.getElementById('planChart').getContext('2d');
+        
+        const labels = data.map(d => new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+        const prices = data.map(d => d.price);
+        const indoorSim = data.map(d => d.indoor_sim);
+        // Action: 0=REST, 10=RUN.
+        const actions = data.map(d => d.is_running * 10); 
+
+        if (planChart) {
+            planChart.data.labels = labels;
+            planChart.data.datasets[0].data = indoorSim;
+            planChart.data.datasets[1].data = prices;
+            planChart.data.datasets[2].data = actions;
+            planChart.update();
+            return;
+        }
+
+        planChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Simulerad Temp (°C)',
+                        data: indoorSim,
+                        borderColor: '#3b82f6', // Blue
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        yAxisID: 'yTemp',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Elpris (kr)',
+                        data: prices,
+                        borderColor: '#9ca3af', // Gray
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        yAxisID: 'yPrice',
+                        tension: 0.1,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Drift (PÅ)',
+                        data: actions,
+                        type: 'bar',
+                        backgroundColor: (ctx) => {
+                            const val = ctx.raw;
+                            return val > 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(0,0,0,0)'; 
+                        },
+                        yAxisID: 'yAction',
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#ccc', usePointStyle: true, boxWidth: 8 } },
+                    tooltip: { 
+                        mode: 'index', intersect: false, backgroundColor: 'rgba(0,0,0,0.9)'
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#6b7280', maxTicksLimit: 8 }, grid: { display: false } },
+                    yTemp: { 
+                        type: 'linear', position: 'left', 
+                        ticks: { color: '#3b82f6' }, 
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        suggestedMin: 19, suggestedMax: 23
+                    },
+                    yPrice: { 
+                        type: 'linear', position: 'right', 
+                        ticks: { color: '#9ca3af' }, 
+                        grid: { display: false },
+                        min: 0 
+                    },
+                    yAction: {
+                        type: 'linear', position: 'right', display: false, min: 0, max: 20 
+                    }
+                }
+            }
+        });
+    }
+
+    updateDashboard();
+    setInterval(updateDashboard, 60000);
+</script>
+{% endblock %}

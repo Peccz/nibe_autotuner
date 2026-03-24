@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block title %}Inställningar - Nibe Autotuner{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <h1>⚙️ Inställningar</h1>
+
+    <!-- Temperature Settings Section -->
+    <div class="card">
+        <h2>🌡️ Temperaturinställningar</h2>
+        <p class="description">Konfigurera minimala och måltemperaturer för inomhusklimatet.</p>
+
+        <div class="setting-item">
+            <label for="minIndoorTemp">
+                <strong>Minsta innetemperatur (°C)</strong>
+                <span class="help-text">Säkerhetsgräns - systemet kommer aldrig sänka under denna temperatur</span>
+            </label>
+            <div class="temp-control">
+                <input
+                    type="number"
+                    id="minIndoorTemp"
+                    min="18.0"
+                    max="23.0"
+                    step="0.5"
+                    value="20.5"
+                    class="temp-input"
+                >
+                <span class="temp-unit">°C</span>
+            </div>
+            <div class="range-indicator">
+                <span class="range-min">18°C</span>
+                <span class="range-max">23°C</span>
+            </div>
+        </div>
+
+        <div class="setting-item info-box">
+            <strong>ℹ️ Information:</strong>
+            <ul>
+                <li>Standard: 20.5°C</li>
+                <li>Rekommenderat intervall: 20.0-21.0°C</li>
+                <li>AI-agenten kommer respektera denna gräns vid alla optimeringar</li>
+                <li>Ändring kräver omstart av tjänster för att träda i kraft</li>
+            </ul>
+        </div>
+
+        <button id="saveTempSettings" class="btn btn-primary btn-large">
+            💾 Spara inställningar
+        </button>
+
+        <div id="saveStatus" class="status-message" style="display: none;"></div>
+    </div>
+
+    <!-- Current Settings Display -->
+    <div class="card">
+        <h2>📋 Aktuella inställningar</h2>
+        <div class="current-settings">
+            <div class="setting-row">
+                <span class="setting-label">Minsta innetemperatur:</span>
+                <span id="currentMinTemp" class="setting-value">-</span>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Måltemperatur (min):</span>
+                <span id="currentTargetMin" class="setting-value">-</span>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Måltemperatur (max):</span>
+                <span id="currentTargetMax" class="setting-value">-</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Information -->
+    <div class="card info-card">
+        <h2>ℹ️ Om temperaturinställningar</h2>
+        <p>
+            <strong>Minsta innetemperatur</strong> är en säkerhetsgräns som förhindrar att AI-agenten
+            sänker uppvärmningen för mycket, även under dyra elpriser. Detta säkerställer alltid
+            acceptabel komfort.
+        </p>
+        <p>
+            <strong>Måltemperatur</strong> är det intervall som systemet försöker hålla vid normal drift.
+            AI-agenten kan tillfälligt justera inom detta intervall baserat på elpris och väderprognos.
+        </p>
+        <div class="warning-box">
+            ⚠️ <strong>Viktigt:</strong> Efter att ha ändrat inställningar, starta om AI-agenten
+            för att ändringarna ska träda i kraft:
+            <pre><code>sudo systemctl restart nibe-ai-agent</code></pre>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-page {
+    padding-bottom: 80px;
+}
+
+.card {
+    background: var(--card-bg, #2a2a2a);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.card h2 {
+    margin-top: 0;
+    color: #4a9eff;
+    font-size: 1.3em;
+}
+
+.description {
+    color: #aaa;
+    margin-bottom: 20px;
+}
+
+.setting-item {
+    margin-bottom: 25px;
+}
+
+.setting-item label {
+    display: block;
+    margin-bottom: 10px;
+}
+
+.help-text {
+    display: block;
+    font-size: 0.85em;
+    color: #888;
+    margin-top: 5px;
+}
+
+.temp-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.temp-input {
+    flex: 1;
+    padding: 12px;
+    font-size: 1.2em;
+    border: 2px solid #444;
+    border-radius: 8px;
+    background: #1a1a1a;
+    color: #fff;
+    text-align: center;
+}
+
+.temp-input:focus {
+    outline: none;
+    border-color: #4a9eff;
+}
+
+.temp-unit {
+    font-size: 1.2em;
+    color: #4a9eff;
+    font-weight: bold;
+}
+
+.range-indicator {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 0.85em;
+    color: #666;
+}
+
+.info-box {
+    background: #1a3a5a;
+    border-left: 4px solid #4a9eff;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.info-box ul {
+    margin: 10px 0 0 0;
+    padding-left: 20px;
+}
+
+.info-box li {
+    margin: 5px 0;
+    color: #aaa;
+}
+
+.btn-large {
+    width: 100%;
+    padding: 15px;
+    font-size: 1.1em;
+    margin-top: 10px;
+}
+
+.status-message {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.status-message.success {
+    background: #1a4d2e;
+    color: #4ade80;
+    border: 1px solid #4ade80;
+}
+
+.status-message.error {
+    background: #4d1a1a;
+    color: #f87171;
+    border: 1px solid #f87171;
+}
+
+.status-message.warning {
+    background: #4d3d1a;
+    color: #fbbf24;
+    border: 1px solid #fbbf24;
+}
+
+.current-settings {
+    background: #1a1a1a;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #333;
+}
+
+.setting-row:last-child {
+    border-bottom: none;
+}
+
+.setting-label {
+    color: #aaa;
+}
+
+.setting-value {
+    color: #4a9eff;
+    font-weight: bold;
+}
+
+.info-card {
+    background: #2a2520;
+    border-left: 4px solid #fbbf24;
+}
+
+.info-card p {
+    color: #ccc;
+    line-height: 1.6;
+    margin: 10px 0;
+}
+
+.warning-box {
+    background: #3d2a1a;
+    border: 1px solid #fbbf24;
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 15px;
+}
+
+.warning-box pre {
+    background: #1a1a1a;
+    padding: 8px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin-top: 8px;
+}
+
+.warning-box code {
+    color: #4ade80;
+    font-family: 'Courier New', monospace;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+
+    <!-- Away Mode -->
+    <div class="card bg-dark text-white mb-4 border-info">
+        <div class="card-header border-info">
+            <i class="bi bi-airplane"></i> Semester / Borta
+        </div>
+        <div class="card-body">
+            <p class="text-muted small">Sänker temperaturen till 16°C och stänger av varmvatten.</p>
+            
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="away-enabled">
+                <label class="form-check-label" for="away-enabled">Aktivera Borta-läge</label>
+            </div>
+            
+            <div class="mb-3">
+                <label for="away-end" class="form-label">Hemkomst</label>
+                <input type="datetime-local" class="form-control bg-dark text-white" id="away-end">
+            </div>
+            
+            <button class="btn btn-info w-100" onclick="saveAwayMode()">Spara Semesterläge</button>
+        </div>
+    </div>
+<script>
+// Load current settings on page load
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadSettings();
+});
+
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+
+        if (data.success) {
+            const settings = data.settings;
+
+            // Update input
+            document.getElementById('minIndoorTemp').value = settings.min_indoor_temp;
+
+            // Update current settings display
+            document.getElementById('currentMinTemp').textContent =
+                `${settings.min_indoor_temp.toFixed(1)}°C`;
+            document.getElementById('currentTargetMin').textContent =
+                `${settings.target_indoor_temp_min.toFixed(1)}°C`;
+            document.getElementById('currentTargetMax').textContent =
+                `${settings.target_indoor_temp_max.toFixed(1)}°C`;
+        }
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+        showStatus('Kunde inte ladda inställningar', 'error');
+    }
+}
+
+// Save settings
+document.getElementById('saveTempSettings').addEventListener('click', async () => {
+    const minTemp = parseFloat(document.getElementById('minIndoorTemp').value);
+
+    // Validate
+    if (minTemp < 18.0 || minTemp > 23.0) {
+        showStatus('Temperatur måste vara mellan 18°C och 23°C', 'error');
+        return;
+    }
+
+    // Show loading state
+    const btn = document.getElementById('saveTempSettings');
+    const originalText = btn.textContent;
+    btn.textContent = '💾 Sparar...';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                min_indoor_temp: minTemp
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showStatus(
+                data.message || 'Inställningar sparade! Starta om tjänster för att tillämpa.',
+                data.restart_required ? 'warning' : 'success'
+            );
+
+            // Reload current settings
+            await loadSettings();
+        } else {
+            showStatus(data.error || 'Kunde inte spara inställningar', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to save settings:', error);
+        showStatus('Kunde inte spara inställningar', 'error');
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+});
+
+function showStatus(message, type = 'success') {
+    const statusEl = document.getElementById('saveStatus');
+    statusEl.textContent = message;
+    statusEl.className = `status-message ${type}`;
+    statusEl.style.display = 'block';
+
+    // Auto-hide after 5 seconds (except warnings)
+    if (type !== 'warning') {
+        setTimeout(() => {
+            statusEl.style.display = 'none';
+        }, 5000);
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% set active_page = 'log' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <h2 class="mb-4">📜 Historik</h2>
+    <div class="list-group list-group-flush" id="log-list">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function loadLogs() {
+        try {
+            const res = await fetch('/api/changes');
+            const data = await res.json();
+            
+            const list = document.getElementById('log-list');
+            list.innerHTML = '';
+            
+            if (data.success && data.data.length > 0) {
+                data.data.forEach(log => {
+                    const time = new Date(log.timestamp).toLocaleString([], {
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+                    const isAI = log.applied_by === 'ai';
+                    const icon = isAI ? 'bi-robot' : 'bi-person-fill';
+                    const color = isAI ? 'text-primary' : 'text-warning';
+                    const badge = isAI ? 'AI Agent' : 'User';
+                    
+                    const item = `
+                    <div class="card bg-dark text-white mb-3 border-secondary">
+                        <div class="card-body py-2">
+                            <div class="d-flex w-100 justify-content-between align-items-center mb-1">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi ${icon} ${color} fs-5 me-2"></i>
+                                    <strong class="me-2">${log.parameter_name}</strong>
+                                    <span class="badge bg-secondary bg-opacity-25 text-secondary" style="font-size:0.6rem">${badge}</span>
+                                </div>
+                                <small class="text-muted">${time}</small>
+                            </div>
+                            <div class="d-flex align-items-center mt-2">
+                                <span class="fs-5 fw-bold text-white-50 me-2">${log.old_value}</span>
+                                <i class="bi bi-arrow-right text-success mx-2"></i>
+                                <span class="fs-4 fw-bold text-white">${log.new_value}</span>
+                            </div>
+                            <p class="mb-0 mt-2 small text-muted fst-italic border-top border-secondary pt-2">
+                                "${log.reason}"
+                            </p>
+                        </div>
+                    </div>
+                    `;
+                    list.innerHTML += item;
+                });
+            } else {
+                list.innerHTML = '<div class="text-center text-muted py-5">Inga loggar funna</div>';
+            }
+        } catch (e) {
+            console.error(e);
+            document.getElementById('log-list').innerHTML = '<div class="alert alert-danger">Kunde inte ladda loggar</div>';
+        }
+    }
+    loadLogs();
+</script>
+{% endblock %}
