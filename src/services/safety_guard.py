@@ -70,6 +70,17 @@ class SafetyGuard:
             if decision.suggested_value < MIN_OFFSET:
                 return True, f"Raised to min {MIN_OFFSET}", MIN_OFFSET
 
+        # --- REGEL 2b: GM (Degree Minutes) Gränser ---
+        if decision.parameter == "40940":  # GM_WRITE parameter
+            MAX_GM = 200  # Max heat surplus
+            MIN_GM = -2000  # Allow deep debt for electric heater
+            if decision.suggested_value > MAX_GM:
+                logger.warning(f"SafetyGuard: GM {decision.suggested_value} > MAX {MAX_GM}, capping")
+                return True, f"GM capped to max {MAX_GM}", MAX_GM
+            if decision.suggested_value < MIN_GM:
+                logger.warning(f"SafetyGuard: GM {decision.suggested_value} < MIN {MIN_GM}, raising")
+                return True, f"GM raised to min {MIN_GM}", MIN_GM
+
         # --- REGEL 3: Dämpning ---
         if decision.parameter == "curve_offset" and decision.current_value is not None:
             diff = decision.suggested_value - decision.current_value

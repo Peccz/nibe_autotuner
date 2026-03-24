@@ -17,9 +17,11 @@ from sqlalchemy import desc
 from data.database import SessionLocal
 from data.models import GMAccount, Device, PlannedHeatingSchedule, Parameter, ParameterReading
 from services.analyzer import HeatPumpAnalyzer
+from services.safety_guard import SafetyGuard
 from integrations.api_client import MyUplinkClient
 from integrations.auth import MyUplinkAuth
 from core.config import settings
+from api.schemas import AgentAIDecisionSchema
 
 class GMController:
     # Constants
@@ -41,6 +43,7 @@ class GMController:
     
     def __init__(self):
         self.db = SessionLocal()
+        self.safety_guard = SafetyGuard(self.db)
         self.auth = MyUplinkAuth()
         self.client = MyUplinkClient(self.auth)
         self.analyzer = HeatPumpAnalyzer()
@@ -148,12 +151,41 @@ class GMController:
             # 2. The pump has strayed too far from our target (> 50 GM)
             # 3. Our software target has changed significantly (> 10 GM) since last write
             # 4. We are in REST mode and pump is trying to run (GM < 0)
-            
+
             strayed = abs(cur_pump_gm - gm_to_write) > 50
             target_changed = self.last_written_gm is None or abs(self.last_written_gm - gm_to_write) >= 10.0
             force_rest = (action in ['MUST_REST', 'REST']) and cur_pump_gm < 50
-            
+
             if strayed or target_changed or force_rest:
+                # Validate with SafetyGuard before writing
+                decision = AgentAIDecisionSchema(
+                    action='adjust',
+                    parameter=self.PARAM_GM_WRITE,
+                    current_value=cur_pump_gm,
+                    suggested_value=gm_to_write,
+                    reasoning=f"Bank balance {account.balance:.1f}, action {action}",
+                    confidence=1.0,
+                    expected_impact=f"Target GM: {gm_to_write}"
+                )
+
+                is_safe, safety_reason, safe_value = self.safety_guard.validate_decision(
+                    decision,
+                    device.device_id
+                )
+
+                if not is_safe:
+                    logger.warning(f"⚠️ SafetyGuard BLOCKED GM write: {safety_reason}")
+                    if safe_value is not None:
+                        logger.info(f"Using SafetyGuard-adjusted value: {safe_value}")
+                        gm_to_write = safe_value
+                    else:
+                        logger.error("SafetyGuard rejected with no safe alternative. Skipping write.")
+                        return  # Don't write anything, skip this tick
+                elif safe_value is not None:
+                    # SafetyGuard approved but with adjustment
+                    logger.info(f"SafetyGuard adjusted GM: {gm_to_write} → {safe_value} ({safety_reason})")
+                    gm_to_write = safe_value
+
                 # Attempt write and verify response
                 response = self.client.set_point_value(device.device_id, self.PARAM_GM_WRITE, gm_to_write)
 

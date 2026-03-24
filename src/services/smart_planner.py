@@ -111,17 +111,24 @@ def calculate_plan():
             0 # Wind
         ))
 
-    conn.execute("DELETE FROM planned_heating_schedule") 
-    conn.executemany("""
-        INSERT INTO planned_heating_schedule 
-        (timestamp, planned_action, planned_offset, electricity_price, 
-         simulated_indoor_temp, simulated_dexter_temp, outdoor_temp, wind_speed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, plan_rows)
-    
-    conn.commit()
-    conn.close()
-    logger.success("✓ V12.0 Optimized Plan Generated.")
+    # Use explicit transaction to prevent race condition with gm_controller
+    try:
+        conn.execute("BEGIN EXCLUSIVE")
+        conn.execute("DELETE FROM planned_heating_schedule")
+        conn.executemany("""
+            INSERT INTO planned_heating_schedule
+            (timestamp, planned_action, planned_offset, electricity_price,
+             simulated_indoor_temp, simulated_dexter_temp, outdoor_temp, wind_speed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, plan_rows)
+        conn.commit()
+        logger.success("✓ V12.0 Optimized Plan Generated.")
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"✗ Failed to update heating schedule: {e}")
+        raise
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     calculate_plan()
