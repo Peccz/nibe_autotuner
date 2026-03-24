@@ -41,14 +41,31 @@ class GMController:
     EL_HEATER_START_LIMIT = -400 
     CRITICAL_TEMP_LIMIT = 19.0 
     
+    SESSION_REFRESH_INTERVAL = 3600  # Refresh DB session every hour
+
     def __init__(self):
-        self.db = SessionLocal()
-        self.safety_guard = SafetyGuard(self.db)
+        self._open_session()
         self.auth = MyUplinkAuth()
         self.client = MyUplinkClient(self.auth)
         self.analyzer = HeatPumpAnalyzer()
         self.last_tick_time = datetime.now(timezone.utc)
         self.last_written_gm = None
+        self.last_session_refresh = datetime.now(timezone.utc)
+
+    def _open_session(self):
+        self.db = SessionLocal()
+        self.safety_guard = SafetyGuard(self.db)
+
+    def _refresh_session_if_needed(self):
+        age = (datetime.now(timezone.utc) - self.last_session_refresh).total_seconds()
+        if age > self.SESSION_REFRESH_INTERVAL:
+            logger.info("Refreshing database session...")
+            try:
+                self.db.close()
+            except Exception:
+                pass
+            self._open_session()
+            self.last_session_refresh = datetime.now(timezone.utc)
 
     def _get_account(self):
         account = self.db.query(GMAccount).first()
@@ -88,7 +105,8 @@ class GMController:
                 reading = self.db.query(ParameterReading).filter_by(parameter_id=param.id).order_by(desc(ParameterReading.timestamp)).first()
                 if reading:
                     system_mode = reading.value
-        except: pass
+        except (AttributeError, TypeError) as e:
+            logger.debug(f"System mode reading unavailable, using default (Heating): {e}")
 
         # 2. Get Current Plan/Offset
         plan = self.db.query(PlannedHeatingSchedule).filter(
@@ -209,10 +227,14 @@ class GMController:
         logger.info("GM Controller V10.1 (HW Awareness) started.")
         while True:
             try:
+                self._refresh_session_if_needed()
                 self.run_tick()
             except Exception as e:
                 logger.error(f"Loop error: {e}")
-                self.db.rollback()
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
             time.sleep(60)
 
 if __name__ == "__main__":

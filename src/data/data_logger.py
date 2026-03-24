@@ -24,6 +24,8 @@ from data.database import init_db, get_session
 class DataLogger:
     """Continuously logs heat pump data to database"""
 
+    SESSION_REFRESH_ITERATIONS = 12  # Refresh session every 12 iterations (~1h at 5min interval)
+
     def __init__(self, database_url: str = None):
         init_db()
         self.session = get_session()
@@ -31,6 +33,15 @@ class DataLogger:
         self.client = MyUplinkClient(self.auth)
         self.ha_service = HomeAssistantService()
         self.weather_service = SMHIWeatherService()
+
+    def _refresh_session(self):
+        """Refresh the database session to prevent stale connections."""
+        try:
+            self.session.close()
+        except Exception:
+            pass
+        self.session = get_session()
+        logger.debug("Database session refreshed")
 
     def initialize_metadata(self):
         logger.info("Initializing metadata...")
@@ -108,6 +119,49 @@ class DataLogger:
 
         logger.info("✓ Metadata initialization complete!\n")
 
+    def investigate_system_mode(self):
+        """Analyze readings to determine if pump is doing Heating or Hot Water"""
+        try:
+            device = self.session.query(Device).first()
+            if not device: return
+
+            def get_latest(pid_str):
+                p = self.session.query(Parameter).filter_by(parameter_id=pid_str).first()
+                if not p: return None
+                r = self.session.query(ParameterReading).filter_by(parameter_id=p.id, device_id=device.id).order_by(desc(ParameterReading.timestamp)).first()
+                return r.value if r else None
+
+            supply = get_latest('40008')
+            hw_top = get_latest('40013')
+            comp_freq = get_latest('41778')
+            
+            mode = 0.0 # Off/Idle
+            str_mode = "Idle"
+
+            if comp_freq and comp_freq > 5:
+                if supply and hw_top and supply > (hw_top + 1.0) and supply > 42.0:
+                    mode = 2.0 # Hot Water
+                    str_mode = "Hot Water"
+                else:
+                    mode = 1.0 # Space Heating
+                    str_mode = "Heating"
+            
+            param = self.session.query(Parameter).filter_by(parameter_id='VP_SYSTEM_MODE').first()
+            if param:
+                reading = ParameterReading(
+                    device_id=device.id,
+                    parameter_id=param.id,
+                    timestamp=datetime.utcnow(),
+                    value=mode,
+                    str_value=str_mode
+                )
+                self.session.add(reading)
+                self.session.commit()
+                logger.info(f"🔍 System Investigation: Pump is in {str_mode} mode")
+        except Exception as e:
+            logger.error(f"Failed system investigation: {e}")
+            self.session.rollback()
+
     def log_reading(self):
         try:
             devices = self.session.query(Device).all()
@@ -118,7 +172,6 @@ class DataLogger:
             total_readings = 0
 
             for device in devices:
-                # Fetch data points from API
                 points = self.client.get_device_points(device.device_id)
 
                 for point in points:
@@ -126,51 +179,29 @@ class DataLogger:
                         parameter_id=str(point['parameterId'])
                     ).first()
 
-                    if not parameter:
-                        continue
+                    if not parameter: continue
 
-                    # Parse timestamp from API
                     api_ts_str = point.get('timestamp')
                     if api_ts_str:
                         try:
-                            # Handle ISO format
-                            if api_ts_str.endswith('Z'):
-                                api_ts_str = api_ts_str[:-1] + '+00:00'
-                            
+                            if api_ts_str.endswith('Z'): api_ts_str = api_ts_str[:-1] + '+00:00'
                             dt = datetime.fromisoformat(api_ts_str)
-                            if dt.tzinfo:
-                                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+                            if dt.tzinfo: dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
                             timestamp = dt
-                        except ValueError:
-                            timestamp = datetime.utcnow()
-                    else:
-                        timestamp = datetime.utcnow()
+                        except ValueError: timestamp = datetime.utcnow()
+                    else: timestamp = datetime.utcnow()
 
-                    # Check duplicate/stale
                     last_reading = self.session.query(ParameterReading).filter_by(
                         device_id=device.id,
                         parameter_id=parameter.id
                     ).order_by(desc(ParameterReading.timestamp)).first()
 
-                    # QM IMPROVEMENT: Robust handling of stuck Nibe timestamps
                     if last_reading and last_reading.timestamp >= timestamp:
-                        # Calculate age of the last record in our DB
                         db_age_seconds = (datetime.utcnow() - last_reading.timestamp).total_seconds()
-                        
                         if last_reading.value == point['value']:
-                            # Value is same. Should we force a heartbeat log anyway?
-                            if db_age_seconds < 3600: # 1 hour heartbeat
-                                # Truly stale and recently logged - skip
-                                continue
-                            else:
-                                # Force heartbeat log to show system is alive
-                                logger.info(f"Heartbeat log for {parameter.parameter_id} (Value {point['value']} unchanged for 1h)")
-                                timestamp = datetime.utcnow()
-                        else:
-                            # Stuck timestamp but value CHANGED! 
-                            # We use current time to capture the change and avoid data loss.
-                            logger.info(f"Stuck timestamp for {parameter.parameter_id} ({timestamp}) but value changed {last_reading.value}->{point['value']}. Forcing log.")
-                            timestamp = datetime.utcnow()
+                            if db_age_seconds < 3600: continue
+                            else: timestamp = datetime.utcnow()
+                        else: timestamp = datetime.utcnow()
 
                     reading = ParameterReading(
                         device_id=device.id,
@@ -179,7 +210,6 @@ class DataLogger:
                         value=point['value'],
                         str_value=point.get('strVal')
                     )
-
                     self.session.add(reading)
                     total_readings += 1
 
@@ -187,80 +217,63 @@ class DataLogger:
 
             if total_readings > 0:
                 logger.info(f"✓ Logged {total_readings} new readings from MyUplink")
+                self.investigate_system_mode() # NEW
             else:
                 logger.info("No new data points from MyUplink (all stale)")
 
-            # QM ADDITION: Log Home Assistant Sensors (High Precision)
+            # HA Sensors
             try:
                 ha_sensors = self.ha_service.get_all_sensors()
                 ha_timestamp = datetime.utcnow()
-                
-                # Fetch device for mapping (we use the first available device as anchor)
                 device = self.session.query(Device).first()
-                
                 if device and any(ha_sensors.values()):
                     ha_logged = 0
-                    mapping = {
-                        'HA_TEMP_DOWNSTAIRS': ha_sensors.get('downstairs_temp'),
-                        'HA_TEMP_DEXTER': ha_sensors.get('dexter_temp'),
-                        'HA_HUMIDITY_DOWNSTAIRS': ha_sensors.get('downstairs_humidity'),
-                        'HA_HUMIDITY_DEXTER': ha_sensors.get('dexter_humidity')
-                    }
-                    
+                    mapping = {'HA_TEMP_DOWNSTAIRS': ha_sensors.get('downstairs_temp'), 'HA_TEMP_DEXTER': ha_sensors.get('dexter_temp'), 'HA_HUMIDITY_DOWNSTAIRS': ha_sensors.get('downstairs_humidity'), 'HA_HUMIDITY_DEXTER': ha_sensors.get('dexter_humidity')}
                     for p_id, val in mapping.items():
                         if val is not None:
                             parameter = self.session.query(Parameter).filter_by(parameter_id=p_id).first()
                             if parameter:
-                                reading = ParameterReading(
-                                    device_id=device.id,
-                                    parameter_id=parameter.id,
-                                    timestamp=ha_timestamp,
-                                    value=val
-                                )
+                                reading = ParameterReading(device_id=device.id, parameter_id=parameter.id, timestamp=ha_timestamp, value=val)
                                 self.session.add(reading)
                                 ha_logged += 1
-                    
                     if ha_logged > 0:
                         self.session.commit()
                         logger.info(f"✓ Logged {ha_logged} high-precision readings from Home Assistant")
+            except (ConnectionError, TimeoutError, KeyError, ValueError) as e:
+                logger.warning(f"HA sensor fetch failed (will retry next cycle): {e}")
+                self.session.rollback()
             except Exception as e:
-                logger.error(f"Error logging HA readings: {e}")
+                logger.error(f"Unexpected error logging HA readings: {e}")
                 self.session.rollback()
 
-            # QM ADDITION: Log External Weather Data (For Physics Learning)
+            # Weather
             try:
                 forecasts = self.weather_service.get_forecast(hours_ahead=1)
                 if forecasts and device:
                     weather = forecasts[0]
                     w_timestamp = datetime.utcnow()
                     w_logged = 0
-                    
-                    mapping = {
-                        'EXT_WIND_SPEED': weather.wind_speed,
-                        'EXT_WIND_DIRECTION': weather.wind_direction
-                    }
-                    
+                    mapping = {'EXT_WIND_SPEED': weather.wind_speed, 'EXT_WIND_DIRECTION': weather.wind_direction}
                     for p_id, val in mapping.items():
                         parameter = self.session.query(Parameter).filter_by(parameter_id=p_id).first()
                         if parameter:
-                            reading = ParameterReading(
-                                device_id=device.id,
-                                parameter_id=parameter.id,
-                                timestamp=w_timestamp,
-                                value=float(val)
-                            )
+                            reading = ParameterReading(device_id=device.id, parameter_id=parameter.id, timestamp=w_timestamp, value=float(val))
                             self.session.add(reading)
                             w_logged += 1
-                    
                     if w_logged > 0:
                         self.session.commit()
                         logger.info(f"✓ Logged {w_logged} external weather readings")
-            except Exception as e:
-                logger.error(f"Error logging weather readings: {e}")
+            except (ConnectionError, TimeoutError, AttributeError) as e:
+                logger.warning(f"Weather fetch failed (will retry next cycle): {e}")
                 self.session.rollback()
-                
+            except Exception as e:
+                logger.error(f"Unexpected error logging weather readings: {e}")
+                self.session.rollback()
             return total_readings
-
+        except (ConnectionError, TimeoutError) as e:
+            logger.warning(f"API connection error, will retry next cycle: {e}")
+            self.session.rollback()
+            return 0
         except Exception as e:
             logger.error(f"Error logging readings: {e}")
             self.session.rollback()
@@ -268,41 +281,33 @@ class DataLogger:
 
     def run_continuous(self, interval_seconds=300):
         logger.info(f"Starting continuous data logging (interval: {interval_seconds}s)")
-        logger.info(f"Press Ctrl+C to stop\n")
         iteration = 0
         try:
             while True:
                 iteration += 1
                 logger.info(f"[Iteration {iteration}]")
+                if iteration % self.SESSION_REFRESH_ITERATIONS == 0:
+                    self._refresh_session()
                 self.log_reading()
-                logger.info(f"  Sleeping for {interval_seconds} seconds...\n")
                 time.sleep(interval_seconds)
         except KeyboardInterrupt:
-            logger.info("\n\nStopping data logger...")
+            logger.info("Stopping data logger...")
 
     def get_stats(self):
-        stats = {
+        return {
             'systems': self.session.query(System).count(),
             'devices': self.session.query(Device).count(),
             'parameters': self.session.query(Parameter).count(),
             'readings': self.session.query(ParameterReading).count(),
         }
-        return stats
 
 
 def main():
     import sys
-    logger.info("="*80)
-    logger.info("NIBE AUTOTUNER - Data Logger (QM Optimized)")
-    logger.info("="*80 + "\n")
-
+    logger.info("NIBE AUTOTUNER - Data Logger")
     logger_service = DataLogger()
     stats = logger_service.get_stats()
-
-    if stats['systems'] == 0:
-        logger.info("No metadata found. Initializing...")
-        logger_service.initialize_metadata()
-
+    if stats['systems'] == 0: logger_service.initialize_metadata()
     if len(sys.argv) > 1 and sys.argv[1] == '--once':
         logger_service.log_reading()
     elif len(sys.argv) > 1 and sys.argv[1] == '--interval':
