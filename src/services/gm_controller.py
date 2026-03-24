@@ -1,7 +1,7 @@
 """
-Deterministic Energy Bank V10.0
+Deterministic Energy Bank V10.1 (HW Awareness)
 Manages heat pump operation by simulating Degree Minutes (GM) locally.
-Calculates energy debt based on Supply Target vs Actual.
+Pauses debt accumulation when pump is making Hot Water.
 """
 import time
 import sys
@@ -11,6 +11,8 @@ from loguru import logger
 
 # Add src to path
 sys.path.insert(0, os.path.abspath('src'))
+
+from sqlalchemy import desc
 
 from data.database import SessionLocal
 from data.models import GMAccount, Device, PlannedHeatingSchedule, Parameter, ParameterReading
@@ -26,23 +28,23 @@ class GMController:
     PARAM_SUPPLY_READ = '40008' # BT2
     PARAM_OUTDOOR_READ = '40004' # BT1
     PARAM_INDOOR_READ = '40033' # BT50
-    PARAM_VP_BANK = 'VP_GM_BANK'
+    PARAM_SYSTEM_MODE = 'VP_SYSTEM_MODE' # Calculated by DataLogger
     
     # Physical Limits
     MIN_BALANCE = -2000 # Allow deep debt for electric heater
     MAX_BALANCE = 200   # Max heat surplus
     
     # Nibe Settings
-    PUMP_START_THRESHOLD = -200 # Pump starts at -200 GM
-    EL_HEATER_START_LIMIT = -400 # Estimated limit where electric heater kicks in
-    CRITICAL_TEMP_LIMIT = 19.0 # Below this, allow electric heater
+    PUMP_START_THRESHOLD = -200 
+    EL_HEATER_START_LIMIT = -400 
+    CRITICAL_TEMP_LIMIT = 19.0 
     
     def __init__(self):
         self.db = SessionLocal()
         self.auth = MyUplinkAuth()
         self.client = MyUplinkClient(self.auth)
         self.analyzer = HeatPumpAnalyzer()
-        self.last_tick_time = None
+        self.last_tick_time = datetime.now(timezone.utc)
         self.last_written_gm = None
 
     def _get_account(self):
@@ -74,6 +76,16 @@ class GMController:
         cur_outdoor = get_val(self.PARAM_OUTDOOR_READ)
         cur_indoor = get_val(self.PARAM_INDOOR_READ)
         cur_pump_gm = get_val(self.PARAM_GM_READ)
+        
+        # Get System Mode from DB (as it's a virtual parameter calculated by DataLogger)
+        system_mode = 1.0 # Default to Heating
+        try:
+            param = self.db.query(Parameter).filter_by(parameter_id=self.PARAM_SYSTEM_MODE).first()
+            if param:
+                reading = self.db.query(ParameterReading).filter_by(parameter_id=param.id).order_by(desc(ParameterReading.timestamp)).first()
+                if reading:
+                    system_mode = reading.value
+        except: pass
 
         # 2. Get Current Plan/Offset
         plan = self.db.query(PlannedHeatingSchedule).filter(
@@ -85,74 +97,84 @@ class GMController:
         action = plan.planned_action if plan else "RUN"
 
         # 3. Calculate Target & Delta
-        # Formula: 20 + (20-Out) * Curve * 0.12 + Offset
         target_supply = 20 + (20 - cur_outdoor) * settings.DEFAULT_HEATING_CURVE * 0.12 + offset
         
-        # Calculate time since last tick (usually 1.0 min)
-        if self.last_tick_time:
-            dt_min = (now - self.last_tick_time).total_seconds() / 60.0
+        dt_min = (now - self.last_tick_time).total_seconds() / 60.0
+        if dt_min < 0 or dt_min > 10: dt_min = 1.0 # Safety
+        
+        # THE TRANSACTION
+        if system_mode == 2.0: # HOT WATER
+            delta_gm = 0.0 # Pause bank during HW production
+            logger.info("⏸️ Bank Paused: Pump is doing Hot Water.")
+        elif system_mode == 3.0: # DEFROST
+            delta_gm = 0.0 
+            logger.info("⏸️ Bank Paused: Pump is Defrosting.")
         else:
-            dt_min = 1.0
-        
-        diff_temp = cur_supply - target_supply
-        
-        # TURBO MODE: If we are far behind target, accumulate debt faster to wake up compressor
-        multiplier = 1.0
-        if diff_temp < -5.0: multiplier = 3.0 # Tripple speed if > 5 degrees behind
-        
-        delta_gm = diff_temp * dt_min * multiplier
+            diff_temp = cur_supply - target_supply
+            # TURBO MODE
+            multiplier = 1.0
+            if diff_temp < -5.0: multiplier = 3.0
+            delta_gm = diff_temp * dt_min * multiplier
         
         # 4. Update Bank Balance
-        # Logic: We only accumulate DEBT if it's not too warm inside
         if cur_indoor < 22.0 or delta_gm > 0:
             account.balance += delta_gm
         
-        # Clamp Balance
         account.balance = max(self.MIN_BALANCE, min(self.MAX_BALANCE, account.balance))
         
         # 5. SAFETY OVERRIDES
-        # Bastu-vakt: Force positive balance if very hot
         if cur_indoor > 23.5:
             logger.warning(f"🚨 BASTU-VAKT: {cur_indoor}C. Resetting bank.")
             account.balance = 100.0
             action = "MUST_REST"
 
-        # 6. Exekvering (Determine what to write to pump)
+        # 6. Exekvering
         if action in ['MUST_REST', 'REST']:
-            # Force stop: write a positive value
             gm_to_write = 100
         else:
-            # Normal/Run: write our simulated truth
-            raw_gm = int(round(account.balance))
-            
-            # SMART THROTTLE (V11): Block Electric Heater unless critical
-            # If temp > 19.0, clamp GM to stay above heater limit (-400)
-            # We use -350 to be safe.
+            raw_gm = int(round(account.balance / 10.0) * 10)
             if cur_indoor > self.CRITICAL_TEMP_LIMIT and raw_gm < (self.EL_HEATER_START_LIMIT + 50):
-                gm_to_write = self.EL_HEATER_START_LIMIT + 50 # e.g. -350
-                if self.last_written_gm != gm_to_write:
-                    logger.info(f"🛡️ Smart Throttle: Clamping GM to {gm_to_write} to avoid heater (Temp {cur_indoor} > {self.CRITICAL_TEMP_LIMIT})")
+                gm_to_write = self.EL_HEATER_START_LIMIT + 50
             else:
                 gm_to_write = raw_gm
             
-            # Ensure pump starts if we have debt
-            if action == 'RUN' and gm_to_write > self.PUMP_START_THRESHOLD and gm_to_write < 0:
+            if action == 'MUST_RUN':
+                gm_to_write = min(gm_to_write, self.PUMP_START_THRESHOLD - 10)
 
-        # 7. Write to Pump
+        # 7. Write to Pump (The Leash Logic)
         try:
-            if self.last_written_gm is None or abs(self.last_written_gm - gm_to_write) >= 1.0:
-                self.client.set_point_value(device.device_id, self.PARAM_GM_WRITE, gm_to_write)
-                self.last_written_gm = gm_to_write
-                logger.info(f"GM Update: Wrote {gm_to_write} (Target:{target_supply:.1f}C, Actual:{cur_supply:.1f}C, Debt:{account.balance:.1f})")
+            # We write to the pump if:
+            # 1. We haven't written before (startup)
+            # 2. The pump has strayed too far from our target (> 50 GM)
+            # 3. Our software target has changed significantly (> 10 GM) since last write
+            # 4. We are in REST mode and pump is trying to run (GM < 0)
+            
+            strayed = abs(cur_pump_gm - gm_to_write) > 50
+            target_changed = self.last_written_gm is None or abs(self.last_written_gm - gm_to_write) >= 10.0
+            force_rest = (action in ['MUST_REST', 'REST']) and cur_pump_gm < 50
+            
+            if strayed or target_changed or force_rest:
+                # Attempt write and verify response
+                response = self.client.set_point_value(device.device_id, self.PARAM_GM_WRITE, gm_to_write)
+
+                # Verify write was acknowledged by API
+                if response:
+                    self.last_written_gm = gm_to_write
+                    logger.info(f"✓ GM Write Verified: {gm_to_write} (Reason: Strayed={strayed}, Changed={target_changed}, Rest={force_rest})")
+                    logger.info(f"  -> Stats: Target Supply: {target_supply:.1f}C, Actual: {cur_supply:.1f}C, Bank: {account.balance:.1f}")
+                else:
+                    logger.warning(f"⚠️ GM Write returned empty response for value {gm_to_write} - write may have failed")
+                    # Don't update last_written_gm - will retry on next tick
         except Exception as e:
-            logger.error(f"Write failed: {e}")
+            logger.error(f"✗ GM Write failed: {e}")
+            # Don't update last_written_gm - will retry on next tick
 
         self.last_tick_time = now
         self.db.add(account)
         self.db.commit()
 
     def run_loop(self):
-        logger.info("GM Controller V10.0 (Deterministic Bank) started.")
+        logger.info("GM Controller V10.1 (HW Awareness) started.")
         while True:
             try:
                 self.run_tick()
