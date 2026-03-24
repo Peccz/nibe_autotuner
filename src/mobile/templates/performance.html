@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% set active_page = 'performance' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+
+    <!-- KPI Cards -->
+    <div class="row g-2 mb-3">
+        <div class="col-4">
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-body p-2 text-center">
+                    <small class="text-muted d-block" style="font-size:0.7rem">KOMFORT 7d</small>
+                    <div class="fs-3 fw-bold" id="kpi-comfort">--</div>
+                    <small class="text-muted">% i zon</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-body p-2 text-center">
+                    <small class="text-muted d-block" style="font-size:0.7rem">KYLSKULD 7d</small>
+                    <div class="fs-3 fw-bold text-warning" id="kpi-cold">--</div>
+                    <small class="text-muted">°C·min</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-body p-2 text-center">
+                    <small class="text-muted d-block" style="font-size:0.7rem">KOMPRESSOR</small>
+                    <div class="fs-3 fw-bold text-info" id="kpi-comp">--</div>
+                    <small class="text-muted">% drifttid</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comfort Trend Chart -->
+    <div class="card bg-dark text-white border-secondary mb-3">
+        <div class="card-header border-secondary py-1 d-flex justify-content-between align-items-center">
+            <small class="text-uppercase text-muted">Komfortzon 14 dagar</small>
+            <small class="text-muted">Mål: 20.5–22°C</small>
+        </div>
+        <div class="card-body p-2" style="height: 200px;">
+            <canvas id="comfortChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Hourly Price Chart (today) -->
+    <div class="card bg-dark text-white border-secondary mb-3">
+        <div class="card-header border-secondary py-1 d-flex justify-content-between align-items-center">
+            <small class="text-uppercase text-muted">Elpris idag (SEK/kWh)</small>
+            <span class="badge bg-secondary" id="price-zone">SE3</span>
+        </div>
+        <div class="card-body p-2" style="height: 180px;">
+            <canvas id="priceChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Daily Table -->
+    <div class="card bg-dark text-white border-secondary mb-4">
+        <div class="card-header border-secondary py-1">
+            <small class="text-uppercase text-muted">Daglig sammanfattning</small>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-sm mb-0" style="font-size: 0.78rem;">
+                <thead>
+                    <tr class="text-muted">
+                        <th>Datum</th>
+                        <th class="text-center">Komfort%</th>
+                        <th class="text-center">Min°C</th>
+                        <th class="text-center">Kylskuld</th>
+                        <th class="text-center">Komp%</th>
+                    </tr>
+                </thead>
+                <tbody id="daily-table"></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<script>
+let comfortChart = null;
+let priceChart = null;
+
+async function load() {
+    const res = await fetch('/api/performance');
+    const d = await res.json();
+    const s = d.summary;
+
+    // KPI cards
+    const comfortEl = document.getElementById('kpi-comfort');
+    comfortEl.innerText = (s.comfort_7d_pct ?? '--') + (s.comfort_7d_pct != null ? '%' : '');
+    comfortEl.className = 'fs-3 fw-bold ' + comfortClass(s.comfort_7d_pct);
+
+    document.getElementById('kpi-cold').innerText = s.cold_debt_7d ?? '--';
+    document.getElementById('kpi-comp').innerText = (s.compressor_on_pct ?? '--') + (s.compressor_on_pct != null ? '%' : '');
+
+    // Comfort trend chart (oldest first for chart)
+    const daily = [...d.daily].reverse();
+    renderComfortChart(daily);
+
+    // Price chart
+    renderPriceChart(d.hourly_today);
+
+    // Daily table
+    renderTable(d.daily);
+}
+
+function comfortClass(pct) {
+    if (pct == null) return 'text-muted';
+    if (pct >= 85) return 'text-success';
+    if (pct >= 70) return 'text-warning';
+    return 'text-danger';
+}
+
+function renderComfortChart(daily) {
+    const labels = daily.map(d => d.date);
+    const comfort = daily.map(d => d.comfort_pct);
+    const minTemp = daily.map(d => d.min_temp);
+
+    const ctx = document.getElementById('comfortChart').getContext('2d');
+    if (comfortChart) { comfortChart.destroy(); }
+
+    comfortChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Komfort %',
+                    data: comfort,
+                    backgroundColor: comfort.map(v => v >= 85 ? 'rgba(34,197,94,0.7)' : v >= 70 ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.7)'),
+                    yAxisID: 'y',
+                    order: 2
+                },
+                {
+                    label: 'Min °C',
+                    data: minTemp,
+                    type: 'line',
+                    borderColor: '#60a5fa',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    tension: 0.2,
+                    yAxisID: 'yTemp',
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { ticks: { color: '#9ca3af', maxTicksLimit: 7 }, grid: { color: '#333' } },
+                y: {
+                    position: 'left',
+                    min: 0, max: 100,
+                    ticks: { color: '#9ca3af', callback: v => v + '%' },
+                    grid: { color: '#333' }
+                },
+                yTemp: {
+                    position: 'right',
+                    min: 17, max: 24,
+                    ticks: { color: '#60a5fa', callback: v => v + '°' },
+                    grid: { display: false }
+                }
+            },
+            plugins: {
+                legend: { labels: { color: '#d1d5db', boxWidth: 12, font: { size: 11 } } },
+                annotation: {
+                    annotations: {
+                        comfort_low: { type: 'line', yScaleID: 'yTemp', yMin: 20.5, yMax: 20.5, borderColor: 'rgba(34,197,94,0.4)', borderDash: [4,4] },
+                        comfort_high: { type: 'line', yScaleID: 'yTemp', yMin: 22, yMax: 22, borderColor: 'rgba(239,68,68,0.3)', borderDash: [4,4] }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderPriceChart(hourly) {
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    if (priceChart) { priceChart.destroy(); }
+
+    const hasPrices = hourly.some(h => h.price && h.price !== 1.0);
+    if (!hasPrices) {
+        ctx.canvas.parentElement.innerHTML = '<div class="text-muted text-center py-4" style="font-size:0.85rem">Prisdata saknas — elprisetjustnu.se ej nådd</div>';
+        return;
+    }
+
+    const labels = hourly.map(h => String(h.hour).padStart(2,'0') + ':00');
+    const prices = hourly.map(h => h.price);
+    const now_h = new Date().getHours();
+
+    priceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'SEK/kWh',
+                data: prices,
+                backgroundColor: hourly.map((h, i) => {
+                    if (i === now_h) return 'rgba(251,191,36,0.9)';
+                    if (h.action === 'REST') return 'rgba(239,68,68,0.5)';
+                    return 'rgba(59,130,246,0.6)';
+                }),
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { ticks: { color: '#9ca3af', maxTicksLimit: 12, font: { size: 10 } }, grid: { display: false } },
+                y: { ticks: { color: '#9ca3af', callback: v => v.toFixed(2) }, grid: { color: '#333' } }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `${ctx.parsed.y.toFixed(3)} SEK/kWh (${hourly[ctx.dataIndex].action})`
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderTable(daily) {
+    const tbody = document.getElementById('daily-table');
+    tbody.innerHTML = daily.slice(0, 10).map(d => {
+        const cls = d.comfort_pct >= 85 ? 'text-success' : d.comfort_pct >= 70 ? 'text-warning' : 'text-danger';
+        const coldCls = d.cold_debt > 50 ? 'text-danger' : d.cold_debt > 10 ? 'text-warning' : 'text-muted';
+        return `<tr>
+            <td>${d.date.slice(5)}</td>
+            <td class="text-center ${cls}">${d.comfort_pct}%</td>
+            <td class="text-center ${d.min_temp < 20.0 ? 'text-danger' : ''}">${d.min_temp ?? '--'}</td>
+            <td class="text-center ${coldCls}">${d.cold_debt}</td>
+            <td class="text-center">${d.compressor_on_pct ?? '--'}%</td>
+        </tr>`;
+    }).join('');
+}
+
+load();
+</script>
+{% endblock %}

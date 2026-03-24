@@ -77,9 +77,14 @@ def calculate_plan():
     
     for i in range(24):
         future_time = now + timedelta(hours=i)
-        
-        # Price
-        p_obj = next((p for p in all_prices if p.time_start.hour == future_time.hour and p.time_start.day == future_time.day), None)
+
+        # Price — normalise both sides to UTC to avoid CET/CEST offset mismatch
+        p_obj = next(
+            (p for p in all_prices
+             if p.time_start.astimezone(timezone.utc).hour == future_time.hour
+             and p.time_start.astimezone(timezone.utc).day == future_time.day),
+            None
+        )
         price_list.append(p_obj.price_per_kwh if p_obj else 1.0)
         
         # Weather (Outdoor Temp)

@@ -12,99 +12,17 @@ from data.models import Device, Parameter, ParameterReading, GMAccount, PlannedH
 from data.performance_model import DailyPerformance
 from services.analyzer import HeatPumpAnalyzer
 from services.price_service import price_service
+from core.config import settings
 
 from sqlalchemy import text
 
 app = Flask(__name__)
-# analyzer = HeatPumpAnalyzer() <-- REMOVED GLOBAL INSTANCE
 
-# --- V4 DASHBOARD ENDPOINT (Ported from FastAPI) ---
-@app.route('/api/v4/dashboard')
-def get_dashboard_v4():
+# --- V7 DASHBOARD (The Strategist) ---
+@app.route('/api/v7/dashboard')
+def get_dashboard_v7():
     session = SessionLocal()
-    analyzer = HeatPumpAnalyzer() # Create fresh analyzer
-    device = analyzer.get_device()
-    
-    try:
-        # 1. Status
-        outdoor = analyzer.get_latest_value(device, analyzer.PARAM_OUTDOOR_TEMP) or 0.0
-        in_down = analyzer.get_latest_value(device, 'HA_TEMP_DOWNSTAIRS') or 21.0
-        in_dexter = analyzer.get_latest_value(device, 'HA_TEMP_DEXTER') or 21.0
-        hum = analyzer.get_latest_value(device, 'HA_HUMIDITY_DOWNSTAIRS')
-        evap = analyzer.get_latest_value(device, '40020')
-        comp = analyzer.get_latest_value(device, analyzer.PARAM_COMPRESSOR_FREQ) or 0.0
-        fan = analyzer.get_latest_value(device, '50221')
-        supply = analyzer.get_latest_value(device, analyzer.PARAM_SUPPLY_TEMP) or 0.0
-        
-        gm = session.query(GMAccount).first()
-        
-        status = {
-            "device_name": device.product_name if device else "Nibe F730",
-            "outdoor_temp": outdoor,
-            "indoor_downstairs": in_down,
-            "indoor_dexter": in_dexter,
-            "indoor_humidity": hum,
-            "supply_temp": supply,
-            "evaporator_temp": evap,
-            "compressor_freq": comp,
-            "degree_minutes": analyzer.get_latest_value(device, analyzer.PARAM_DM_CURRENT) or 0.0,
-            "gm_balance": gm.balance if gm else 0.0,
-            "gm_mode": gm.mode if gm else "NORMAL",
-            "current_price": price_service.get_current_price(),
-            "fan_speed": fan,
-            "is_frost_guard_active": (evap is not None and evap < -14.0),
-            "last_updated": datetime.now(timezone.utc).isoformat()
-        }
-
-        # 2. Plan
-        plan_rows = session.query(PlannedHeatingSchedule).order_by(PlannedHeatingSchedule.timestamp.asc()).all()
-        
-        # Get Curve
-        heating_curve = analyzer.get_latest_value(device, analyzer.PARAM_HEATING_CURVE) or 7.0
-        
-        plan_data = []
-        for p in plan_rows:
-            base_supply = 20 + ((20 - (p.outdoor_temp or 0)) * heating_curve * 0.15)
-            offset = p.planned_offset if p.planned_offset is not None else 0.0
-            pred_supply = base_supply + offset
-            
-            supply_down = min(pred_supply, 29.0)
-            supply_dexter = pred_supply
-            
-            plan_data.append({
-                "time": p.timestamp.isoformat(),
-                "price": p.electricity_price,
-                "temp_out": p.outdoor_temp,
-                "temp_sim_down": p.simulated_indoor_temp,
-                "temp_sim_dexter": p.simulated_dexter_temp,
-                "supply_down": round(supply_down, 1),
-                "supply_dexter": round(supply_dexter, 1),
-                "action": p.planned_action,
-                "offset": p.planned_offset,
-                "wind": p.wind_speed
-            })
-
-        # 3. Tuning
-        try:
-            res = session.execute(text("SELECT parameter_id, value FROM system_tuning")).fetchall()
-            tuning = {row[0]: row[1] for row in res}
-        except Exception:
-            tuning = {}
-
-        return jsonify({
-            "status": status,
-            "plan": plan_data,
-            "tuning": tuning,
-            "recent_savings": 5.87
-        })
-    finally:
-        session.close()
-
-# --- V6 DASHBOARD (Deterministic) ---
-@app.route('/api/v6/dashboard')
-def get_dashboard_v6():
-    session = SessionLocal()
-    analyzer = HeatPumpAnalyzer() # Fresh instance
+    analyzer = HeatPumpAnalyzer()
     device = analyzer.get_device()
     
     try:
@@ -113,9 +31,10 @@ def get_dashboard_v6():
         in_down = analyzer.get_latest_value(device, 'HA_TEMP_DOWNSTAIRS')
         in_dexter = analyzer.get_latest_value(device, 'HA_TEMP_DEXTER')
         
-        # Determine actual control temperature (Logic mirror from SmartPlanner)
+        # Determine actual control temperature
+        # Logic from SmartPlanner V12:
         target_temp = 21.5
-        min_dexter = 20.0
+        min_dexter = 20.5
         
         control_temp = in_down if in_down else (in_dexter if in_dexter else 21.0)
         priority_msg = "Normal (Nere)"
@@ -127,29 +46,30 @@ def get_dashboard_v6():
                  priority_msg = "Säkerhet (Dexter)"
 
         supply = analyzer.get_latest_value(device, analyzer.PARAM_SUPPLY_TEMP) or 0.0
+        
+        # Calculate Target Supply (The Truth)
+        # 20 + (20-Out)*Curve*0.12 + Offset
+        # We need the current planned offset
+        now = datetime.now(timezone.utc)
+        current_plan = session.query(PlannedHeatingSchedule).filter(
+            PlannedHeatingSchedule.timestamp <= now,
+            PlannedHeatingSchedule.timestamp > now - timedelta(hours=1)
+        ).order_by(PlannedHeatingSchedule.timestamp.desc()).first()
+        
+        current_offset = current_plan.planned_offset if current_plan else 0.0
+        target_supply = 20 + (20 - outdoor) * settings.DEFAULT_HEATING_CURVE * 0.12 + current_offset
+
         gm = session.query(GMAccount).first()
         gm_balance = gm.balance if gm else 0.0
         
-        # Get Tuning Params
-        try:
-            res = session.execute(text("SELECT parameter_id, value FROM system_tuning")).fetchall()
-            tuning = {row[0]: row[1] for row in res}
-        except: tuning = {}
+        # Calculate GM Rate (Delta)
+        # Rate = Actual - Target
+        gm_rate = supply - target_supply
         
-        kp = tuning.get('control_kp', 2.5)
-        keco = tuning.get('control_keco', 3.0)
-        bias = tuning.get('control_bias', 0.0)
+        # 2. CHART DATA (History + Future)
+        hist_start = now - timedelta(hours=12)
         
-        # Calculate Logic Breakdown
-        error = target_temp - control_temp
-        p_term = error * kp
-        # Eco term requires price avg, skipping for realtime calc, showing only P-term impact
-        
-        # 2. PLAN & HISTORY (Chart)
-        now = datetime.utcnow()
-        hist_start = now - timedelta(hours=24)
-        
-        # Fetch History
+        # Helper for history
         def get_series(param_id):
             pid = session.query(Parameter).filter_by(parameter_id=param_id).first()
             if not pid: return []
@@ -157,19 +77,19 @@ def get_dashboard_v6():
                 ParameterReading.parameter_id == pid.id,
                 ParameterReading.timestamp >= hist_start
             ).order_by(ParameterReading.timestamp).all()
-            return [{'x': r.timestamp.isoformat() + 'Z', 'y': r.value} for r in readings]
+            return [{'x': r.timestamp.isoformat(), 'y': r.value} for r in readings]
 
-        series_indoor = get_series('HA_TEMP_DOWNSTAIRS')
-        series_dexter = get_series('HA_TEMP_DEXTER')
-        series_gm = get_series('40941') # Pump GM
+        hist_indoor = get_series('HA_TEMP_DOWNSTAIRS')
+        hist_dexter = get_series('HA_TEMP_DEXTER')
         
-        # Fetch Plan
+        # Helper for future
         plan_rows = session.query(PlannedHeatingSchedule).filter(
             PlannedHeatingSchedule.timestamp >= now
         ).order_by(PlannedHeatingSchedule.timestamp).all()
         
-        plan_offset = [{'x': p.timestamp.isoformat() + 'Z', 'y': p.planned_offset} for p in plan_rows]
-        plan_price = [{'x': p.timestamp.isoformat() + 'Z', 'y': p.electricity_price} for p in plan_rows]
+        future_indoor = [{'x': p.timestamp.isoformat(), 'y': p.simulated_indoor_temp} for p in plan_rows]
+        future_offset = [{'x': p.timestamp.isoformat(), 'y': p.planned_offset} for p in plan_rows]
+        future_price = [{'x': p.timestamp.isoformat(), 'y': p.electricity_price} for p in plan_rows]
 
         return jsonify({
             "status": {
@@ -177,42 +97,28 @@ def get_dashboard_v6():
                 "target_temp": target_temp,
                 "outdoor": outdoor,
                 "supply": supply,
+                "target_supply": round(target_supply, 1),
                 "gm_actual": analyzer.get_latest_value(device, '40941') or 0,
-                "gm_target": round(gm_balance, 0),
+                "gm_bank": round(gm_balance, 0),
+                "gm_rate": round(gm_rate, 1),
+                "offset": current_offset,
                 "priority": priority_msg
             },
-            "logic": {
-                "error": round(error, 2),
-                "p_term": round(p_term, 2),
-                "kp": kp,
-                "bias": bias
-            },
             "chart": {
-                "indoor": series_indoor,
-                "dexter": series_dexter,
-                "gm": series_gm,
-                "offset": plan_offset,
-                "price": plan_price
+                "hist_indoor": hist_indoor,
+                "hist_dexter": hist_dexter,
+                "future_indoor": future_indoor,
+                "future_offset": future_offset,
+                "future_price": future_price
             }
         })
     finally:
         session.close()
 
-@app.route('/api/performance')
-def get_performance():
-    session = SessionLocal()
-    try:
-        results = session.query(DailyPerformance).order_by(DailyPerformance.date.desc()).limit(14).all()
-        return jsonify([{
-            'date': p.date.strftime('%Y-%m-%d'),
-            'savings_sek': round(p.savings_sek, 2),
-            'savings_percent': round(p.savings_percent, 1),
-            'actual_kwh': round(p.actual_kwh, 1),
-            'baseline_kwh': round(p.baseline_kwh, 1),
-            'avg_indoor': round(p.avg_indoor_temp, 1)
-        } for p in results])
-    finally:
-        session.close()
+# --- LEGACY ENDPOINTS (Keeping for compatibility) ---
+@app.route('/api/v4/dashboard')
+def get_dashboard_v4():
+    return jsonify({}) # Deprecated
 
 @app.route('/')
 def index():
@@ -220,159 +126,7 @@ def index():
 
 @app.route('/dashboard')
 def dashboard():
-    return render_template('dashboard_v6.html')
-
-@app.route('/analytics')
-def analytics():
-    return render_template('analytics.html')
-
-@app.route('/log')
-def log_page():
-    return render_template('changes.html')
-
-@app.route('/settings')
-def settings_page():
-    session = SessionLocal()
-    device = session.query(Device).first()
-    session.close()
-    return render_template('settings.html', device=device)
-
-# --- API Endpoints ---
-
-@app.route('/api/status')
-def get_status():
-    session = SessionLocal()
-    analyzer = HeatPumpAnalyzer() # Fresh instance
-    try:
-        device = session.query(Device).first()
-        metrics = analyzer.calculate_metrics(hours_back=1)
-        
-        # DOWNSTAIRS (Prefer IKEA)
-        indoor = analyzer.get_latest_value(device, 'HA_TEMP_DOWNSTAIRS')
-        if indoor is None:
-            indoor = metrics.avg_indoor_temp if metrics and metrics.avg_indoor_temp else None
-        
-        # DEXTER
-        dexter = analyzer.get_latest_value(device, 'HA_TEMP_DEXTER')
-
-        outdoor = metrics.avg_outdoor_temp if metrics and metrics.avg_outdoor_temp else None
-        if outdoor is None and device:
-            outdoor = analyzer.get_latest_value(device, '40004')
-
-        hw_temp = None
-        supply_temp = None
-        if device:
-            hw_temp = analyzer.get_latest_value(device, '40013')
-            supply_temp = analyzer.get_latest_value(device, '40008')
-
-        account = session.query(GMAccount).first()
-        gm_balance = account.balance if account else 0.0
-        gm_mode = account.mode if account else 'NORMAL'
-
-        price_data = price_service.get_current_price_details()
-
-        # Check Boost status
-        latest_log = session.query(AIDecisionLog).order_by(AIDecisionLog.timestamp.desc()).first()
-        is_boost = False
-        if latest_log and "Dexter boost" in (latest_log.reasoning or ""):
-            # Check if log is recent (within 1 hour)
-            if (datetime.utcnow() - latest_log.timestamp).total_seconds() < 3600:
-                is_boost = True
-
-        return jsonify({
-            'indoor_temp': round(indoor, 2) if indoor else None,
-            'indoor_dexter': round(dexter, 2) if dexter else None,
-            'outdoor_temp': round(outdoor, 1) if outdoor else None,
-            'hw_temp': round(hw_temp, 1) if hw_temp else None,
-            'supply_temp': round(supply_temp, 1) if supply_temp else None,
-            'target_temp': device.target_indoor_temp_min if device else 21.0,
-            'gm_balance': round(gm_balance, 0),
-            'gm_mode': gm_mode,
-            'current_price': round(price_data['total'], 2),
-            'spot_price': round(price_data['spot'], 2),
-            'is_boost_active': is_boost,
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
-        })
-    finally:
-        session.close()
-
-@app.route('/api/plan')
-def get_plan():
-    """Returns historical data + 24h schedule for charting"""
-    session = SessionLocal()
-    try:
-        now = datetime.utcnow()
-        history_start = now - timedelta(hours=12)
-        
-        def get_readings(param_id):
-            pid = session.query(Parameter).filter_by(parameter_id=param_id).first()
-            if not pid: 
-                print(f"DEBUG: Param {param_id} not found")
-                return []
-            readings = (session.query(ParameterReading)
-                .filter(ParameterReading.parameter_id == pid.id)
-                .filter(ParameterReading.timestamp >= history_start)
-                .order_by(ParameterReading.timestamp).all())
-            print(f"DEBUG: Param {param_id} (ID {pid.id}) -> Found {len(readings)} readings")
-            return [{'x': r.timestamp.isoformat() + 'Z', 'y': r.value} for r in readings]
-
-        # 1. History
-        hist_indoor = get_readings('HA_TEMP_DOWNSTAIRS')
-        if not hist_indoor: hist_indoor = get_readings('40033')
-        
-        hist_dexter = get_readings('HA_TEMP_DEXTER')
-        hist_outdoor = get_readings('40004')
-        hist_gm = get_readings('40941')
-        hist_bank = get_readings('VP_GM_BANK')
-        
-        # 2. Plan
-        schedule = session.query(PlannedHeatingSchedule).filter(
-            PlannedHeatingSchedule.timestamp >= now
-        ).order_by(PlannedHeatingSchedule.timestamp).all()
-        
-        # Format Plan Data
-        plan_indoor = [{'x': s.timestamp.isoformat() + 'Z', 'y': s.simulated_indoor_temp} for s in schedule]
-        plan_dexter = [{'x': s.timestamp.isoformat() + 'Z', 'y': s.simulated_dexter_temp} for s in schedule]
-        plan_outdoor = [{'x': s.timestamp.isoformat() + 'Z', 'y': s.outdoor_temp} for s in schedule]
-        plan_price = [{'x': s.timestamp.isoformat() + 'Z', 'y': s.electricity_price} for s in schedule]
-        
-        plan_action = []
-        for s in schedule:
-            val = 0
-            if s.planned_action in ['RUN', 'MUST_RUN']: val = 10
-            plan_action.append({'x': s.timestamp.isoformat() + 'Z', 'y': val})
-
-        table_data = []
-        for s in schedule:
-            table_data.append({
-                'timestamp': s.timestamp.isoformat() + 'Z',
-                'action': s.planned_action,
-                'hw_mode': s.planned_hot_water_mode,
-                'price': s.electricity_price,
-                'indoor_sim': s.simulated_indoor_temp,
-                'dexter_sim': s.simulated_dexter_temp,
-                'outdoor': s.outdoor_temp
-            })
-
-        return jsonify({
-            'history': {
-                'indoor': hist_indoor,
-                'dexter': hist_dexter,
-                'outdoor': hist_outdoor,
-                'gm': hist_gm,
-                'bank': hist_bank
-            },
-            'plan': {
-                'indoor': plan_indoor,
-                'dexter': plan_dexter,
-                'outdoor': plan_outdoor,
-                'price': plan_price,
-                'action': plan_action
-            },
-            'table': table_data
-        })
-    finally:
-        session.close()
+    return render_template('dashboard_v7.html')
 
 @app.route('/api/changes')
 def get_changes():
@@ -393,71 +147,117 @@ def get_changes():
     finally:
         session.close()
 
-@app.route('/api/ai-agent/history')
-def get_ai_history():
-    session = SessionLocal()
-    try:
-        logs = session.query(AIDecisionLog).order_by(AIDecisionLog.timestamp.desc()).limit(10).all()
-        return jsonify([{
-            'timestamp': l.timestamp.isoformat() + 'Z',
-            'action': l.action,
-            'reasoning': l.reasoning
-        } for l in logs])
-    finally:
-        session.close()
+@app.route('/performance')
+def performance():
+    return render_template('performance.html')
 
-@app.route('/api/analytics/data')
-def get_analytics_data():
+@app.route('/api/performance')
+def get_performance():
     session = SessionLocal()
     try:
-        hours = request.args.get('hours', default=24, type=int)
-        start_time = datetime.utcnow() - timedelta(hours=hours)
-        
-        def get_series(param_id):
-            param = session.query(Parameter).filter_by(parameter_id=param_id).first()
-            if not param: return []
-            
-            readings = (session.query(ParameterReading)
-                .filter(ParameterReading.parameter_id == param.id)
-                .filter(ParameterReading.timestamp >= start_time)
-                .order_by(ParameterReading.timestamp).all())
-            return [{'x': r.timestamp.isoformat() + 'Z', 'y': r.value} for r in readings]
+        # --- Daily comfort stats (BT50 = parameter 40033) ---
+        daily_rows = session.execute(text("""
+            SELECT
+              DATE(r.timestamp) as day,
+              COUNT(*) as total,
+              SUM(CASE WHEN r.value BETWEEN 20.5 AND 22.0 THEN 1 ELSE 0 END) as in_comfort,
+              ROUND(SUM(CASE WHEN r.value < 20.5 THEN (20.5 - r.value) ELSE 0 END), 2) as cold_debt,
+              ROUND(AVG(r.value), 2) as avg_temp,
+              ROUND(MIN(r.value), 1) as min_temp,
+              ROUND(MAX(r.value), 1) as max_temp
+            FROM parameter_readings r
+            JOIN parameters p ON r.parameter_id = p.id
+            WHERE p.parameter_id = '40033'
+              AND r.timestamp > datetime('now', '-14 days')
+            GROUP BY day
+            ORDER BY day DESC
+        """)).fetchall()
+
+        # --- Daily compressor on-time (41778 > 5 Hz = running) ---
+        comp_rows = session.execute(text("""
+            SELECT
+              DATE(r.timestamp) as day,
+              ROUND(100.0 * SUM(CASE WHEN r.value > 5 THEN 1 ELSE 0 END) / COUNT(*), 1) as on_pct,
+              ROUND(AVG(CASE WHEN r.value > 5 THEN r.value ELSE NULL END), 1) as avg_hz
+            FROM parameter_readings r
+            JOIN parameters p ON r.parameter_id = p.id
+            WHERE p.parameter_id = '41778'
+              AND r.timestamp > datetime('now', '-14 days')
+            GROUP BY day
+            ORDER BY day DESC
+        """)).fetchall()
+        comp_map = {r[0]: {'on_pct': r[1], 'avg_hz': r[2]} for r in comp_rows}
+
+        # --- Daily price stats (from plan — only non-fallback prices) ---
+        price_rows = session.execute(text("""
+            SELECT
+              DATE(timestamp) as day,
+              ROUND(AVG(electricity_price), 3) as avg_price,
+              ROUND(MIN(electricity_price), 3) as min_price,
+              ROUND(MAX(electricity_price), 3) as max_price
+            FROM planned_heating_schedule
+            WHERE electricity_price != 1.0
+              AND timestamp > datetime('now', '-14 days')
+            GROUP BY day
+            ORDER BY day DESC
+        """)).fetchall()
+        price_map = {r[0]: {'avg': r[1], 'min': r[2], 'max': r[3]} for r in price_rows}
+
+        # --- Today's hourly prices from plan ---
+        today_prices = session.execute(text("""
+            SELECT
+              strftime('%H', timestamp) as hour,
+              ROUND(electricity_price, 3) as price,
+              planned_action,
+              planned_offset
+            FROM planned_heating_schedule
+            WHERE DATE(timestamp) = DATE('now')
+            ORDER BY hour
+        """)).fetchall()
+
+        # Assemble daily array
+        daily = []
+        for row in daily_rows:
+            day = row[0]
+            total = row[1] or 1
+            comfort_pct = round(100.0 * (row[2] or 0) / total, 1)
+            cold_debt = row[3] or 0.0
+            c = comp_map.get(day, {})
+            p = price_map.get(day, {})
+            daily.append({
+                'date': day,
+                'comfort_pct': comfort_pct,
+                'cold_debt': cold_debt,
+                'avg_temp': row[4],
+                'min_temp': row[5],
+                'max_temp': row[6],
+                'compressor_on_pct': c.get('on_pct'),
+                'avg_hz': c.get('avg_hz'),
+                'avg_price': p.get('avg'),
+            })
+
+        # Summary (last 7 full days)
+        recent = daily[:7]
+        summary = {}
+        if recent:
+            summary['comfort_7d_pct'] = round(sum(d['comfort_pct'] for d in recent) / len(recent), 1)
+            summary['cold_debt_7d'] = round(sum(d['cold_debt'] for d in recent), 1)
+            summary['compressor_on_pct'] = round(sum(d['compressor_on_pct'] or 0 for d in recent) / len(recent), 1)
+            prices_with_data = [d['avg_price'] for d in recent if d['avg_price']]
+            summary['avg_price'] = round(sum(prices_with_data) / len(prices_with_data), 3) if prices_with_data else None
+            summary['price_available'] = bool(prices_with_data)
 
         return jsonify({
-            'indoor': get_series('40033'),
-            'outdoor': get_series('40004'),
-            'gm': get_series('40941'),
-            'bank': get_series('VP_GM_BANK'),
-            'supply': get_series('40008'),
-            'return': get_series('40012')
+            'summary': summary,
+            'daily': daily,
+            'hourly_today': [
+                {'hour': int(r[0]), 'price': r[1], 'action': r[2], 'offset': r[3]}
+                for r in today_prices
+            ]
         })
     finally:
         session.close()
 
-@app.route('/api/settings/update', methods=['POST'])
-def update_settings():
-    data = request.json
-    session = SessionLocal()
-    try:
-        device = session.query(Device).first()
-        if device:
-            if 'min_indoor_temp' in data:
-                device.min_indoor_temp_user_setting = float(data['min_indoor_temp'])
-            if 'target_indoor_temp_min' in data:
-                device.target_indoor_temp_min = float(data['target_indoor_temp_min'])
-            if 'target_indoor_temp_max' in data:
-                device.target_indoor_temp_max = float(data['target_indoor_temp_max'])
-            if 'away_mode' in data:
-                device.away_mode_enabled = bool(data['away_mode'])
-            
-            session.commit()
-            return jsonify({'success': True})
-        return jsonify({'success': False, 'error': 'No device found'}), 404
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        session.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
-
