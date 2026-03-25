@@ -134,16 +134,20 @@ class DataLogger:
             supply = get_latest('40008')
             hw_top = get_latest('40013')
             comp_freq = get_latest('41778')
-            
-            mode = 0.0 # Off/Idle
+            defrost_active = get_latest('43066')
+
+            mode = 0.0  # Off/Idle
             str_mode = "Idle"
 
-            if comp_freq and comp_freq > 5:
+            if defrost_active and defrost_active > 0:
+                mode = 3.0  # Defrost
+                str_mode = "Defrost"
+            elif comp_freq and comp_freq > 5:
                 if supply and hw_top and supply > (hw_top + 1.0) and supply > 42.0:
-                    mode = 2.0 # Hot Water
+                    mode = 2.0  # Hot Water
                     str_mode = "Hot Water"
                 else:
-                    mode = 1.0 # Space Heating
+                    mode = 1.0  # Space Heating
                     str_mode = "Heating"
             
             param = self.session.query(Parameter).filter_by(parameter_id='VP_SYSTEM_MODE').first()

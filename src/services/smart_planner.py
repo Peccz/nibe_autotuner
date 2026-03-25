@@ -103,7 +103,8 @@ def calculate_plan():
         
         # Action Logic
         action = "RUN"
-        if offsets[i] <= -3: action = "REST"
+        if offsets[i] <= settings.OPTIMIZER_REST_THRESHOLD:
+            action = "REST"
         
         plan_rows.append((
             future_time,

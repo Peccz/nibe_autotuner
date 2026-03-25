@@ -115,18 +115,46 @@ class Settings(BaseSettings):
     # ============================================================================
     # SmartPlanner Settings (Tuning)
     # ============================================================================
-    
-    K_GM_PER_DELTA_T_PER_H: float = 0.30 
+
+    K_GM_PER_DELTA_T_PER_H: float = 0.30
     """GM lost per degree-hour difference. Numerically calibrated."""
 
     COMPRESSOR_HEAT_OUTPUT_C_PER_H: float = 0.18
     """Degrees Celsius gain per hour when compressor is running. Numerically calibrated."""
 
-    GM_PRODUCTION_PER_HOUR_RUNNING: float = 60.0 
+    GM_PRODUCTION_PER_HOUR_RUNNING: float = 60.0
     """GM produced per hour when compressor is running."""
 
     OUTDOOR_TEMP_OFFSET_C: float = -0.5
     """Correction for sensor deviation. Add to forecast to match pump sensor. (e.g. -0.5)"""
+
+    # ============================================================================
+    # Optimizer V13.0 Constants (Tuning)
+    # ============================================================================
+
+    OPTIMIZER_K_LEAK: float = 0.002
+    """House heat loss factor per °C delta per hour. Increase if house cools faster than predicted."""
+
+    OPTIMIZER_K_GAIN: float = 0.15
+    """Indoor temp gain per unit of offset per hour. Calibrated to heating curve response."""
+
+    OPTIMIZER_MIN_OFFSET: float = -3.0
+    """Minimum heating curve offset. Negative values enable active load-shedding (REST periods)."""
+
+    OPTIMIZER_MAX_OFFSET: float = 5.0
+    """Maximum heating curve offset. Hard limit from Nibe hardware."""
+
+    OPTIMIZER_REST_THRESHOLD: float = -2.5
+    """Offset value at or below which the planned action is classified as REST."""
+
+    OPTIMIZER_TARGET_TEMP: float = 21.0
+    """Target indoor temperature. Pass 2 reduces offsets while keeping temp at or above this."""
+
+    OPTIMIZER_MIN_TEMP: float = 20.5
+    """Comfort floor. Pass 1 raises offsets to ensure temp never drops below this."""
+
+    OPTIMIZER_HOURLY_LOSS_FACTORS: str = "1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,4.0,4.0,4.0,4.0,1.0,1.0,1.0,1.0,1.0"
+    """Per-hour K_LEAK multipliers (comma-separated, 24 values). Hours 15-18 have 4x loss due to occupancy/activity."""
 
     # ============================================================================
     # Feature Flags

@@ -132,9 +132,10 @@ class GMController:
             logger.info("⏸️ Bank Paused: Pump is Defrosting.")
         else:
             diff_temp = cur_supply - target_supply
-            # TURBO MODE
+            # TURBO MODE: Linear ramp 1.0x at deficit=2°C → 3.0x at deficit=8°C
             multiplier = 1.0
-            if diff_temp < -5.0: multiplier = 3.0
+            if diff_temp < -2.0:
+                multiplier = 1.0 + min(2.0, (abs(diff_temp) - 2.0) / 3.0)
             delta_gm = diff_temp * dt_min * multiplier
         
         # 4. Update Bank Balance
