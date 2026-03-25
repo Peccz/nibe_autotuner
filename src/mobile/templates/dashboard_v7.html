@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% set active_page = 'dashboard' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    
+    <!-- ROW 1: THE MECHANICS (Bank & Flow) -->
+    <div class="card bg-dark text-white border-secondary mb-3 shadow-sm">
+        <div class="card-header border-secondary py-1 d-flex justify-content-between">
+            <small class="text-uppercase text-muted">Energibalans (GM)</small>
+            <span class="badge bg-secondary" id="val-prio">--</span>
+        </div>
+        <div class="card-body py-2">
+            <div class="row text-center align-items-center">
+                <div class="col-4">
+                    <small class="text-muted d-block">Börvärde</small>
+                    <span class="fs-4 text-info" id="val-target-supply">--</span>
+                </div>
+                <div class="col-4 border-start border-end border-secondary">
+                    <small class="text-muted d-block">Bank (Skuld)</small>
+                    <h2 class="mb-0 fw-bold" id="val-bank">--</h2>
+                    <small class="d-block" id="val-rate">Rate: --</small>
+                </div>
+                <div class="col-4">
+                    <small class="text-muted d-block">Ärvärde</small>
+                    <span class="fs-4 text-warning" id="val-supply">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ROW 2: THE CLIMATE -->
+    <div class="row g-2 mb-3">
+        <div class="col-6">
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-body p-2 text-center">
+                    <small class="text-muted">Inne (°C)</small>
+                    <div class="display-4 fw-bold text-primary" id="val-indoor">--</div>
+                    <small class="text-success">Mål: <span id="val-target">--</span></small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-body p-2 text-center">
+                    <small class="text-muted">Offset (Gas)</small>
+                    <div class="display-4 fw-bold" id="val-offset">--</div>
+                    <small class="text-muted" id="val-outdoor">Ute: --</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ROW 3: THE STRATEGY CHART -->
+    <div class="card bg-dark text-white border-secondary" style="height: 400px;">
+        <div class="card-body p-2">
+            <canvas id="strategyChart"></canvas>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<script>
+    let chart = null;
+
+    async function update() {
+        try {
+            const res = await fetch('/api/v7/dashboard');
+            const data = await res.json();
+            const s = data.status;
+            
+            // Values
+            document.getElementById('val-bank').innerText = s.gm_bank;
+            document.getElementById('val-bank').className = "mb-0 fw-bold " + (s.gm_bank < -500 ? "text-danger" : "text-white");
+            
+            document.getElementById('val-rate').innerText = (s.gm_rate > 0 ? "+" : "") + s.gm_rate + " GM/min";
+            document.getElementById('val-rate').className = "d-block small " + (s.gm_rate > 0 ? "text-success" : "text-warning");
+
+            document.getElementById('val-target-supply').innerText = s.target_supply + "°";
+            document.getElementById('val-supply').innerText = s.supply + "°";
+            
+            document.getElementById('val-indoor').innerText = s.control_temp;
+            document.getElementById('val-target').innerText = s.target_temp;
+            document.getElementById('val-prio').innerText = s.priority;
+            
+            document.getElementById('val-offset').innerText = (s.offset > 0 ? "+" : "") + s.offset;
+            document.getElementById('val-offset').className = "display-4 fw-bold " + (s.offset > 0 ? "text-success" : "text-secondary");
+            
+            document.getElementById('val-outdoor').innerText = "Ute: " + s.outdoor + "°";
+
+            // Chart
+            renderChart(data.chart);
+
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function renderChart(c) {
+        const ctx = document.getElementById('strategyChart').getContext('2d');
+        if (chart) {
+            chart.data.datasets[0].data = c.hist_indoor; // Nere
+            chart.data.datasets[1].data = c.hist_dexter; // Dexter
+            chart.data.datasets[2].data = c.future_indoor; // Prediction
+            chart.data.datasets[3].data = c.future_offset; // Plan
+            chart.update();
+            return;
+        }
+
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Nere (Historik)',
+                        data: c.hist_indoor,
+                        borderColor: '#3b82f6',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.2
+                    },
+                    {
+                        label: 'Dexter (Historik)',
+                        data: c.hist_dexter,
+                        borderColor: '#06b6d4',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.2
+                    },
+                    {
+                        label: 'Prognos (Nere)',
+                        data: c.future_indoor,
+                        borderColor: '#3b82f6',
+                        borderWidth: 2,
+                        borderDash: [5, 5], // Dotted line
+                        pointRadius: 0,
+                        tension: 0.2
+                    },
+                    {
+                        label: 'Offset Plan',
+                        data: c.future_offset,
+                        type: 'bar',
+                        backgroundColor: 'rgba(34, 197, 94, 0.3)',
+                        yAxisID: 'yOffset',
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { type: 'time', time: { unit: 'hour', displayFormats:{hour:'HH:mm'} }, grid: { color: '#333' } },
+                    y: { position: 'left', min: 17, max: 24, grid: { color: '#333' } },
+                    yOffset: { position: 'right', min: -5, max: 10, grid: { display: false } }
+                },
+                plugins: { legend: { labels: { color: '#fff' } } }
+            }
+        });
+    }
+
+    update();
+    setInterval(update, 30000);
+</script>
+{% endblock %}
