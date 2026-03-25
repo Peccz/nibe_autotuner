@@ -11,13 +11,17 @@ from integrations.auth import MyUplinkAuth
 from integrations.api_client import MyUplinkClient
 from services.home_assistant_service import HomeAssistantService
 from services.weather_service import SMHIWeatherService
+from services.cop_model import COPModel
 from core.config import settings
 from data.models import (
     System,
     Device,
     Parameter,
-    ParameterReading
+    ParameterReading,
+    PlannedHeatingSchedule,
+    PredictionAccuracy,
 )
+from data.performance_model import DailyPerformance
 from data.database import init_db, get_session
 
 
@@ -33,6 +37,7 @@ class DataLogger:
         self.client = MyUplinkClient(self.auth)
         self.ha_service = HomeAssistantService()
         self.weather_service = SMHIWeatherService()
+        self._last_aggregation_date = None
 
     def _refresh_session(self):
         """Refresh the database session to prevent stale connections."""
@@ -273,6 +278,17 @@ class DataLogger:
             except Exception as e:
                 logger.error(f"Unexpected error logging weather readings: {e}")
                 self.session.rollback()
+
+            # Validate optimizer predictions (compare planned vs actual temps)
+            self._validate_predictions()
+
+            # Aggregate yesterday's performance once per day
+            today = datetime.utcnow().date()
+            if self._last_aggregation_date != today:
+                yesterday = today - timedelta(days=1)
+                self._aggregate_daily_performance(yesterday)
+                self._last_aggregation_date = today
+
             return total_readings
         except (ConnectionError, TimeoutError) as e:
             logger.warning(f"API connection error, will retry next cycle: {e}")
@@ -282,6 +298,175 @@ class DataLogger:
             logger.error(f"Error logging readings: {e}")
             self.session.rollback()
             return 0
+
+    def _validate_predictions(self):
+        """Compare planned temps from completed hours against actual measurements."""
+        try:
+            now = datetime.utcnow()
+            # Check plan rows that are 1–8h old (enough time for actual readings to exist)
+            window_start = now - timedelta(hours=8)
+            window_end = now - timedelta(hours=1)
+
+            plans = self.session.query(PlannedHeatingSchedule).filter(
+                PlannedHeatingSchedule.timestamp >= window_start,
+                PlannedHeatingSchedule.timestamp <= window_end,
+                PlannedHeatingSchedule.simulated_indoor_temp.isnot(None)
+            ).all()
+
+            if not plans:
+                return
+
+            # Get the best indoor sensor (HA first, BT50 fallback)
+            indoor_param = None
+            for pid in ('HA_TEMP_DOWNSTAIRS', '40033'):
+                p = self.session.query(Parameter).filter_by(parameter_id=pid).first()
+                if p:
+                    indoor_param = p
+                    break
+
+            if not indoor_param:
+                return
+
+            validated = 0
+            for plan in plans:
+                # Skip if already validated
+                exists = self.session.query(PredictionAccuracy).filter_by(
+                    forecast_hour=plan.timestamp
+                ).first()
+                if exists:
+                    continue
+
+                # Find actual reading closest to plan.timestamp (±30 min)
+                nearby = self.session.query(ParameterReading).filter(
+                    ParameterReading.parameter_id == indoor_param.id,
+                    ParameterReading.timestamp >= plan.timestamp - timedelta(minutes=30),
+                    ParameterReading.timestamp <= plan.timestamp + timedelta(minutes=30)
+                ).all()
+
+                if not nearby:
+                    continue
+
+                closest = min(nearby, key=lambda r: abs((r.timestamp - plan.timestamp).total_seconds()))
+                error = closest.value - plan.simulated_indoor_temp
+
+                acc = PredictionAccuracy(
+                    forecast_hour=plan.timestamp,
+                    predicted_indoor=plan.simulated_indoor_temp,
+                    actual_indoor=closest.value,
+                    error_c=round(error, 3),
+                    planned_offset=plan.planned_offset,
+                    outdoor_temp=plan.outdoor_temp
+                )
+                self.session.add(acc)
+                validated += 1
+
+            if validated > 0:
+                self.session.commit()
+                logger.info(f"✓ Validated {validated} prediction(s)")
+        except Exception as e:
+            logger.error(f"Prediction validation failed: {e}")
+            self.session.rollback()
+
+    def _aggregate_daily_performance(self, date):
+        """Calculate and store performance metrics for a completed day."""
+        try:
+            from datetime import date as date_type
+            day_start = datetime.combine(date, datetime.min.time())
+            day_end = day_start + timedelta(days=1)
+
+            # Check if already done
+            existing = self.session.query(DailyPerformance).filter(
+                DailyPerformance.date == day_start
+            ).first()
+            if existing:
+                return
+
+            device = self.session.query(Device).first()
+            if not device:
+                return
+
+            def get_day_readings(pid_str):
+                p = self.session.query(Parameter).filter_by(parameter_id=pid_str).first()
+                if not p:
+                    return []
+                return self.session.query(ParameterReading).filter(
+                    ParameterReading.parameter_id == p.id,
+                    ParameterReading.device_id == device.id,
+                    ParameterReading.timestamp >= day_start,
+                    ParameterReading.timestamp < day_end
+                ).all()
+
+            # Indoor temp — HA sensor preferred
+            indoor_readings = get_day_readings('HA_TEMP_DOWNSTAIRS') or get_day_readings('40033')
+            if not indoor_readings:
+                logger.info(f"No indoor readings for {date}, skipping daily aggregation")
+                return
+
+            indoor_vals = [r.value for r in indoor_readings]
+            avg_indoor = round(sum(indoor_vals) / len(indoor_vals), 2)
+            min_indoor = round(min(indoor_vals), 2)
+            max_indoor = round(max(indoor_vals), 2)
+
+            # Outdoor temp
+            outdoor_vals = [r.value for r in get_day_readings('40004')]
+            avg_outdoor = round(sum(outdoor_vals) / len(outdoor_vals), 2) if outdoor_vals else None
+
+            # COP estimate (supply + return + outdoor)
+            avg_cop = None
+            supply_vals = [r.value for r in get_day_readings('40008')]
+            return_vals = [r.value for r in get_day_readings('40012')]
+            if supply_vals and return_vals and outdoor_vals:
+                avg_supply = sum(supply_vals) / len(supply_vals)
+                avg_return = sum(return_vals) / len(return_vals)
+                avg_water = (avg_supply + avg_return) / 2.0
+                avg_outdoor_f = sum(outdoor_vals) / len(outdoor_vals)
+                cop = COPModel._interpolate_cop(avg_outdoor_f, avg_water)
+                if cop:
+                    avg_cop = round(cop, 2)
+
+            # Compressor runtime and estimated cost
+            comp_readings = get_day_readings('41778')
+            actual_kwh = None
+            actual_cost_sek = None
+            if comp_readings:
+                AVG_POWER_KW = 1.5
+                INTERVAL_H = 5.0 / 60.0  # 5-minute readings → hours
+                on_readings = [r for r in comp_readings if r.value > 5]
+                actual_kwh = round(len(on_readings) * INTERVAL_H * AVG_POWER_KW, 2)
+
+                # Match each on-hour to electricity price from plan
+                cost = 0.0
+                priced = 0
+                for r in on_readings:
+                    plan_row = self.session.query(PlannedHeatingSchedule).filter(
+                        PlannedHeatingSchedule.timestamp <= r.timestamp,
+                        PlannedHeatingSchedule.timestamp > r.timestamp - timedelta(hours=1),
+                        PlannedHeatingSchedule.electricity_price != 1.0
+                    ).order_by(PlannedHeatingSchedule.timestamp.desc()).first()
+                    if plan_row:
+                        cost += plan_row.electricity_price * INTERVAL_H * AVG_POWER_KW
+                        priced += 1
+                if priced > 0:
+                    actual_cost_sek = round(cost, 2)
+
+            dp = DailyPerformance(
+                date=day_start,
+                avg_indoor_temp=avg_indoor,
+                min_indoor_temp=min_indoor,
+                max_indoor_temp=max_indoor,
+                target_temp=settings.OPTIMIZER_TARGET_TEMP,
+                avg_outdoor_temp=avg_outdoor,
+                avg_cop=avg_cop,
+                actual_kwh=actual_kwh,
+                actual_cost_sek=actual_cost_sek
+            )
+            self.session.add(dp)
+            self.session.commit()
+            logger.info(f"✓ Daily performance aggregated for {date}: "
+                        f"indoor={avg_indoor}°C, COP={avg_cop}, cost≈{actual_cost_sek} SEK")
+        except Exception as e:
+            logger.error(f"Daily performance aggregation failed for {date}: {e}")
+            self.session.rollback()
 
     def run_continuous(self, interval_seconds=300):
         logger.info(f"Starting continuous data logging (interval: {interval_seconds}s)")

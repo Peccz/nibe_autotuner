@@ -84,10 +84,11 @@ def init_db(database_url: str = settings.DATABASE_URL):
 
     # Import all models to ensure they're registered with Base
     from data.models import (
-        System, Device, Parameter, ParameterReading, ParameterChange, 
-        ABTestResult, Recommendation, RecommendationResult, PlannedTest, 
-        AIDecisionLog, LearningEvent, HotWaterUsage, GMAccount, 
-        PlannedHeatingSchedule, AIDecision, ABTest, SystemTuning
+        System, Device, Parameter, ParameterReading, ParameterChange,
+        ABTestResult, Recommendation, RecommendationResult, PlannedTest,
+        AIDecisionLog, LearningEvent, HotWaterUsage, GMAccount,
+        PlannedHeatingSchedule, AIDecision, ABTest, SystemTuning,
+        GMTransaction, PredictionAccuracy
     )
     from data.performance_model import DailyPerformance
     from data.evaluation_model import AIEvaluation

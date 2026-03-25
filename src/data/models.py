@@ -280,3 +280,35 @@ class HotWaterUsage(Base):
     weekday = Column(Integer)
     hour = Column(Integer)
 
+
+class GMTransaction(Base):
+    """Audit trail of every GM bank balance change — one row per controller tick."""
+    __tablename__ = 'gm_transactions'
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    old_balance = Column(Float, nullable=False)
+    delta_gm = Column(Float, nullable=False)
+    new_balance = Column(Float, nullable=False)
+    system_mode = Column(Float)       # 0=idle, 1=heating, 2=hw, 3=defrost
+    supply_actual = Column(Float)
+    supply_target = Column(Float)
+    supply_delta = Column(Float)      # supply_actual - supply_target
+    indoor_temp = Column(Float)
+    outdoor_temp = Column(Float)
+    action = Column(String(20))
+    gm_written = Column(Integer)      # Value written to pump (None if write skipped)
+    safety_override = Column(String(50))  # e.g. 'BASTU_VAKT' if triggered
+
+
+class PredictionAccuracy(Base):
+    """Tracks how accurate the optimizer's temperature forecasts were."""
+    __tablename__ = 'prediction_accuracy'
+    id = Column(Integer, primary_key=True)
+    forecast_hour = Column(DateTime, nullable=False, unique=True, index=True)
+    predicted_indoor = Column(Float)  # Simulated temp from smart_planner
+    actual_indoor = Column(Float)     # Measured temp closest to that hour
+    error_c = Column(Float)           # actual - predicted (positive = warmer than expected)
+    planned_offset = Column(Float)
+    outdoor_temp = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+

@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath('src'))
 from sqlalchemy import desc
 
 from data.database import SessionLocal
-from data.models import GMAccount, Device, PlannedHeatingSchedule, Parameter, ParameterReading
+from data.models import GMAccount, Device, PlannedHeatingSchedule, Parameter, ParameterReading, GMTransaction
 from services.analyzer import HeatPumpAnalyzer
 from services.safety_guard import SafetyGuard
 from integrations.api_client import MyUplinkClient
@@ -124,31 +124,36 @@ class GMController:
         if dt_min < 0 or dt_min > 10: dt_min = 1.0 # Safety
         
         # THE TRANSACTION
+        supply_delta = None
         if system_mode == 2.0: # HOT WATER
             delta_gm = 0.0 # Pause bank during HW production
             logger.info("⏸️ Bank Paused: Pump is doing Hot Water.")
         elif system_mode == 3.0: # DEFROST
-            delta_gm = 0.0 
+            delta_gm = 0.0
             logger.info("⏸️ Bank Paused: Pump is Defrosting.")
         else:
             diff_temp = cur_supply - target_supply
+            supply_delta = diff_temp
             # TURBO MODE: Linear ramp 1.0x at deficit=2°C → 3.0x at deficit=8°C
             multiplier = 1.0
             if diff_temp < -2.0:
                 multiplier = 1.0 + min(2.0, (abs(diff_temp) - 2.0) / 3.0)
             delta_gm = diff_temp * dt_min * multiplier
-        
+
         # 4. Update Bank Balance
+        old_balance = account.balance
         if cur_indoor < 22.0 or delta_gm > 0:
             account.balance += delta_gm
-        
+
         account.balance = max(self.MIN_BALANCE, min(self.MAX_BALANCE, account.balance))
-        
+
         # 5. SAFETY OVERRIDES
+        safety_override = None
         if cur_indoor > 23.5:
             logger.warning(f"🚨 BASTU-VAKT: {cur_indoor}C. Resetting bank.")
             account.balance = 100.0
             action = "MUST_REST"
+            safety_override = "BASTU_VAKT"
 
         # 6. Exekvering
         if action in ['MUST_REST', 'REST']:
@@ -164,6 +169,7 @@ class GMController:
                 gm_to_write = min(gm_to_write, self.PUMP_START_THRESHOLD - 10)
 
         # 7. Write to Pump (The Leash Logic)
+        gm_actually_written = None
         try:
             # We write to the pump if:
             # 1. We haven't written before (startup)
@@ -211,6 +217,7 @@ class GMController:
                 # Verify write was acknowledged by API
                 if response:
                     self.last_written_gm = gm_to_write
+                    gm_actually_written = gm_to_write
                     logger.info(f"✓ GM Write Verified: {gm_to_write} (Reason: Strayed={strayed}, Changed={target_changed}, Rest={force_rest})")
                     logger.info(f"  -> Stats: Target Supply: {target_supply:.1f}C, Actual: {cur_supply:.1f}C, Bank: {account.balance:.1f}")
                 else:
@@ -219,6 +226,27 @@ class GMController:
         except Exception as e:
             logger.error(f"✗ GM Write failed: {e}")
             # Don't update last_written_gm - will retry on next tick
+
+        # 8. Log transaction for audit trail
+        try:
+            tx = GMTransaction(
+                timestamp=now.replace(tzinfo=None),
+                old_balance=old_balance,
+                delta_gm=delta_gm,
+                new_balance=account.balance,
+                system_mode=system_mode,
+                supply_actual=cur_supply,
+                supply_target=target_supply,
+                supply_delta=supply_delta,
+                indoor_temp=cur_indoor,
+                outdoor_temp=cur_outdoor,
+                action=action,
+                gm_written=gm_actually_written,
+                safety_override=safety_override
+            )
+            self.db.add(tx)
+        except Exception as e:
+            logger.warning(f"Failed to log GM transaction: {e}")
 
         self.last_tick_time = now
         self.db.add(account)
