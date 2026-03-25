@@ -30,6 +30,7 @@ pytest-asyncio>=0.21.0
 
 # Utilities
 loguru>=0.7.0
+sdnotify>=0.3.2
 pyyaml>=6.0
 matplotlib>=3.8.0
 

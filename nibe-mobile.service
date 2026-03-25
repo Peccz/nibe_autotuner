@@ -13,6 +13,8 @@ ExecStart=/home/peccz/AI/nibe_autotuner/venv/bin/python src/mobile/mobile_app.py
 
 Restart=always
 RestartSec=10
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

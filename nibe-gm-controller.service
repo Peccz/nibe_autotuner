@@ -4,12 +4,16 @@ After=network.target
 
 [Service]
 Type=simple
+NotifyAccess=main
 User=peccz
 WorkingDirectory=/home/peccz/AI/nibe_autotuner
 ExecStart=/home/peccz/AI/nibe_autotuner/venv/bin/python src/services/gm_controller.py
 Restart=always
 RestartSec=10
+WatchdogSec=120
 Environment=PYTHONPATH=/home/peccz/AI/nibe_autotuner/src
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

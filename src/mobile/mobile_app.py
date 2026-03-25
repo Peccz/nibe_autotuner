@@ -155,13 +155,18 @@ def performance():
 def get_performance():
     session = SessionLocal()
     try:
+        # Load per-device comfort thresholds
+        device = session.query(Device).first()
+        comfort_min = float(device.target_indoor_temp_min) if device and device.target_indoor_temp_min else 20.5
+        comfort_max = float(device.target_indoor_temp_max) if device and device.target_indoor_temp_max else 22.0
+
         # --- Daily comfort stats (HA_TEMP_DOWNSTAIRS preferred, BT50 fallback) ---
         daily_rows = session.execute(text("""
             SELECT
               DATE(r.timestamp) as day,
               COUNT(*) as total,
-              SUM(CASE WHEN r.value BETWEEN 20.5 AND 22.0 THEN 1 ELSE 0 END) as in_comfort,
-              ROUND(SUM(CASE WHEN r.value < 20.5 THEN (20.5 - r.value) ELSE 0 END), 2) as cold_debt,
+              SUM(CASE WHEN r.value BETWEEN :cmin AND :cmax THEN 1 ELSE 0 END) as in_comfort,
+              ROUND(SUM(CASE WHEN r.value < :cmin THEN (:cmin - r.value) ELSE 0 END), 2) as cold_debt,
               ROUND(AVG(r.value), 2) as avg_temp,
               ROUND(MIN(r.value), 1) as min_temp,
               ROUND(MAX(r.value), 1) as max_temp
@@ -175,7 +180,7 @@ def get_performance():
               AND r.timestamp > datetime('now', '-14 days')
             GROUP BY day
             ORDER BY day DESC
-        """)).fetchall()
+        """), {'cmin': comfort_min, 'cmax': comfort_max}).fetchall()
 
         # --- Daily compressor on-time (41778 > 5 Hz = running) ---
         comp_rows = session.execute(text("""

@@ -268,6 +268,14 @@ class GMController:
 
     def run_loop(self):
         logger.info("GM Controller V10.1 (HW Awareness) started.")
+        try:
+            import sdnotify
+            _notifier = sdnotify.SystemdNotifier()
+            _notifier.notify("READY=1")
+            _watchdog = True
+        except ImportError:
+            _watchdog = False
+
         while True:
             try:
                 self._refresh_session_if_needed()
@@ -278,6 +286,8 @@ class GMController:
                     self.db.rollback()
                 except Exception:
                     pass
+            if _watchdog:
+                _notifier.notify("WATCHDOG=1")
             time.sleep(60)
 
 if __name__ == "__main__":

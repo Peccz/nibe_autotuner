@@ -2,7 +2,7 @@
 Data Logger - Continuously fetch and store heat pump data
 """
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from loguru import logger
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc
@@ -20,6 +20,7 @@ from data.models import (
     ParameterReading,
     PlannedHeatingSchedule,
     PredictionAccuracy,
+    HotWaterUsage,
 )
 from data.performance_model import DailyPerformance
 from data.database import init_db, get_session
@@ -157,6 +158,12 @@ class DataLogger:
             
             param = self.session.query(Parameter).filter_by(parameter_id='VP_SYSTEM_MODE').first()
             if param:
+                # Determine previous mode before writing new reading
+                prev_reading = self.session.query(ParameterReading).filter_by(
+                    parameter_id=param.id, device_id=device.id
+                ).order_by(desc(ParameterReading.timestamp)).first()
+                prev_mode = prev_reading.value if prev_reading else 0.0
+
                 reading = ParameterReading(
                     device_id=device.id,
                     parameter_id=param.id,
@@ -165,6 +172,32 @@ class DataLogger:
                     str_value=str_mode
                 )
                 self.session.add(reading)
+
+                # --- Hot Water usage tracking ---
+                now = datetime.utcnow()
+                if mode == 2.0 and prev_mode != 2.0:
+                    # HW just started — open a new session
+                    hw_event = HotWaterUsage(
+                        start_time=now,
+                        start_temp=hw_top,
+                        weekday=now.weekday(),
+                        hour=now.hour
+                    )
+                    self.session.add(hw_event)
+                    logger.info(f"🚿 Hot Water started (top={hw_top}°C)")
+                elif mode != 2.0 and prev_mode == 2.0:
+                    # HW just ended — close the open session
+                    open_hw = self.session.query(HotWaterUsage).filter(
+                        HotWaterUsage.end_time.is_(None)
+                    ).order_by(desc(HotWaterUsage.start_time)).first()
+                    if open_hw:
+                        open_hw.end_time = now
+                        open_hw.end_temp = hw_top
+                        open_hw.temp_drop = round((open_hw.start_temp or 0) - (hw_top or 0), 2)
+                        duration = (now - open_hw.start_time).total_seconds() / 60
+                        open_hw.duration_minutes = int(duration)
+                        logger.info(f"🚿 Hot Water ended ({open_hw.duration_minutes} min, drop={open_hw.temp_drop}°C)")
+
                 self.session.commit()
                 logger.info(f"🔍 System Investigation: Pump is in {str_mode} mode")
         except Exception as e:
@@ -385,6 +418,8 @@ class DataLogger:
             if not device:
                 return
 
+            target_temp = float(device.target_indoor_temp_min) if device.target_indoor_temp_min else settings.OPTIMIZER_TARGET_TEMP
+
             def get_day_readings(pid_str):
                 p = self.session.query(Parameter).filter_by(parameter_id=pid_str).first()
                 if not p:
@@ -454,7 +489,7 @@ class DataLogger:
                 avg_indoor_temp=avg_indoor,
                 min_indoor_temp=min_indoor,
                 max_indoor_temp=max_indoor,
-                target_temp=settings.OPTIMIZER_TARGET_TEMP,
+                target_temp=target_temp,
                 avg_outdoor_temp=avg_outdoor,
                 avg_cop=avg_cop,
                 actual_kwh=actual_kwh,
