@@ -66,6 +66,21 @@ class GMController:
                 pass
             self._open_session()
             self.last_session_refresh = datetime.now(timezone.utc)
+            self._cleanup_old_transactions()
+
+    def _cleanup_old_transactions(self):
+        """Keep only 90 days of GM transaction history."""
+        try:
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).replace(tzinfo=None)
+            deleted = self.db.query(GMTransaction).filter(
+                GMTransaction.timestamp < cutoff
+            ).delete(synchronize_session=False)
+            if deleted:
+                self.db.commit()
+                logger.info(f"Pruned {deleted} old GM transactions (>90 days)")
+        except Exception as e:
+            logger.warning(f"Transaction cleanup failed: {e}")
+            self.db.rollback()
 
     def _get_account(self):
         account = self.db.query(GMAccount).first()
@@ -142,8 +157,7 @@ class GMController:
 
         # 4. Update Bank Balance
         old_balance = account.balance
-        if cur_indoor < 22.0 or delta_gm > 0:
-            account.balance += delta_gm
+        account.balance += delta_gm
 
         account.balance = max(self.MIN_BALANCE, min(self.MAX_BALANCE, account.balance))
 

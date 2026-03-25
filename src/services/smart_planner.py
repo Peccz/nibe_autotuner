@@ -26,32 +26,60 @@ def get_db_connection():
     return sqlite3.connect(db_path)
 
 def calculate_plan():
-    logger.info("Starting V12.0 Optimizer...")
+    logger.info("Starting V13.0 Optimizer...")
     conn = get_db_connection()
     weather_service = SMHIWeatherService()
-    
+
+    # 0. Load device settings (comfort temps + away mode)
+    device_row = conn.execute("""
+        SELECT away_mode_enabled, away_mode_end_date,
+               target_indoor_temp_min, target_indoor_temp_max,
+               min_indoor_temp_user_setting
+        FROM devices LIMIT 1
+    """).fetchone()
+
+    away_mode = False
+    opt_min_temp = settings.OPTIMIZER_MIN_TEMP
+    opt_target_temp = settings.OPTIMIZER_TARGET_TEMP
+
+    if device_row:
+        away_enabled = bool(device_row[0])
+        away_end_str = device_row[1]
+        away_end = datetime.fromisoformat(away_end_str) if away_end_str else None
+
+        if away_enabled and (away_end is None or away_end > datetime.now(timezone.utc).replace(tzinfo=None)):
+            away_mode = True
+            opt_min_temp = 16.0
+            opt_target_temp = 17.0
+            logger.info("BORTA-LÄGE aktivt — optimerar för 16–17°C")
+        else:
+            # Use per-device comfort settings if configured
+            if device_row[2]:
+                opt_min_temp = float(device_row[2])
+            if device_row[3]:
+                opt_target_temp = float(device_row[3])
+
     # 1. Get Current Status (Start Point)
     query = """
-    SELECT p.parameter_id, r.value 
-    FROM parameter_readings r 
-    JOIN parameters p ON r.parameter_id = p.id 
+    SELECT p.parameter_id, r.value
+    FROM parameter_readings r
+    JOIN parameters p ON r.parameter_id = p.id
     WHERE r.timestamp > datetime('now', '-1 hour')
     AND p.parameter_id IN ('HA_TEMP_DOWNSTAIRS', 'HA_TEMP_DEXTER', '40004')
     ORDER BY r.timestamp DESC
     """
     df = pd.read_sql_query(query, conn)
-    
+
     dexter = df[df['parameter_id']=='HA_TEMP_DEXTER']['value'].iloc[0] if not df[df['parameter_id']=='HA_TEMP_DEXTER'].empty else None
     downstairs = df[df['parameter_id']=='HA_TEMP_DOWNSTAIRS']['value'].iloc[0] if not df[df['parameter_id']=='HA_TEMP_DOWNSTAIRS'].empty else None
-    
+
     # Priority Logic (Safety)
-    target = 21.5
-    min_dexter = 20.5
-    
-    start_temp = 21.0 # Default
-    
+    min_dexter = opt_min_temp - 0.5  # Dexter's floor is 0.5°C below main floor
+
+    start_temp = opt_target_temp  # Default fallback
+
     if downstairs is None:
-        start_temp = dexter if dexter is not None else target
+        start_temp = dexter if dexter is not None else opt_target_temp
     else:
         start_temp = downstairs
         if dexter is not None and dexter < min_dexter:
@@ -92,7 +120,8 @@ def calculate_plan():
         outdoor_list.append(w_obj.temperature if w_obj else -5.0)
 
     # 3. Run Optimization
-    offsets = optimize_24h_plan(start_temp, outdoor_list, price_list)
+    offsets = optimize_24h_plan(start_temp, outdoor_list, price_list,
+                                min_temp=opt_min_temp, target_temp=opt_target_temp)
     
     # 4. Save Plan
     plan_rows = []

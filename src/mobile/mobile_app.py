@@ -155,7 +155,7 @@ def performance():
 def get_performance():
     session = SessionLocal()
     try:
-        # --- Daily comfort stats (BT50 = parameter 40033) ---
+        # --- Daily comfort stats (HA_TEMP_DOWNSTAIRS preferred, BT50 fallback) ---
         daily_rows = session.execute(text("""
             SELECT
               DATE(r.timestamp) as day,
@@ -167,7 +167,11 @@ def get_performance():
               ROUND(MAX(r.value), 1) as max_temp
             FROM parameter_readings r
             JOIN parameters p ON r.parameter_id = p.id
-            WHERE p.parameter_id = '40033'
+            WHERE p.parameter_id = (
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM parameters WHERE parameter_id = 'HA_TEMP_DOWNSTAIRS'
+                ) THEN 'HA_TEMP_DOWNSTAIRS' ELSE '40033' END
+            )
               AND r.timestamp > datetime('now', '-14 days')
             GROUP BY day
             ORDER BY day DESC
@@ -236,6 +240,20 @@ def get_performance():
                 'avg_price': p.get('avg'),
             })
 
+        # --- Prediction accuracy (last 14 days) ---
+        accuracy_rows = session.execute(text("""
+            SELECT
+              DATE(forecast_hour) as day,
+              ROUND(AVG(ABS(error_c)), 3) as mae,
+              ROUND(AVG(error_c), 3) as bias,
+              COUNT(*) as n
+            FROM prediction_accuracy
+            WHERE forecast_hour > datetime('now', '-14 days')
+            GROUP BY day
+            ORDER BY day DESC
+        """)).fetchall()
+        accuracy = [{'date': r[0], 'mae': r[1], 'bias': r[2], 'n': r[3]} for r in accuracy_rows]
+
         # Summary (last 7 full days)
         recent = daily[:7]
         summary = {}
@@ -247,9 +265,16 @@ def get_performance():
             summary['avg_price'] = round(sum(prices_with_data) / len(prices_with_data), 3) if prices_with_data else None
             summary['price_available'] = bool(prices_with_data)
 
+        # MAE summary for KPI card
+        recent_acc = accuracy[:7]
+        if recent_acc:
+            summary['model_mae_7d'] = round(sum(a['mae'] for a in recent_acc if a['mae']) / len(recent_acc), 3)
+            summary['model_bias_7d'] = round(sum(a['bias'] for a in recent_acc if a['bias']) / len(recent_acc), 3)
+
         return jsonify({
             'summary': summary,
             'daily': daily,
+            'accuracy': accuracy,
             'hourly_today': [
                 {'hour': int(r[0]), 'price': r[1], 'action': r[2], 'offset': r[3]}
                 for r in today_prices

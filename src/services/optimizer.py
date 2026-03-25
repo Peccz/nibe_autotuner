@@ -62,20 +62,26 @@ def predict_temperatures(
 def optimize_24h_plan(
     current_temp: float,
     outdoor_temps: List[float],
-    prices: List[float]
+    prices: List[float],
+    min_temp: Optional[float] = None,
+    target_temp: Optional[float] = None,
 ) -> List[float]:
     """
     V13.0 Two-pass optimizer.
 
     Pass 1: Raise offsets (greedy, cheapest+best-COP first) until temp >= MIN_TEMP everywhere.
     Pass 2: Reduce offsets at expensive hours while keeping temp >= TARGET_TEMP everywhere.
+
+    min_temp / target_temp override config defaults (used for away mode).
     """
     hours = min(len(outdoor_temps), len(prices))
     loss_factors = _get_hourly_loss_factors(hours)
     offsets = [0.0] * hours
 
-    min_temp = settings.OPTIMIZER_MIN_TEMP
-    target_temp = settings.OPTIMIZER_TARGET_TEMP
+    if min_temp is None:
+        min_temp = settings.OPTIMIZER_MIN_TEMP
+    if target_temp is None:
+        target_temp = settings.OPTIMIZER_TARGET_TEMP
     max_offset = settings.OPTIMIZER_MAX_OFFSET
     min_offset = settings.OPTIMIZER_MIN_OFFSET
     k_leak = settings.OPTIMIZER_K_LEAK

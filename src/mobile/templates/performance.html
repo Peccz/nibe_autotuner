@@ -4,9 +4,9 @@
 {% block content %}
 <div class="container-fluid mt-3">
 
-    <!-- KPI Cards -->
+    <!-- KPI Cards (4 columns on wide, 2x2 on narrow) -->
     <div class="row g-2 mb-3">
-        <div class="col-4">
+        <div class="col-6">
             <div class="card bg-dark text-white border-secondary h-100">
                 <div class="card-body p-2 text-center">
                     <small class="text-muted d-block" style="font-size:0.7rem">KOMFORT 7d</small>
@@ -15,7 +15,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-4">
+        <div class="col-6">
             <div class="card bg-dark text-white border-secondary h-100">
                 <div class="card-body p-2 text-center">
                     <small class="text-muted d-block" style="font-size:0.7rem">KYLSKULD 7d</small>
@@ -24,12 +24,21 @@
                 </div>
             </div>
         </div>
-        <div class="col-4">
+        <div class="col-6">
             <div class="card bg-dark text-white border-secondary h-100">
                 <div class="card-body p-2 text-center">
                     <small class="text-muted d-block" style="font-size:0.7rem">KOMPRESSOR</small>
                     <div class="fs-3 fw-bold text-info" id="kpi-comp">--</div>
                     <small class="text-muted">% drifttid</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-body p-2 text-center">
+                    <small class="text-muted d-block" style="font-size:0.7rem">MODELL MAE 7d</small>
+                    <div class="fs-3 fw-bold" id="kpi-mae">--</div>
+                    <small class="text-muted" id="kpi-bias">°C fel</small>
                 </div>
             </div>
         </div>
@@ -54,6 +63,17 @@
         </div>
         <div class="card-body p-2" style="height: 180px;">
             <canvas id="priceChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Prediction Accuracy Chart -->
+    <div class="card bg-dark text-white border-secondary mb-3" id="accuracy-card">
+        <div class="card-header border-secondary py-1 d-flex justify-content-between align-items-center">
+            <small class="text-uppercase text-muted">Modellnoggrannhet (MAE °C)</small>
+            <small class="text-muted" id="accuracy-subtitle">Prediktion vs utfall</small>
+        </div>
+        <div class="card-body p-2" style="height: 150px;">
+            <canvas id="accuracyChart"></canvas>
         </div>
     </div>
 
@@ -87,6 +107,7 @@
 <script>
 let comfortChart = null;
 let priceChart = null;
+let accuracyChart = null;
 
 async function load() {
     const res = await fetch('/api/performance');
@@ -101,12 +122,30 @@ async function load() {
     document.getElementById('kpi-cold').innerText = s.cold_debt_7d ?? '--';
     document.getElementById('kpi-comp').innerText = (s.compressor_on_pct ?? '--') + (s.compressor_on_pct != null ? '%' : '');
 
+    // MAE KPI
+    const maeEl = document.getElementById('kpi-mae');
+    const mae = s.model_mae_7d;
+    if (mae != null) {
+        maeEl.innerText = mae.toFixed(2) + '°C';
+        maeEl.className = 'fs-3 fw-bold ' + (mae < 0.3 ? 'text-success' : mae < 0.6 ? 'text-warning' : 'text-danger');
+        const bias = s.model_bias_7d;
+        document.getElementById('kpi-bias').innerText = bias != null
+            ? (bias >= 0 ? '+' : '') + bias.toFixed(2) + '°C bias'
+            : '°C fel';
+    } else {
+        maeEl.innerText = '--';
+        document.getElementById('kpi-bias').innerText = 'samlar data...';
+    }
+
     // Comfort trend chart (oldest first for chart)
     const daily = [...d.daily].reverse();
     renderComfortChart(daily);
 
     // Price chart
     renderPriceChart(d.hourly_today);
+
+    // Accuracy chart (oldest first)
+    renderAccuracyChart([...(d.accuracy || [])].reverse());
 
     // Daily table
     renderTable(d.daily);
@@ -225,6 +264,67 @@ function renderPriceChart(hourly) {
                 tooltip: {
                     callbacks: {
                         label: ctx => `${ctx.parsed.y.toFixed(3)} SEK/kWh (${hourly[ctx.dataIndex].action})`
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderAccuracyChart(accuracy) {
+    const ctx = document.getElementById('accuracyChart').getContext('2d');
+    if (accuracyChart) { accuracyChart.destroy(); }
+
+    if (!accuracy || accuracy.length === 0) {
+        document.getElementById('accuracy-card').style.display = 'none';
+        return;
+    }
+
+    const labels = accuracy.map(a => a.date.slice(5));
+    const maes = accuracy.map(a => a.mae);
+    const biases = accuracy.map(a => a.bias);
+
+    accuracyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'MAE °C',
+                    data: maes,
+                    backgroundColor: maes.map(v => v < 0.3 ? 'rgba(34,197,94,0.6)' : v < 0.6 ? 'rgba(234,179,8,0.6)' : 'rgba(239,68,68,0.6)'),
+                    yAxisID: 'y',
+                    order: 2
+                },
+                {
+                    label: 'Bias °C',
+                    data: biases,
+                    type: 'line',
+                    borderColor: '#a78bfa',
+                    borderWidth: 1.5,
+                    pointRadius: 2,
+                    tension: 0.3,
+                    yAxisID: 'y',
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { ticks: { color: '#9ca3af', maxTicksLimit: 7, font: { size: 10 } }, grid: { display: false } },
+                y: {
+                    min: -1.0, max: 1.5,
+                    ticks: { color: '#9ca3af', callback: v => v.toFixed(1) + '°', font: { size: 10 } },
+                    grid: { color: '#333' }
+                }
+            },
+            plugins: {
+                legend: { labels: { color: '#d1d5db', boxWidth: 10, font: { size: 10 } } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(3) + '°C' : '--')
                     }
                 }
             }
