@@ -23,6 +23,7 @@ Detta är det **primära referensdokumentet** för all utveckling. Läs det inna
 ## Teknikstack
 
 - **Datainsamling:** Python 3.11+, SQLAlchemy, myUplink REST API
+- **Väderdata:** Open-Meteo (gratis, ingen nyckel) — ersatte SMHI pmp3g som 404:ar
 - **Optimering:** Python, deterministisk två-pass-algoritm (V13.0)
 - **Kontroll:** Python, Degree Minutes-bank (GM-kontroller)
 - **Databas:** SQLite (`data/nibe_autotuner.db`), WAL-mode
@@ -216,7 +217,15 @@ Alla konfigurerbara via `.env`:
 | `OPTIMIZER_REST_THRESHOLD` | −2.5 | Offset ≤ detta → action = REST |
 | `OPTIMIZER_HOURLY_LOSS_FACTORS` | 1.0×…4.0×… | Per-timme K_LEAK-multiplikatorer (kl 15–18: 4×) |
 
-**Kalibrering:** Övervaka `prediction_accuracy`. Positiv `bias` → sänk `K_GAIN`. Negativ `bias` → sänk `K_LEAK`.
+**Kalibrering:** Övervaka `prediction_accuracy`. Positiv `bias` → sänk `K_GAIN_FLOOR`/`K_GAIN_RADIATOR`. Negativ `bias` → sänk `K_LEAK`.
+
+### Tvåzonsmodell (V14.0)
+
+Huset har tre termiska zoner som behandlas som två i modellen:
+- **Golvvärmezon** (bottenplan): Shuntreglerad till ~40°C, trög respons. K_GAIN_FLOOR=0.10
+- **Radiatorzon** (Dexters rum mellanvåning + övervåning): Direkt radiatorer. K_GAIN_RADIATOR=0.15, med RAD_BOOST_FACTOR=0.012 extra gain/°C ovan SHUNT_SETPOINT=40°C
+
+**Empiriskt:** Dexter är 0.9–1.5°C kallare än nedervåning vid kallt väder. Gapet är störst vid framledning=40°C (shunten fullt öppen), minskar vid >45°C när överskottsvärme driver radiatorerna.
 
 ---
 
@@ -294,3 +303,5 @@ Free tier: 15 anrop/min. data_logger: ~1 anrop/5 min. gm_controller: ~2 anrop/mi
 | 2026-04-01 | Komfortintervall läses nu från devices-tabellen (ej hårdkodat 20.5/22.0) |
 | 2026-04-01 | Smart planner automatiserad: nibe-smart-planner.service + .timer (varje timme) |
 | 2026-04-01 | architecture.md komplettering: deploy-flöde, API-endpoints, hjälptjänster, smart_planner-schema |
+| 2026-04-01 | V14.0: Tvåzonsmodell (golvvärme + radiatorer), Open-Meteo ersätter SMHI (404), DB-fallback för utomhustemp |
+| 2026-04-01 | Dexter-skydd symmetriskt: varmt (>22°C) och kallt (<20°C) justerar starttemp åt rätt håll |

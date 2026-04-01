@@ -62,12 +62,36 @@ class Settings(BaseSettings):
     # ============================================================================
     # House Physics (Multi-zone & Shunt)
     # ============================================================================
-    
-    SHUNT_LIMIT_C: float = 32.0
-    """Max temperature the downstairs floor heating shunt allows into the floor."""
 
     DEFAULT_HEATING_CURVE: float = 7.0
     """The base heating curve set in the Nibe pump."""
+
+    SHUNT_LIMIT_C: float = 32.0
+    """Max temperature the downstairs floor heating shunt allows into the floor."""
+
+    # Two-zone model: ground floor (floor heating) vs upper floors (radiators)
+    # Empirically derived from parameter_readings 2026-01 to 2026-04 (cold weather, outdoor < 15°C)
+    SHUNT_SETPOINT: float = 40.0
+    """Supply temp (°C) above which the shunt starts limiting floor flow → excess heats radiators.
+    Empirical: Dexter-Downstairs delta is worst at supply=40°C, improves above 45°C."""
+
+    K_GAIN_FLOOR: float = 0.10
+    """Indoor temp gain (°C/h) per offset unit for the floor heating zone.
+    Lower than overall because the shunt buffers the floor circuit."""
+
+    K_GAIN_RADIATOR: float = 0.15
+    """Indoor temp gain (°C/h) per offset unit for the radiator zone (baseline, below shunt).
+    Boosted by RAD_BOOST_FACTOR when supply exceeds SHUNT_SETPOINT."""
+
+    K_LEAK_RADIATOR: float = 0.003
+    """Heat loss factor for radiator zone. Slightly higher than floor (less insulated upper floors)."""
+
+    RAD_BOOST_FACTOR: float = 0.012
+    """Extra radiator gain (°C/h) per °C of supply above SHUNT_SETPOINT.
+    At supply=50°C (10°C above shunt): +0.12°C/h per offset unit."""
+
+    DEXTER_MIN_TEMP: float = 20.0
+    """Minimum acceptable temperature in Dexter's room (radiator zone, middle floor)."""
 
     # ============================================================================
     # AI API Keys
