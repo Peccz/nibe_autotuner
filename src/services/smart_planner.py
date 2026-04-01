@@ -75,6 +75,7 @@ def calculate_plan():
 
     # Priority Logic (Safety)
     min_dexter = opt_min_temp - 0.5  # Dexter's floor is 0.5°C below main floor
+    max_dexter = opt_target_temp      # Dexter's ceiling = same as main max (e.g. 22°C)
 
     start_temp = opt_target_temp  # Default fallback
 
@@ -83,10 +84,17 @@ def calculate_plan():
     else:
         start_temp = downstairs
         if dexter is not None and dexter < min_dexter:
+            # Too cold in Dexter's room → raise effective start temp (heat more)
             dexter_equiv = dexter + 1.5
             if dexter_equiv < start_temp:
                 start_temp = dexter_equiv
                 logger.info(f"Using Dexter (Equiv {dexter_equiv:.2f}C) as start temp.")
+        elif dexter is not None and dexter > max_dexter:
+            # Too warm in Dexter's room → raise effective start temp (heat less)
+            dexter_equiv = dexter - 1.5
+            if dexter_equiv > start_temp:
+                start_temp = dexter_equiv
+                logger.info(f"Dexter for varm ({dexter:.2f}C > {max_dexter:.2f}C). Equiv {dexter_equiv:.2f}C som starttemp.")
 
     # 2. Get Data for Next 24h
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
