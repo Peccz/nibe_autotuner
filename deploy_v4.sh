@@ -56,10 +56,19 @@ ssh $REMOTE_USER@$REMOTE_HOST << EOF
     # python src/data/migrate_db.py
 EOF
 
-# 4. Restart Services
+# 4. Install smart_planner systemd units (sed replaces dev path with RPi path)
+echo ""
+echo "▶ [3b] Installing smart_planner systemd units..."
+ssh $REMOTE_USER@$REMOTE_HOST "
+    sed 's|/home/peccz/AI/nibe_autotuner|$REMOTE_DIR|g' $REMOTE_DIR/nibe-smart-planner.service | sudo tee /etc/systemd/system/nibe-smart-planner.service > /dev/null
+    sudo cp $REMOTE_DIR/nibe-smart-planner.timer /etc/systemd/system/nibe-smart-planner.timer
+    sudo systemctl daemon-reload
+"
+
+# 5. Restart Services
 echo ""
 echo "▶ [4/4] Restarting Services..."
-ssh $REMOTE_USER@$REMOTE_HOST "sudo systemctl restart nibe-autotuner nibe-api nibe-gm-controller"
+ssh $REMOTE_USER@$REMOTE_HOST "sudo systemctl restart nibe-autotuner nibe-api nibe-gm-controller && sudo systemctl enable --now nibe-smart-planner.timer && sudo systemctl start nibe-smart-planner.service"
 
 echo ""
 echo "════════════════════════════════════════════════════════════════"

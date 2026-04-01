@@ -1,0 +1,11 @@
+[Unit]
+Description=Kör Nibe Smart Planner varje timme
+Requires=nibe-smart-planner.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

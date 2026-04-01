@@ -29,7 +29,7 @@ Detta är det **primära referensdokumentet** för all utveckling. Läs det inna
 - **Backend API:** FastAPI + Uvicorn — port **8000**
 - **Dashboard:** Flask (PWA) — port **5001**
 - **Deploy:** rsync → Raspberry Pi 4 (100.100.118.62 via Tailscale)
-- **Schemaläggning:** systemd services (`Restart=always`) + smart_planner triggas manuellt/cron
+- **Schemaläggning:** systemd services (`Restart=always`) + smart_planner via systemd timer (varje timme)
 
 ---
 
@@ -70,11 +70,27 @@ Detta är det **primära referensdokumentet** för all utveckling. Läs det inna
 ├── nibe-gm-controller.service  # systemd: gm_controller (1 min), watchdog 120s
 ├── nibe-api.service            # systemd: FastAPI
 ├── nibe-mobile.service         # systemd: Flask PWA
-├── deploy_v4.sh                # Commit + rsync + restart på RPi
+├── nibe-smart-planner.service  # systemd: smart_planner (oneshot, körs av timer)
+├── nibe-smart-planner.timer    # systemd: triggar smart_planner varje timme
+├── deploy_v4.sh                # Commit + rsync + restart på RPi (se nedan)
 ├── requirements.txt
 └── data/
     └── nibe_autotuner.db       # SQLite-databas (på RPi)
 ```
+
+---
+
+## Deploy-flöde (`deploy_v4.sh`)
+
+1. `git add . && git commit` (valfritt meddelande, default: "Deploy: Auto-update DATUM")
+2. `git push origin main`
+3. `rsync` till RPi `100.100.118.62:/home/peccz/nibe_autotuner/` (exkluderar `venv/`, `__pycache__/`, `data/nibe_autotuner.db`, `.git/`)
+4. SSH: `pip install -r requirements.txt --quiet`
+5. SSH: `sudo systemctl restart nibe-autotuner nibe-api nibe-gm-controller`
+6. SSH: `sudo systemctl enable --now nibe-smart-planner.timer && sudo systemctl start nibe-smart-planner.service`
+
+**OBS:** `nibe-mobile` startas **inte** om av deploy_v4.sh. Gör det manuellt vid behov.
+**OBS:** Service-filerna i repot refererar `/home/peccz/AI/nibe_autotuner` (dev-sökväg). `deploy_v4.sh` kör `sed` för att byta till `/home/peccz/nibe_autotuner` vid installation av `nibe-smart-planner.*` på RPi. Övriga service-filer är manuellt skapade på RPi med rätt sökvägar.
 
 ---
 
@@ -148,6 +164,40 @@ data_logger.py  →  daily_performance    (nattaggregering)
 | 43066 | Defrost Active | R | 1 = avfrostning aktiv |
 | 47007 | Värmekurva | W | Lutning (0–15), default 7.0 |
 | 47011 | Kurva Offset | W | Offset (−10 till +10), styrs via plan |
+
+---
+
+## API-endpoints (FastAPI, port 8000)
+
+| Endpoint | Metod | Router | Beskrivning |
+|----------|-------|--------|-------------|
+| `/` | GET | api_server | Versioninfo |
+| `/docs` | GET | FastAPI | Swagger UI |
+| `/dashboard` | GET | api_server | Servar dashboard HTML (FileResponse) |
+| `/api/status` | GET | dashboard_v5 | Aktuell systemstatus (temp, GM, plan) |
+| `/api/plan` | GET | dashboard_v5 | Aktuell 24h-plan |
+| `/api/metrics` | GET | metrics | Nyckeltal (COP, drifttid etc.) |
+| `/api/parameters` | GET | parameters | Lista alla parametrar |
+| `/api/parameters/{id}/history` | GET | parameters | Tidsseriedata för parameter |
+| `/api/settings` | GET | user_settings | Hämta enhetsinställningar |
+| `/api/settings` | POST | user_settings | Uppdatera inställningar |
+| `/api/settings/away-mode` | POST | user_settings | Sätt/avaktivera bortaläge |
+| `/api/ai-agent/run` | POST | ai_agent | Kör AI-agent manuellt |
+| `/api/ai-agent/decisions` | GET | ai_agent | Beslutlogg |
+| `/api/ventilation` | GET/POST | ventilation | Ventilationsstyrning |
+| `/api/visualizations/prediction-accuracy` | GET | visualizations | Prediktionsnoggrannhet som bild |
+
+---
+
+## Hjälptjänster
+
+| Tjänst | Fil | Beskrivning |
+|--------|-----|-------------|
+| `HeatPumpAnalyzer` | `services/analyzer.py` | Beräknar COP, drifttid, systemläge; get_latest_value() för parameter-queries |
+| `SafetyGuard` | `services/safety_guard.py` | Validerar GM-värden innan skrivning; kontrollerar gränser och tillstånd |
+| `COPModel` | `services/cop_model.py` | Bilinear interpolering av Nibe F730 COP (utetemperatur × tilloppstemperatur) |
+| `PriceService` | `services/price_service.py` | Hämtar spotpriser från elprisetjustnu.se (gratis, ingen nyckel) |
+| `WeatherService` | `services/weather_service.py` | Hämtar SMHI-prognos (temperatur, vind) |
 
 ---
 
@@ -242,3 +292,5 @@ Free tier: 15 anrop/min. data_logger: ~1 anrop/5 min. gm_controller: ~2 anrop/mi
 | 2026-04-01 | Bugfix: bank-frysning vid ≥22°C, BT50→HA_TEMP_DOWNSTAIRS, timezone i prisjämförelse, timedelta-import |
 | 2026-04-01 | Funktioner: bortaläge (komplett), prediction accuracy-visualisering, systemd watchdog (sdnotify) |
 | 2026-04-01 | Komfortintervall läses nu från devices-tabellen (ej hårdkodat 20.5/22.0) |
+| 2026-04-01 | Smart planner automatiserad: nibe-smart-planner.service + .timer (varje timme) |
+| 2026-04-01 | architecture.md komplettering: deploy-flöde, API-endpoints, hjälptjänster, smart_planner-schema |
