@@ -196,7 +196,10 @@ def calculate_plan():
 
     try:
         conn.execute("BEGIN EXCLUSIVE")
-        conn.execute("DELETE FROM planned_heating_schedule")
+        # Delete from now onwards (keeps past rows for prediction_accuracy validation)
+        conn.execute("DELETE FROM planned_heating_schedule WHERE timestamp >= datetime('now')")
+        # Prune rows older than 48h to prevent unbounded growth
+        conn.execute("DELETE FROM planned_heating_schedule WHERE timestamp < datetime('now', '-48 hours')")
         conn.executemany("""
             INSERT INTO planned_heating_schedule
             (timestamp, planned_action, planned_offset, electricity_price,
