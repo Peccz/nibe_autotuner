@@ -40,16 +40,19 @@ def predict_temperatures(
     outdoor_temps: List[float],
     offsets: List[float],
     loss_factors: Optional[List[float]] = None,
+    k_leak: Optional[float] = None,
+    k_gain: Optional[float] = None,
 ) -> List[float]:
     """
     Single-zone simulation (floor zone). Used for backwards compatibility
     and as the primary constraint in the optimizer.
+    k_leak / k_gain: override config defaults with calibrated values if provided.
     """
     if loss_factors is None:
         loss_factors = _get_hourly_loss_factors(len(offsets))
 
-    k_leak = settings.OPTIMIZER_K_LEAK
-    k_gain = settings.K_GAIN_FLOOR
+    k_leak = k_leak if k_leak is not None else settings.OPTIMIZER_K_LEAK
+    k_gain = k_gain if k_gain is not None else settings.K_GAIN_FLOOR
 
     temps = []
     current_temp = start_temp
@@ -75,6 +78,8 @@ def predict_temperatures_two_zone(
     outdoor_temps: List[float],
     offsets: List[float],
     loss_factors: Optional[List[float]] = None,
+    k_leak_floor: Optional[float] = None,
+    k_gain_floor: Optional[float] = None,
 ) -> Tuple[List[float], List[float]]:
     """
     Two-zone simulation: floor heating zone (downstairs) and radiator zone (Dexter/upstairs).
@@ -93,9 +98,9 @@ def predict_temperatures_two_zone(
     if loss_factors is None:
         loss_factors = _get_hourly_loss_factors(len(offsets))
 
-    k_leak_floor = settings.OPTIMIZER_K_LEAK
+    k_leak_floor = k_leak_floor if k_leak_floor is not None else settings.OPTIMIZER_K_LEAK
     k_leak_rad   = settings.K_LEAK_RADIATOR
-    k_gain_floor = settings.K_GAIN_FLOOR
+    k_gain_floor = k_gain_floor if k_gain_floor is not None else settings.K_GAIN_FLOOR
     k_gain_rad   = settings.K_GAIN_RADIATOR
     shunt        = settings.SHUNT_SETPOINT
     boost        = settings.RAD_BOOST_FACTOR
@@ -135,6 +140,9 @@ def optimize_24h_plan(
     current_radiator_temp: Optional[float] = None,
     min_radiator_temp: Optional[float] = None,
     target_radiator_temp: Optional[float] = None,
+    must_run_hours: Optional[set] = None,
+    k_leak: Optional[float] = None,
+    k_gain_floor: Optional[float] = None,
 ) -> List[float]:
     """
     V14.0 Two-zone two-pass optimizer.
@@ -169,14 +177,15 @@ def optimize_24h_plan(
     two_zone = current_radiator_temp is not None
 
     def _check_temps(offsets):
-        """Returns (floor_temps, rad_temps, binding_floor_idx, binding_rad_idx)."""
         if two_zone:
             f_temps, r_temps = predict_temperatures_two_zone(
-                current_temp, current_radiator_temp, outdoor_temps, offsets, loss_factors
+                current_temp, current_radiator_temp, outdoor_temps, offsets, loss_factors,
+                k_leak_floor=k_leak, k_gain_floor=k_gain_floor
             )
         else:
-            f_temps = predict_temperatures(current_temp, outdoor_temps, offsets, loss_factors)
-            r_temps = f_temps  # single-zone fallback
+            f_temps = predict_temperatures(current_temp, outdoor_temps, offsets, loss_factors,
+                                           k_leak=k_leak, k_gain=k_gain_floor)
+            r_temps = f_temps
         return f_temps, r_temps
 
     # --- PASS 1: Raise offsets to enforce comfort floors for both zones ---
@@ -242,6 +251,8 @@ def optimize_24h_plan(
         for h in price_order:
             if offsets[h] <= min_offset:
                 continue
+            if must_run_hours and h in must_run_hours:
+                continue  # Pre-heat / VV hour — never reduce offset here
 
             trial = offsets.copy()
             trial[h] -= 1.0
@@ -255,11 +266,13 @@ def optimize_24h_plan(
                 improved = True
                 break
 
+    f_final, r_final = _check_temps(offsets)
     logger.debug(
-        f"V14.0 Plan: min_floor={min(predict_temperatures(current_temp, outdoor_temps, offsets, loss_factors)):.1f}°C "
+        f"V14.0 Plan: min_floor={min(f_final):.1f}°C "
         f"min_offset={min(offsets):.1f}, max_offset={max(offsets):.1f}, "
         f"rest_hours={sum(1 for o in offsets if o <= settings.OPTIMIZER_REST_THRESHOLD)}"
-        + (f", two_zone=True min_rad={min(predict_temperatures_two_zone(current_temp, current_radiator_temp, outdoor_temps, offsets, loss_factors)[1]):.1f}°C" if two_zone else "")
+        + (f", two_zone=True min_rad={min(r_final):.1f}°C" if two_zone else "")
+        + (f", must_run={sorted(must_run_hours)}" if must_run_hours else "")
     )
 
     return offsets

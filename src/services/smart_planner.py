@@ -17,6 +17,50 @@ from services.weather_service import SMHIWeatherService
 from services.optimizer import optimize_24h_plan, predict_temperatures, predict_temperatures_two_zone
 
 
+def _load_calibration(conn):
+    """Return (k_leak, k_gain_floor) from latest calibration row, or config defaults."""
+    try:
+        row = conn.execute("""
+            SELECT k_leak, k_gain_floor FROM calibration_history
+            ORDER BY date DESC LIMIT 1
+        """).fetchone()
+        if row:
+            logger.info(f"Using calibrated constants: K_LEAK={row[0]:.5f}, K_GAIN_FLOOR={row[1]:.4f}")
+            return float(row[0]), float(row[1])
+    except Exception as e:
+        logger.warning(f"Could not load calibration: {e}")
+    return settings.OPTIMIZER_K_LEAK, settings.K_GAIN_FLOOR
+
+
+def _get_vv_must_run_hours(conn, now) -> set:
+    """Return set of hour indices (0–23 within next 24h) that should not be REST.
+    Index i = hour i from now. Includes confirmed VV hours and their pre-heat (i-1).
+    Requires >= 2 historical observations to count as a pattern."""
+    must_run = set()
+    try:
+        rows = conn.execute("""
+            SELECT hour, weekday, COUNT(*) as n
+            FROM hot_water_usage
+            WHERE end_time IS NOT NULL
+            GROUP BY hour, weekday
+            HAVING COUNT(*) >= 2
+        """).fetchall()
+        if not rows:
+            return must_run
+        pattern = {(r[0], r[1]) for r in rows}
+        for i in range(24):
+            future = now + timedelta(hours=i)
+            if (future.hour, future.weekday()) in pattern:
+                must_run.add(i)       # VV hour itself
+                if i > 0:
+                    must_run.add(i - 1)   # pre-heat hour before VV
+        if must_run:
+            logger.info(f"VV pre-heat: must_run_hours={sorted(must_run)}")
+    except Exception as e:
+        logger.warning(f"VV pattern query failed: {e}")
+    return must_run
+
+
 def get_db_connection():
     db_path = settings.DATABASE_URL.replace('sqlite:///', '')
     if not os.path.isabs(db_path):
@@ -161,7 +205,11 @@ def calculate_plan():
         else:
             outdoor_list.append(fallback_outdoor)
 
-    # 3. Run two-zone optimization
+    # 3. Load calibrated constants and VV patterns
+    cal_k_leak, cal_k_gain = _load_calibration(conn)
+    must_run = _get_vv_must_run_hours(conn, now) if not away_mode else set()
+
+    # 4. Run two-zone optimization
     offsets = optimize_24h_plan(
         current_temp          = start_floor,
         outdoor_temps         = outdoor_list,
@@ -171,14 +219,18 @@ def calculate_plan():
         current_radiator_temp = start_radiator if not away_mode else None,
         min_radiator_temp     = settings.DEXTER_MIN_TEMP if not away_mode else None,
         target_radiator_temp  = opt_radiator_temp if not away_mode else None,
+        must_run_hours        = must_run,
+        k_leak                = cal_k_leak,
+        k_gain_floor          = cal_k_gain,
     )
 
-    # 4. Simulate both zones for plan storage
+    # 5. Simulate both zones for plan storage (use same calibrated constants)
     floor_temps, rad_temps = predict_temperatures_two_zone(
-        start_floor, start_radiator, outdoor_list, offsets
+        start_floor, start_radiator, outdoor_list, offsets,
+        k_leak_floor=cal_k_leak, k_gain_floor=cal_k_gain,
     )
 
-    # 5. Save plan
+    # 6. Save plan
     plan_rows = []
     for i in range(24):
         future_time = now + timedelta(hours=i)

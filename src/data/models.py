@@ -313,3 +313,21 @@ class PredictionAccuracy(Base):
     outdoor_temp = Column(Float)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class CalibrationHistory(Base):
+    """Nightly log of calibrated thermal model constants (K_LEAK, K_GAIN_FLOOR).
+    smart_planner reads the most recent row and passes these to the optimizer,
+    overriding the .env defaults. Bounds enforced: K_LEAK ∈ [0.001, 0.010],
+    K_GAIN_FLOOR ∈ [0.05, 0.30]."""
+    __tablename__ = 'calibration_history'
+    id = Column(Integer, primary_key=True)
+    date = Column(DateTime, nullable=False, unique=True, index=True)
+    k_leak = Column(Float, nullable=False)
+    k_gain_floor = Column(Float, nullable=False)
+    n_rest = Column(Integer)     # Number of REST hours used in calibration
+    n_run = Column(Integer)      # Number of RUN hours used
+    bias_rest = Column(Float)    # Mean error_c during REST hours (positive = house warmer than predicted)
+    bias_run = Column(Float)     # Mean error_c during RUN hours
+    mae_before = Column(Float)   # MAE before this calibration step
+    created_at = Column(DateTime, default=datetime.utcnow)
+

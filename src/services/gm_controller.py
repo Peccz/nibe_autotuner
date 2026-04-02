@@ -128,9 +128,26 @@ class GMController:
             PlannedHeatingSchedule.timestamp <= now,
             PlannedHeatingSchedule.timestamp > now - timedelta(hours=1)
         ).order_by(PlannedHeatingSchedule.timestamp.desc()).first()
-        
+
         offset = plan.planned_offset if plan else 0.0
         action = plan.planned_action if plan else "RUN"
+
+        # Dexter cold override: if radiator zone < threshold during REST, force RUN
+        DEXTER_COLD_THRESHOLD = 19.0
+        try:
+            dexter_param = self.db.query(Parameter).filter_by(parameter_id='HA_TEMP_DEXTER').first()
+            if dexter_param:
+                dexter_reading = self.db.query(ParameterReading).filter(
+                    ParameterReading.parameter_id == dexter_param.id,
+                    ParameterReading.timestamp > now.replace(tzinfo=None) - timedelta(hours=1)
+                ).order_by(desc(ParameterReading.timestamp)).first()
+                if dexter_reading and dexter_reading.value < DEXTER_COLD_THRESHOLD and action == 'REST':
+                    logger.warning(
+                        f"⚠️ Dexter-skydd: {dexter_reading.value:.1f}°C < {DEXTER_COLD_THRESHOLD}°C — REST → RUN"
+                    )
+                    action = 'RUN'
+        except Exception as e:
+            logger.debug(f"Dexter cold check failed: {e}")
 
         # 3. Calculate Target & Delta
         target_supply = 20 + (20 - cur_outdoor) * settings.DEFAULT_HEATING_CURVE * 0.12 + offset

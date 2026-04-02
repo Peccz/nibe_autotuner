@@ -88,7 +88,7 @@ def init_db(database_url: str = settings.DATABASE_URL):
         ABTestResult, Recommendation, RecommendationResult, PlannedTest,
         AIDecisionLog, LearningEvent, HotWaterUsage, GMAccount,
         PlannedHeatingSchedule, AIDecision, ABTest, SystemTuning,
-        GMTransaction, PredictionAccuracy
+        GMTransaction, PredictionAccuracy, CalibrationHistory
     )
     from data.performance_model import DailyPerformance
     from data.evaluation_model import AIEvaluation

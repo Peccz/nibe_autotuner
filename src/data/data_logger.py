@@ -21,6 +21,7 @@ from data.models import (
     PlannedHeatingSchedule,
     PredictionAccuracy,
     HotWaterUsage,
+    CalibrationHistory,
 )
 from data.performance_model import DailyPerformance
 from data.database import init_db, get_session
@@ -499,8 +500,95 @@ class DataLogger:
             self.session.commit()
             logger.info(f"✓ Daily performance aggregated for {date}: "
                         f"indoor={avg_indoor}°C, COP={avg_cop}, cost≈{actual_cost_sek} SEK")
+
+            self._calibrate_thermal_model(day_start)
+
         except Exception as e:
             logger.error(f"Daily performance aggregation failed for {date}: {e}")
+            self.session.rollback()
+
+    def _calibrate_thermal_model(self, day_start: datetime):
+        """Nightly calibration of K_LEAK and K_GAIN_FLOOR from prediction_accuracy.
+
+        Uses last 7 days of clean samples (|error_c| < 1.5°C).
+        REST hours calibrate K_LEAK; RUN hours calibrate K_GAIN_FLOOR.
+        Updates are bounded and use EMA (alpha=0.3) to avoid overreacting to noise.
+        Results stored in calibration_history; smart_planner reads the latest row.
+        """
+        try:
+            # Already calibrated today?
+            existing = self.session.query(CalibrationHistory).filter(
+                CalibrationHistory.date == day_start
+            ).first()
+            if existing:
+                return
+
+            cutoff = day_start - timedelta(days=7)
+            rows = self.session.query(PredictionAccuracy).filter(
+                PredictionAccuracy.forecast_hour >= cutoff,
+                PredictionAccuracy.forecast_hour < day_start,
+            ).all()
+
+            # Filter outliers (airing, guests, solar spikes)
+            clean = [r for r in rows if r.error_c is not None and abs(r.error_c) < 1.5]
+            if len(clean) < 24:
+                logger.info(f"Calibration: only {len(clean)} clean samples (need 24), skipping")
+                return
+
+            # Get previous calibration as baseline (or config defaults)
+            prev = self.session.query(CalibrationHistory).order_by(
+                CalibrationHistory.date.desc()
+            ).first()
+            k_leak  = prev.k_leak       if prev else settings.OPTIMIZER_K_LEAK
+            k_gain  = prev.k_gain_floor if prev else settings.K_GAIN_FLOOR
+
+            mae_before = sum(abs(r.error_c) for r in clean) / len(clean)
+
+            # REST hours: calibrate K_LEAK
+            # positive bias_rest → house warmer than predicted → K_LEAK too high → reduce
+            rest = [r for r in clean if r.planned_offset is not None
+                    and r.planned_offset <= settings.OPTIMIZER_REST_THRESHOLD]
+            bias_rest = None
+            if len(rest) >= 8:
+                bias_rest = sum(r.error_c for r in rest) / len(rest)
+                if abs(bias_rest) > 0.1:
+                    factor = 0.95 if bias_rest > 0 else 1.05
+                    k_leak_target = k_leak * factor
+                    k_leak = 0.7 * k_leak + 0.3 * k_leak_target
+                    k_leak = max(0.001, min(0.010, k_leak))
+
+            # RUN hours: calibrate K_GAIN_FLOOR
+            # positive bias_run → house warms faster than predicted → K_GAIN too low → increase
+            run = [r for r in clean if r.planned_offset is not None
+                   and r.planned_offset > settings.OPTIMIZER_REST_THRESHOLD]
+            bias_run = None
+            if len(run) >= 8:
+                bias_run = sum(r.error_c for r in run) / len(run)
+                if abs(bias_run) > 0.1:
+                    factor = 1.05 if bias_run > 0 else 0.95
+                    k_gain_target = k_gain * factor
+                    k_gain = 0.7 * k_gain + 0.3 * k_gain_target
+                    k_gain = max(0.05, min(0.30, k_gain))
+
+            cal = CalibrationHistory(
+                date=day_start,
+                k_leak=round(k_leak, 6),
+                k_gain_floor=round(k_gain, 5),
+                n_rest=len(rest),
+                n_run=len(run),
+                bias_rest=round(bias_rest, 3) if bias_rest is not None else None,
+                bias_run=round(bias_run, 3) if bias_run is not None else None,
+                mae_before=round(mae_before, 3),
+            )
+            self.session.add(cal)
+            self.session.commit()
+            logger.info(
+                f"✓ Thermal calibration: K_LEAK={k_leak:.5f} (bias_rest={bias_rest}), "
+                f"K_GAIN_FLOOR={k_gain:.4f} (bias_run={bias_run}), "
+                f"MAE={mae_before:.2f}°C from {len(clean)} samples"
+            )
+        except Exception as e:
+            logger.error(f"Thermal calibration failed: {e}")
             self.session.rollback()
 
     def run_continuous(self, interval_seconds=300):
