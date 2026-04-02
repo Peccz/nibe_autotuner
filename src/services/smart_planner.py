@@ -66,7 +66,7 @@ def calculate_plan():
         away_end_str = device_row[1]
         away_end = datetime.fromisoformat(away_end_str) if away_end_str else None
 
-        if away_enabled and (away_end is None or away_end > datetime.now(timezone.utc).replace(tzinfo=None)):
+        if away_enabled and (away_end is None or away_end > datetime.now()):
             away_mode = True
             opt_min_temp    = 16.0
             opt_target_temp = 17.0

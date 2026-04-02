@@ -2,13 +2,13 @@ from typing import Optional, Tuple
 from loguru import logger
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from data.models import Device, ParameterReading
+from data.models import Device, Parameter, ParameterReading
 from api.schemas import AIDecisionSchema
 
 class SafetyGuard:
     def __init__(self, db_session: Session):
         self.db = db_session
-        self.INDOOR_TEMP_PARAM_ID = '13'
+        self.INDOOR_TEMP_PARAM_STRING_ID = '40033'  # BT50 Nibe indoor sensor
         self.ABSOLUTE_MIN_TEMP_HARD_LIMIT = 5.0 # Degrees C, to prevent pipes from freezing
 
     def validate_decision(self, decision: AIDecisionSchema, device_id: str) -> Tuple[bool, str, Optional[float]]:
@@ -31,16 +31,19 @@ class SafetyGuard:
             user_min_temp = self.ABSOLUTE_MIN_TEMP_HARD_LIMIT
 
         # 2. Hämta FAKTISK innetemperatur
-        # Vi letar efter '13' (sträng) eller 13 (int) beroende på hur DB sparar det
-        latest_reading = self.db.query(ParameterReading)\
-            .filter(ParameterReading.parameter_id == self.INDOOR_TEMP_PARAM_ID)\
-            .order_by(desc(ParameterReading.timestamp))\
-            .first()
+        # Look up the integer FK for BT50 (40033) first, then query readings.
+        param = self.db.query(Parameter).filter_by(parameter_id=self.INDOOR_TEMP_PARAM_STRING_ID).first()
+        latest_reading = None
+        if param:
+            latest_reading = self.db.query(ParameterReading)\
+                .filter(ParameterReading.parameter_id == param.id)\
+                .order_by(desc(ParameterReading.timestamp))\
+                .first()
 
         current_indoor_temp = latest_reading.value if latest_reading else None
-        
+
         if current_indoor_temp is None:
-            logger.warning(f"SafetyGuard: Could not read indoor temp (Param {self.INDOOR_TEMP_PARAM_ID})")
+            logger.warning(f"SafetyGuard: Could not read indoor temp (Param {self.INDOOR_TEMP_PARAM_STRING_ID})")
             # Om vi inte vet temp, blockera för säkerhets skull om det är en sänkning
             if decision.action == 'adjust' and decision.suggested_value < decision.current_value:
                 return False, "Unknown indoor temp - Safety block", None
