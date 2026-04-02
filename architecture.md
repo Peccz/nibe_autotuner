@@ -320,24 +320,13 @@ Om Dexter-sensorn tappar kontakt och `HA_TEMP_DEXTER` saknas i senaste timmes re
 
 ## To-do
 
-### Väntar på data (~3–4 veckors körning)
-
-- **K_LEAK/K_GAIN per-zon auto-kalibrering** — kräver `prediction_accuracy`-historik.
-  ```sql
-  SELECT AVG(error_c) as bias, AVG(ABS(error_c)) as mae FROM prediction_accuracy;
-  ```
-  Positiv bias Floor → sänk `K_GAIN_FLOOR`. Negativ → sänk `OPTIMIZER_K_LEAK`.
-  Positiv bias Radiator → sänk `K_GAIN_RADIATOR` eller `RAD_BOOST_FACTOR`.
-
-- **VV pre-heat i optimeraren** — kräver `hot_water_usage`-mönster.
-  ```sql
-  SELECT hour, weekday, AVG(duration_minutes), COUNT(*)
-  FROM hot_water_usage GROUP BY hour, weekday ORDER BY COUNT(*) DESC;
-  ```
+### Kvar att göra
 
 - **Solvinst-heuristik** — Dexters rum överhettas av sol på varma dagar (observerat +1.5°C relativt nedervåning vid outdoor > 20°C). En faktor baserad på tid+utomhustemperatur kan förebygga detta i planeringen.
 
 - **Övervåningsensor** — saknas helt. Utan den är radiatorzonens modell begränsad till Dexters rum. En tredje sensor (IKEA) skulle förbättra tvåzonsmodellen avsevärt.
+
+- **K_LEAK_RADIATOR / K_GAIN_RADIATOR kalibrering** — kräver prediction_accuracy per zon. `simulated_dexter_temp` finns i planned_heating_schedule men valideras inte än mot HA_TEMP_DEXTER i data_logger.
 
 ---
 
@@ -353,3 +342,10 @@ Om Dexter-sensorn tappar kontakt och `HA_TEMP_DEXTER` saknas i senaste timmes re
 | 2026-04-01 | Smart planner automatiserad: nibe-smart-planner.service + .timer (varje timme) |
 | 2026-04-01 | V14.0: Tvåzonsmodell (golvvärme + radiatorer), Open-Meteo ersätter SMHI (404), DB-fallback för utomhustemp |
 | 2026-04-01 | Dexter-skydd symmetriskt: varmt (>22°C) och kallt (<20°C) justerar starttemp åt rätt håll |
+| 2026-04-02 | Bugfix: SafetyGuard INDOOR_TEMP_PARAM_ID='13' (hårdkodat DB-rad-ID, nu korrekt uppslag via '40033') |
+| 2026-04-02 | Bugfix: away_mode datetime-jämförelse (timezone-naiv vs UTC) |
+| 2026-04-02 | Bugfix: planned_heating_schedule töms ej retroaktivt — prediction_accuracy kan nu fyllas |
+| 2026-04-02 | Tvåzons-temperaturmål: target_radiator_temp i devices, optimizer, API och settings-UI |
+| 2026-04-02 | Autonom kalibrering: _calibrate_thermal_model() i data_logger — nattligt K_LEAK/K_GAIN-jobb med EMA, lagras i calibration_history, läses av smart_planner |
+| 2026-04-02 | VV pre-heat: smart_planner blockerar REST för timmar med historiska VV-mönster (>= 2 obs) + föregående timme |
+| 2026-04-02 | Dexter-skydd i regulatorn: gm_controller overridar REST→RUN om HA_TEMP_DEXTER < 19°C |
