@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     DEXTER_MIN_TEMP: float = 20.0
     """Minimum acceptable temperature in Dexter's room (radiator zone, middle floor)."""
 
+    DEXTER_TARGET_TEMP: float = 21.0
+    """Desired target temperature in Dexter's room. Pass 2 reduces offsets while keeping
+    radiator zone at or above this. Higher value = upstairs priority."""
+
     # ============================================================================
     # AI API Keys
     # ============================================================================

@@ -134,6 +134,7 @@ def optimize_24h_plan(
     target_temp: Optional[float] = None,
     current_radiator_temp: Optional[float] = None,
     min_radiator_temp: Optional[float] = None,
+    target_radiator_temp: Optional[float] = None,
 ) -> List[float]:
     """
     V14.0 Two-zone two-pass optimizer.
@@ -141,7 +142,11 @@ def optimize_24h_plan(
     Pass 1: Raise offsets (cheapest+best-COP first) until BOTH zones are >= their floor.
     Pass 2: Reduce offsets at expensive hours while keeping BOTH zones >= their target.
 
-    current_radiator_temp / min_radiator_temp: Dexter's zone.
+    current_radiator_temp / min_radiator_temp: Dexter's zone minimum (comfort floor).
+    target_radiator_temp: Desired upstairs temperature (Pass 2 target).
+      Higher than floor target → upstairs priority (optimizer keeps higher offsets to
+      boost radiators via supply > SHUNT_SETPOINT).
+      Lower than floor target → downstairs priority.
     If current_radiator_temp is None, falls back to single-zone V13.0 behaviour.
     """
     hours        = min(len(outdoor_temps), len(prices))
@@ -154,6 +159,8 @@ def optimize_24h_plan(
         target_temp = settings.OPTIMIZER_TARGET_TEMP
     if min_radiator_temp is None:
         min_radiator_temp = settings.DEXTER_MIN_TEMP
+    if target_radiator_temp is None:
+        target_radiator_temp = settings.DEXTER_TARGET_TEMP
 
     max_offset = settings.OPTIMIZER_MAX_OFFSET
     min_offset = settings.OPTIMIZER_MIN_OFFSET
@@ -225,8 +232,7 @@ def optimize_24h_plan(
             break
 
     # --- PASS 2: Reduce offsets at expensive hours while keeping both zones >= target ---
-    # For radiator zone, target = min_radiator_temp (there's no separate "target" for it)
-    rad_target = min_radiator_temp
+    rad_target = target_radiator_temp
 
     improved = True
     while improved:

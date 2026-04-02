@@ -53,13 +53,14 @@ def calculate_plan():
     device_row = conn.execute("""
         SELECT away_mode_enabled, away_mode_end_date,
                target_indoor_temp_min, target_indoor_temp_max,
-               min_indoor_temp_user_setting
+               min_indoor_temp_user_setting, target_radiator_temp
         FROM devices LIMIT 1
     """).fetchone()
 
     away_mode = False
-    opt_min_temp    = settings.OPTIMIZER_MIN_TEMP
-    opt_target_temp = settings.OPTIMIZER_TARGET_TEMP
+    opt_min_temp      = settings.OPTIMIZER_MIN_TEMP
+    opt_target_temp   = settings.OPTIMIZER_TARGET_TEMP
+    opt_radiator_temp = settings.DEXTER_TARGET_TEMP
 
     if device_row:
         away_enabled = bool(device_row[0])
@@ -76,6 +77,8 @@ def calculate_plan():
                 opt_min_temp = float(device_row[2])
             if device_row[3]:
                 opt_target_temp = float(device_row[3])
+            if device_row[5]:
+                opt_radiator_temp = float(device_row[5])
 
     # 1. Get current temperatures
     query = """
@@ -167,6 +170,7 @@ def calculate_plan():
         target_temp           = opt_target_temp,
         current_radiator_temp = start_radiator if not away_mode else None,
         min_radiator_temp     = settings.DEXTER_MIN_TEMP if not away_mode else None,
+        target_radiator_temp  = opt_radiator_temp if not away_mode else None,
     )
 
     # 4. Simulate both zones for plan storage

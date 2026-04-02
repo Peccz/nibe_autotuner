@@ -12,6 +12,7 @@ class SettingsUpdate(BaseModel):
     min_indoor_temp: float = Field(..., ge=10, le=30)
     target_indoor_temp_min: float = Field(..., ge=10, le=30)
     target_indoor_temp_max: float = Field(..., ge=10, le=30)
+    target_radiator_temp: Optional[float] = Field(21.0, ge=10, le=30)
     comfort_adjustment_offset: Optional[float] = Field(0.0, ge=-10, le=10)
 
 class ComfortOffsetUpdate(BaseModel):
@@ -35,6 +36,7 @@ def get_settings(db: Session = Depends(get_db)):
     min_temp = getattr(device, "min_indoor_temp_user_setting", 20.5)
     target_min = getattr(device, "target_indoor_temp_min", 20.5)
     target_max = getattr(device, "target_indoor_temp_max", 22.0)
+    target_radiator = getattr(device, "target_radiator_temp", 21.0)
     comfort_offset = getattr(device, "comfort_adjustment_offset", 0.0)
 
     away_enabled = getattr(device, "away_mode_enabled", False)
@@ -51,6 +53,7 @@ def get_settings(db: Session = Depends(get_db)):
             "min_indoor_temp": min_temp,
             "target_indoor_temp_min": target_min,
             "target_indoor_temp_max": target_max,
+            "target_radiator_temp": target_radiator,
             "comfort_adjustment_offset": comfort_offset,
             "away_mode_enabled": away_enabled,
             "away_mode_end_date": away_end.isoformat() if away_end else None
@@ -67,7 +70,8 @@ def update_settings(settings: SettingsUpdate, db: Session = Depends(get_db)):
     device.min_indoor_temp_user_setting = settings.min_indoor_temp
     device.target_indoor_temp_min = settings.target_indoor_temp_min
     device.target_indoor_temp_max = settings.target_indoor_temp_max
-    
+    if settings.target_radiator_temp is not None:
+        device.target_radiator_temp = settings.target_radiator_temp
     if settings.comfort_adjustment_offset is not None:
         device.comfort_adjustment_offset = settings.comfort_adjustment_offset
     

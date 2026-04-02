@@ -30,6 +30,7 @@ class Device(Base):
     min_indoor_temp_user_setting = Column(Float, default=20.5, nullable=False)
     target_indoor_temp_min = Column(Float, default=20.5, nullable=False)
     target_indoor_temp_max = Column(Float, default=22.0, nullable=False)
+    target_radiator_temp = Column(Float, default=21.0)   # Desired temp upstairs (Dexter zone)
     comfort_adjustment_offset = Column(Float, default=0.0)
     away_mode_enabled = Column(Boolean, default=False)
     away_mode_end_date = Column(DateTime, nullable=True)

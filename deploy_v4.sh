@@ -52,8 +52,7 @@ ssh $REMOTE_USER@$REMOTE_HOST << EOF
     pip install -r requirements.txt --quiet
     
     echo "  -> Running Database Migrations..."
-    # Add migration commands here if needed
-    # python src/data/migrate_db.py
+    PYTHONPATH=$REMOTE_DIR/src python src/data/migrate_zone_priority.py
 EOF
 
 # 4. Install smart_planner systemd units (sed replaces dev path with RPi path)
