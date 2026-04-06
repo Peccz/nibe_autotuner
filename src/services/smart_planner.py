@@ -165,7 +165,9 @@ def calculate_plan():
     start_radiator = dexter if dexter is not None else (start_floor - 1.0)
 
     # 2. Get 24h data
-    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    # Use naive UTC throughout — SQLite/SQLAlchemy can't handle tz-aware timestamps
+    # stored by sqlite3 raw connections (parameter_readings uses naive, plan must match)
+    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
 
     prices_today    = price_service.get_prices_today()
     prices_tomorrow = price_service.get_prices_tomorrow()
