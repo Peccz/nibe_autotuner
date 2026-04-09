@@ -394,3 +394,5 @@ Project Link: [https://github.com/Peccz/nibe_autotuner](https://github.com/Peccz
 ## Disclaimer
 
 This project is not affiliated with, endorsed by, or connected to Nibe, myUplink, or any related companies. Use at your own risk. Always verify recommendations before making changes to your heat pump settings.
+
+<!-- AI Review Trigger: tor 15 jan 2026 10:48:05 CET -->
