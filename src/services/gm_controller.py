@@ -127,7 +127,10 @@ class GMController:
         plan = self.db.query(PlannedHeatingSchedule).filter(
             PlannedHeatingSchedule.timestamp <= now,
             PlannedHeatingSchedule.timestamp > now - timedelta(hours=1)
-        ).order_by(PlannedHeatingSchedule.timestamp.desc()).first()
+        ).order_by(
+            PlannedHeatingSchedule.timestamp.desc(),
+            PlannedHeatingSchedule.id.desc()
+        ).first()
 
         offset = plan.planned_offset if plan else 0.0
         action = plan.planned_action if plan else "RUN"

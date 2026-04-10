@@ -10,6 +10,26 @@ echo "════════════════════════�
 echo "  Deploying Nibe Autotuner V7.0 (Robust Edition)"
 echo "════════════════════════════════════════════════════════════════"
 
+echo ""
+echo "▶ Preflight: checking repository state..."
+if git ls-files --error-unmatch tokens.json >/dev/null 2>&1; then
+    echo "    ❌ tokens.json is tracked by git. Remove it from tracking before deploy."
+    exit 1
+fi
+if git ls-files --error-unmatch .myuplink_tokens.json >/dev/null 2>&1; then
+    echo "    ❌ .myuplink_tokens.json is tracked by git. Remove it from tracking before deploy."
+    exit 1
+fi
+
+git status --short
+echo ""
+echo "    Continue with commit, sync, migrations and service restarts? Type DEPLOY to continue:"
+read -r deploy_confirm
+if [ "$deploy_confirm" != "DEPLOY" ]; then
+    echo "    Deploy aborted."
+    exit 1
+fi
+
 # 1. Commit Local Changes
 echo ""
 echo "▶ [1/4] Committing local changes..."

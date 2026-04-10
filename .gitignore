@@ -1,4 +1,7 @@
 .env
+tokens.json
+.myuplink_tokens.json
+*.tokens.json
 __pycache__/
 *.pyc
 venv/

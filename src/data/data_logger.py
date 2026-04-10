@@ -31,6 +31,7 @@ class DataLogger:
     """Continuously logs heat pump data to database"""
 
     SESSION_REFRESH_ITERATIONS = 12  # Refresh session every 12 iterations (~1h at 5min interval)
+    FEEDBACK_LOOKBACK_DAYS = 7
 
     def __init__(self, database_url: str = None):
         init_db()
@@ -313,8 +314,8 @@ class DataLogger:
                 logger.error(f"Unexpected error logging weather readings: {e}")
                 self.session.rollback()
 
-            # Validate optimizer predictions (compare planned vs actual temps)
-            self._validate_predictions()
+            # Autonomous feedback loop: validate forecasts and calibrate missed days.
+            self._run_feedback_loop()
 
             # Aggregate yesterday's performance once per day
             today = datetime.utcnow().date()
@@ -333,22 +334,34 @@ class DataLogger:
             self.session.rollback()
             return 0
 
+    def _run_feedback_loop(self):
+        """Keep the optimizer feedback data current without touching live control."""
+        self._validate_predictions()
+        self._calibrate_due_days()
+
     def _validate_predictions(self):
         """Compare planned temps from completed hours against actual measurements."""
         try:
             now = datetime.utcnow()
-            # Check plan rows that are 1–8h old (enough time for actual readings to exist)
-            window_start = now - timedelta(hours=8)
+            # Backfill up to a week so feedback recovers after restarts or old plan bugs.
+            window_start = now - timedelta(days=self.FEEDBACK_LOOKBACK_DAYS)
             window_end = now - timedelta(hours=1)
 
             plans = self.session.query(PlannedHeatingSchedule).filter(
                 PlannedHeatingSchedule.timestamp >= window_start,
                 PlannedHeatingSchedule.timestamp <= window_end,
                 PlannedHeatingSchedule.simulated_indoor_temp.isnot(None)
+            ).order_by(
+                PlannedHeatingSchedule.timestamp.asc(),
+                PlannedHeatingSchedule.id.desc()
             ).all()
 
             if not plans:
                 return
+
+            latest_plan_by_hour = {}
+            for plan in plans:
+                latest_plan_by_hour.setdefault(plan.timestamp, plan)
 
             # Get the best indoor sensor (HA first, BT50 fallback)
             indoor_param = None
@@ -362,7 +375,7 @@ class DataLogger:
                 return
 
             validated = 0
-            for plan in plans:
+            for plan in latest_plan_by_hour.values():
                 # Skip if already validated
                 exists = self.session.query(PredictionAccuracy).filter_by(
                     forecast_hour=plan.timestamp
@@ -401,6 +414,33 @@ class DataLogger:
             logger.error(f"Prediction validation failed: {e}")
             self.session.rollback()
 
+    def _calibrate_due_days(self):
+        """Run missing daily calibration jobs once enough prediction samples exist."""
+        today = datetime.utcnow().date()
+        start_date = today - timedelta(days=self.FEEDBACK_LOOKBACK_DAYS)
+        for offset in range(self.FEEDBACK_LOOKBACK_DAYS):
+            day = start_date + timedelta(days=offset)
+            if day >= today:
+                continue
+            day_start = datetime.combine(day, datetime.min.time())
+            existing = self.session.query(CalibrationHistory).filter(
+                CalibrationHistory.date == day_start
+            ).first()
+            if existing:
+                continue
+
+            cutoff = day_start - timedelta(days=7)
+            clean_count = self.session.query(PredictionAccuracy).filter(
+                PredictionAccuracy.forecast_hour >= cutoff,
+                PredictionAccuracy.forecast_hour < day_start,
+                PredictionAccuracy.error_c > -1.5,
+                PredictionAccuracy.error_c < 1.5,
+            ).count()
+            if clean_count < 24:
+                continue
+
+            self._calibrate_thermal_model(day_start)
+
     def _aggregate_daily_performance(self, date):
         """Calculate and store performance metrics for a completed day."""
         try:
@@ -413,6 +453,7 @@ class DataLogger:
                 DailyPerformance.date == day_start
             ).first()
             if existing:
+                self._calibrate_thermal_model(day_start)
                 return
 
             device = self.session.query(Device).first()

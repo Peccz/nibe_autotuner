@@ -88,6 +88,18 @@ def _outdoor_fallback_from_db(conn) -> float:
     return 5.0  # Safe default for Sweden
 
 
+def _replace_future_plan_rows(conn, plan_start: datetime, plan_rows):
+    """Replace the active horizon from the same timestamp used for new rows."""
+    conn.execute("DELETE FROM planned_heating_schedule WHERE timestamp >= ?", (plan_start,))
+    conn.execute("DELETE FROM planned_heating_schedule WHERE timestamp < datetime('now', '-48 hours')")
+    conn.executemany("""
+        INSERT INTO planned_heating_schedule
+        (timestamp, planned_action, planned_offset, electricity_price,
+         simulated_indoor_temp, simulated_dexter_temp, outdoor_temp, wind_speed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, plan_rows)
+
+
 def calculate_plan():
     logger.info("Starting V14.0 Two-Zone Optimizer...")
     conn = get_db_connection()
@@ -254,16 +266,7 @@ def calculate_plan():
 
     try:
         conn.execute("BEGIN EXCLUSIVE")
-        # Delete from now onwards (keeps past rows for prediction_accuracy validation)
-        conn.execute("DELETE FROM planned_heating_schedule WHERE timestamp >= datetime('now')")
-        # Prune rows older than 48h to prevent unbounded growth
-        conn.execute("DELETE FROM planned_heating_schedule WHERE timestamp < datetime('now', '-48 hours')")
-        conn.executemany("""
-            INSERT INTO planned_heating_schedule
-            (timestamp, planned_action, planned_offset, electricity_price,
-             simulated_indoor_temp, simulated_dexter_temp, outdoor_temp, wind_speed)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, plan_rows)
+        _replace_future_plan_rows(conn, now, plan_rows)
         conn.commit()
         logger.success("✓ V14.0 Two-Zone Plan Generated.")
     except Exception as e:
