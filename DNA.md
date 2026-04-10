@@ -409,23 +409,19 @@ BT50 sitter i teknikrummet — kan visa annan temp än HA_TEMP_DOWNSTAIRS. Grän
 last_updated: 2026-04-10
 last_agent: Codex GPT-5
 status: idle
-current_task: Autonom feedbackloop för prediktionsvalidering och termisk kalibrering
+current_task: Feedbackloop deployad till RPi och verifierad
 recent_change: |
-  - Lokal fix: smart_planner raderar framtida planrader från samma plan_start som används för inserts
-  - Lokal fix: gm_controller väljer planrad deterministiskt med timestamp DESC, id DESC
-  - Lokal feedbackloop: data_logger backfill-validerar planerade temperaturer upp till 7 dagar och ignorerar dubblettplaner via senaste id per timestamp
-  - Lokal feedbackloop: data_logger kör ikapp saknade CalibrationHistory-dagar när minst 24 rena prediction_accuracy-samples finns
-  - Lokal feedbackloop: daily_performance som redan finns blockerar inte längre dagens kalibrering
-  - Lokal testtäckning: tests/test_feedback_loop.py skapad för backfill-validering och ikappkalibrering
-  - Lokal miljö: venv återskapad med Python 3.14.3 och requirements.txt installerat
-  - Lokal testkonfiguration: pytest.ini skapad så pytest bara samlar in kanoniska tester i tests/
-  - Lokal säkerhet: tokens.json ignoreras och togs bort från git-index; fix_tokens.py vägrar hårdkodade tokens
-  - Lokal säkerhet: test_gm_write.py kräver explicit flagga och env-var för enstaka live-GM-skrivning
-  - Lokal deploy-säkerhet: deploy_v4.sh har preflight och stoppar om tokenfiler är trackade
-  - RPi-drift 2026-04-03 till 2026-04-10 utvärderad läsande via SSH; inga tjänster ändrade
+  - Commit c0a6367 pushad till origin/main och deployad till RPi via ren HEAD-export
+  - RPi kör feedbackloop, planner-raderingsfix, deterministiskt gm_controller-planval och token-/GM-testspärrar
+  - RPi services verifierade active: nibe-autotuner, nibe-gm-controller, nibe-api, nibe-smart-planner.timer
+  - smart_planner körde utan fel och framtida plan har 0 dubbletter
+  - data_logger startade efter att logs/ återskapades; feedbackloop validerade 47 prediction_accuracy-rader
+  - DB-integritet på RPi verifierad: PRAGMA integrity_check = ok
 open_issues:
-  - RPi kör ännu inte lokala fixar; plan-dubbletter finns i produktionsdatabasen (48 dubbla timmar senaste veckan)
-  - Prediction_accuracy och calibration_history hade 0 rader senaste veckan på RPi
+  - Historiska plan-dubbletter finns kvar i produktionsdatabasen men framtida plan-dubbletter är 0 efter deploy
+  - calibration_history är ännu 0 rader; första kalibrering kräver minst 24 rena historiska prediction_accuracy-samples före aktuell dag
+  - RPi deploy via ren rsync --delete tog bort .env och logs/; båda återställdes manuellt. Nästa deploy bör exkludera/protecta .env och logs/
+  - Vid gm_controller-restart skrev regulatorn GM=-350 enligt befintlig leash-logik
   - Pytest passerar lokalt (6 passed) men visar Python 3.14-deprecation-varningar för utcnow/sqlite datetime
   - myUplink-tokens som tidigare låg i repo/history bör roteras
 ```
@@ -434,6 +430,7 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-04-10 | Commit c0a6367 deployad till RPi; tjänster verifierade; prediction_accuracy backfill skapade 47 rader; framtida plan-dubbletter 0 |
 | 2026-04-10 | Lokal venv återskapad och requirements installerade; pytest.ini begränsar testinsamling till tests/; pytest: 6 passed |
 | 2026-04-10 | Testtäckning skapad för feedbackloopen: dubblettplaner, prediction_accuracy-backfill och saknad CalibrationHistory |
 | 2026-04-10 | Autonom feedbackloop lokalt: 7-dagars backfill av prediction_accuracy och ikappkörning av saknad CalibrationHistory |
