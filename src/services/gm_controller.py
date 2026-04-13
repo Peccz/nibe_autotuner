@@ -40,6 +40,9 @@ class GMController:
     PUMP_START_THRESHOLD = -200 
     EL_HEATER_START_LIMIT = -400 
     CRITICAL_TEMP_LIMIT = 19.0 
+    WARM_OVERRIDE_FLOOR_MARGIN = 0.2
+    WARM_OVERRIDE_DEXTER_MARGIN = 0.3
+    WARM_OVERRIDE_RELEASE_MARGIN = 0.1
     
     SESSION_REFRESH_INTERVAL = 3600  # Refresh DB session every hour
 
@@ -51,6 +54,7 @@ class GMController:
         self.last_tick_time = datetime.now(timezone.utc)
         self.last_written_gm = None
         self.last_session_refresh = datetime.now(timezone.utc)
+        self._warm_override_active = False
 
     def _open_session(self):
         self.db = SessionLocal()
@@ -89,6 +93,67 @@ class GMController:
             self.db.add(account)
             self.db.commit()
         return account
+
+    def _get_recent_reading_value(self, parameter_code, now, max_age_hours=1):
+        param = self.db.query(Parameter).filter_by(parameter_id=parameter_code).first()
+        if not param:
+            return None
+
+        reading = self.db.query(ParameterReading).filter(
+            ParameterReading.parameter_id == param.id,
+            ParameterReading.timestamp > now.replace(tzinfo=None) - timedelta(hours=max_age_hours)
+        ).order_by(desc(ParameterReading.timestamp)).first()
+        return reading.value if reading else None
+
+    def _apply_zone_temperature_overrides(self, device, now, action):
+        dexter_temp = self._get_recent_reading_value('HA_TEMP_DEXTER', now)
+        floor_temp = self._get_recent_reading_value('HA_TEMP_DOWNSTAIRS', now)
+
+        dexter_cold_threshold = 19.0
+        if dexter_temp is not None and dexter_temp < dexter_cold_threshold and action == 'REST':
+            logger.warning(
+                f"⚠️ Dexter-skydd: {dexter_temp:.1f}°C < {dexter_cold_threshold}°C — REST → RUN"
+            )
+            action = 'RUN'
+
+        floor_trigger = device.target_indoor_temp_max + self.WARM_OVERRIDE_FLOOR_MARGIN
+        dexter_trigger = device.target_radiator_temp + self.WARM_OVERRIDE_DEXTER_MARGIN
+        floor_release = floor_trigger - self.WARM_OVERRIDE_RELEASE_MARGIN
+        dexter_release = dexter_trigger - self.WARM_OVERRIDE_RELEASE_MARGIN
+
+        if self._warm_override_active:
+            warm_override = (
+                (floor_temp is not None and floor_temp > floor_release) or
+                (dexter_temp is not None and dexter_temp > dexter_release)
+            )
+        else:
+            warm_override = (
+                (floor_temp is not None and floor_temp > floor_trigger) or
+                (dexter_temp is not None and dexter_temp > dexter_trigger)
+            )
+
+        override_reason = None
+        if warm_override:
+            if floor_temp is not None and floor_temp > floor_trigger:
+                override_reason = "WARM_OVERRIDE_DOWNSTAIRS"
+                logger.warning(
+                    f"⚠️ Varmoverride nedervåning: {floor_temp:.1f}°C > {floor_trigger:.1f}°C — {action} → REST"
+                )
+            elif dexter_temp is not None and dexter_temp > dexter_trigger:
+                override_reason = "WARM_OVERRIDE_DEXTER"
+                logger.warning(
+                    f"⚠️ Varmoverride Dexter: {dexter_temp:.1f}°C > {dexter_trigger:.1f}°C — {action} → REST"
+                )
+            elif floor_temp is not None and floor_temp > floor_release:
+                override_reason = "WARM_OVERRIDE_DOWNSTAIRS_HOLD"
+            else:
+                override_reason = "WARM_OVERRIDE_DEXTER_HOLD"
+
+            if action != 'MUST_RUN':
+                action = 'REST'
+
+        self._warm_override_active = warm_override
+        return action, override_reason
 
     def run_tick(self):
         now = datetime.now(timezone.utc)
@@ -135,22 +200,15 @@ class GMController:
         offset = plan.planned_offset if plan else 0.0
         action = plan.planned_action if plan else "RUN"
 
-        # Dexter cold override: if radiator zone < threshold during REST, force RUN
-        DEXTER_COLD_THRESHOLD = 19.0
         try:
-            dexter_param = self.db.query(Parameter).filter_by(parameter_id='HA_TEMP_DEXTER').first()
-            if dexter_param:
-                dexter_reading = self.db.query(ParameterReading).filter(
-                    ParameterReading.parameter_id == dexter_param.id,
-                    ParameterReading.timestamp > now.replace(tzinfo=None) - timedelta(hours=1)
-                ).order_by(desc(ParameterReading.timestamp)).first()
-                if dexter_reading and dexter_reading.value < DEXTER_COLD_THRESHOLD and action == 'REST':
-                    logger.warning(
-                        f"⚠️ Dexter-skydd: {dexter_reading.value:.1f}°C < {DEXTER_COLD_THRESHOLD}°C — REST → RUN"
-                    )
-                    action = 'RUN'
+            action, zone_override = self._apply_zone_temperature_overrides(device, now, action)
+            if zone_override:
+                safety_override = zone_override
+            else:
+                safety_override = None
         except Exception as e:
-            logger.debug(f"Dexter cold check failed: {e}")
+            logger.debug(f"Zone override check failed: {e}")
+            safety_override = None
 
         # 3. Calculate Target & Delta
         target_supply = 20 + (20 - cur_outdoor) * settings.DEFAULT_HEATING_CURVE * 0.12 + offset
@@ -182,7 +240,6 @@ class GMController:
         account.balance = max(self.MIN_BALANCE, min(self.MAX_BALANCE, account.balance))
 
         # 5. SAFETY OVERRIDES
-        safety_override = None
         if cur_indoor > 23.5:
             logger.warning(f"🚨 BASTU-VAKT: {cur_indoor}C. Resetting bank.")
             account.balance = 100.0

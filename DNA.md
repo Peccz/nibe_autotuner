@@ -406,23 +406,21 @@ BT50 sitter i teknikrummet — kan visa annan temp än HA_TEMP_DOWNSTAIRS. Grän
 *AI-agenter: uppdatera detta avsnitt efter varje session.*
 
 ```
-last_updated: 2026-04-10
+last_updated: 2026-04-13
 last_agent: Codex GPT-5
-status: idle
-current_task: Feedbackloop deployad till RPi och verifierad
+status: in_progress
+current_task: Varmoverride i gm_controller implementerad och lokalt verifierad inför RPi-deploy
 recent_change: |
-  - Commit c0a6367 pushad till origin/main och deployad till RPi via ren HEAD-export
-  - RPi kör feedbackloop, planner-raderingsfix, deterministiskt gm_controller-planval och token-/GM-testspärrar
-  - RPi services verifierade active: nibe-autotuner, nibe-gm-controller, nibe-api, nibe-smart-planner.timer
-  - smart_planner körde utan fel och framtida plan har 0 dubbletter
-  - data_logger startade efter att logs/ återskapades; feedbackloop validerade 47 prediction_accuracy-rader
-  - DB-integritet på RPi verifierad: PRAGMA integrity_check = ok
+  - gm_controller har nu varmoverride på HA-zonerna före GM-write: HA_TEMP_DOWNSTAIRS och HA_TEMP_DEXTER kan tvinga RUN -> REST när huset redan är varmt
+  - Override-logiken har hysteresis i processminnet för att undvika fladder runt tröskelvärdena
+  - Nya tester verifierar varmoverride för nedervåning, varmoverride för Dexter, hysteresis-hold och att Dexter-kallskyddet fortfarande tvingar REST -> RUN
+  - Lokal verifiering passerar: compileall + pytest (10 passed)
 open_issues:
+  - Varmoverride är ännu inte deployad till RPi; huset kör fortfarande föregående gm_controller tills ny deploy är klar
   - Historiska plan-dubbletter finns kvar i produktionsdatabasen men framtida plan-dubbletter är 0 efter deploy
-  - calibration_history är ännu 0 rader; första kalibrering kräver minst 24 rena historiska prediction_accuracy-samples före aktuell dag
-  - RPi deploy via ren rsync --delete tog bort .env och logs/; båda återställdes manuellt. Nästa deploy bör exkludera/protecta .env och logs/
-  - Vid gm_controller-restart skrev regulatorn GM=-350 enligt befintlig leash-logik
-  - Pytest passerar lokalt (6 passed) men visar Python 3.14-deprecation-varningar för utcnow/sqlite datetime
+  - RPi deploy via ren rsync --delete tog bort .env och logs/; nästa deploy måste exkludera/protecta .env och logs/
+  - Vid gm_controller-restart kan regulatorn skriva GM direkt enligt befintlig leash-logik; följ första minutens write efter restart
+  - Pytest passerar lokalt (10 passed) men visar Python 3.14-deprecation-varningar för utcnow/sqlite datetime
   - myUplink-tokens som tidigare låg i repo/history bör roteras
 ```
 
@@ -430,6 +428,7 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-04-13 | Varmoverride i gm_controller implementerad lokalt: HA_TEMP_DOWNSTAIRS/HA_TEMP_DEXTER kan tvinga REST med hysteresis; pytest 10 passed |
 | 2026-04-10 | Commit c0a6367 deployad till RPi; tjänster verifierade; prediction_accuracy backfill skapade 47 rader; framtida plan-dubbletter 0 |
 | 2026-04-10 | Lokal venv återskapad och requirements installerade; pytest.ini begränsar testinsamling till tests/; pytest: 6 passed |
 | 2026-04-10 | Testtäckning skapad för feedbackloopen: dubblettplaner, prediction_accuracy-backfill och saknad CalibrationHistory |
@@ -455,6 +454,7 @@ open_issues:
 
 | Datum | Beslut | Anledning |
 |-------|--------|-----------|
+| 2026-04-13 | Varm-sida override ska ske i gm_controller med HA-zoner och hysteresis | Övervärmen kvarstod trots fungerande planner/feedbackloop. BT50/BASTU_VAKT reagerar för sent; HA_TEMP_DOWNSTAIRS och HA_TEMP_DEXTER ska kunna blockera fortsatt uppvärmning innan huset blir bastuvarmt. |
 | 2026-04-10 | Hårdkodade myUplink-tokens får inte finnas i repo eller maintenance-script | Tokens har WRITESYSTEM-scope och kan påverka verklig värmepump; autentisering ska ske via OAuth-flödet till `~/.myuplink_tokens.json`. |
 | 2026-04-10 | Live-GM-verktyg måste kräva explicit dubbel bekräftelse | GM 40940 påverkar live-styrning direkt; manuella verktyg ska inte kunna köras av misstag eller via automatisk testkörning. |
 | 2026-04-10 | Deploy ska ha preflight före commit/sync/restart | `deploy_v4.sh` gör produktionsändringar; synlig status och token-check minskar risken att oavsiktliga filer eller credentials skickas till RPi. |

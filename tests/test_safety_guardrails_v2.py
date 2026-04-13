@@ -40,7 +40,7 @@ def plan_row(ts, action="RUN", offset=0.0):
 def test_replace_future_plan_rows_deletes_from_plan_start_not_wall_clock_now():
     conn = sqlite3.connect(":memory:")
     create_plan_table(conn)
-    plan_start = datetime(2026, 4, 10, 7, 0, 0)
+    plan_start = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
 
     conn.executemany("""
         INSERT INTO planned_heating_schedule
@@ -65,7 +65,7 @@ def test_replace_future_plan_rows_deletes_from_plan_start_not_wall_clock_now():
     """).fetchall()
 
     assert rows == [
-        ("2026-04-10 06:00:00", "KEEP", -1.0),
-        ("2026-04-10 07:00:00", "NEW", 1.0),
-        ("2026-04-10 08:00:00", "NEW", 2.0),
+        ((plan_start - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"), "KEEP", -1.0),
+        (plan_start.strftime("%Y-%m-%d %H:%M:%S"), "NEW", 1.0),
+        ((plan_start + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"), "NEW", 2.0),
     ]
