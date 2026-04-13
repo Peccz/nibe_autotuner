@@ -408,17 +408,19 @@ BT50 sitter i teknikrummet — kan visa annan temp än HA_TEMP_DOWNSTAIRS. Grän
 ```
 last_updated: 2026-04-13
 last_agent: Codex GPT-5
-status: in_progress
-current_task: Varmoverride i gm_controller implementerad och lokalt verifierad inför RPi-deploy
+status: idle
+current_task: Varmoverride deployad till RPi och första live-tick verifierad
 recent_change: |
+  - Commit 7f4d43a pushad till origin/main och deployad till RPi via ren HEAD-export med exclude för .env och logs/
   - gm_controller har nu varmoverride på HA-zonerna före GM-write: HA_TEMP_DOWNSTAIRS och HA_TEMP_DEXTER kan tvinga RUN -> REST när huset redan är varmt
   - Override-logiken har hysteresis i processminnet för att undvika fladder runt tröskelvärdena
   - Nya tester verifierar varmoverride för nedervåning, varmoverride för Dexter, hysteresis-hold och att Dexter-kallskyddet fortfarande tvingar REST -> RUN
   - Lokal verifiering passerar: compileall + pytest (10 passed)
+  - Första live-tick efter restart på RPi gav WARM_OVERRIDE_DOWNSTAIRS och verifierad GM-write 100 i stället för fortsatt RUN
 open_issues:
-  - Varmoverride är ännu inte deployad till RPi; huset kör fortfarande föregående gm_controller tills ny deploy är klar
   - Historiska plan-dubbletter finns kvar i produktionsdatabasen men framtida plan-dubbletter är 0 efter deploy
-  - RPi deploy via ren rsync --delete tog bort .env och logs/; nästa deploy måste exkludera/protecta .env och logs/
+  - Behöver 24-48h uppföljning för att se om varmoverride sänker andelen tid över 22°C och minskar BASTU_VAKT
+  - Ren RPi-deploy ska fortsätta exkludera/protecta .env och logs/ för att undvika servicefel
   - Vid gm_controller-restart kan regulatorn skriva GM direkt enligt befintlig leash-logik; följ första minutens write efter restart
   - Pytest passerar lokalt (10 passed) men visar Python 3.14-deprecation-varningar för utcnow/sqlite datetime
   - myUplink-tokens som tidigare låg i repo/history bör roteras
@@ -428,6 +430,7 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-04-13 | Commit 7f4d43a deployad till RPi; första live-tick gav WARM_OVERRIDE_DOWNSTAIRS och GM write 100; nibe-gm-controller verifierad active |
 | 2026-04-13 | Varmoverride i gm_controller implementerad lokalt: HA_TEMP_DOWNSTAIRS/HA_TEMP_DEXTER kan tvinga REST med hysteresis; pytest 10 passed |
 | 2026-04-10 | Commit c0a6367 deployad till RPi; tjänster verifierade; prediction_accuracy backfill skapade 47 rader; framtida plan-dubbletter 0 |
 | 2026-04-10 | Lokal venv återskapad och requirements installerade; pytest.ini begränsar testinsamling till tests/; pytest: 6 passed |
