@@ -413,8 +413,14 @@ Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificie
 last_updated: 2026-04-16
 last_agent: Codex GPT-5
 status: monitoring
-current_task: Lokal implementation av effective_outdoor_temp för västfasadpåverkad BT1/40004
+current_task: effective_outdoor_temp deployad till RPi och första live-tick verifierad
 recent_change: |
+  - Commit a1b3d26 pushad till origin/main och riktat deployad till RPi utan att ta med orelaterade arbetskatalogändringar
+  - RPi-verifiering före restart passerade: compileall för outdoor_temperature/gm_controller/smart_planner och pytest för berörda tester (9 passed)
+  - nibe-gm-controller restartades och nibe-smart-planner.service kördes manuellt; nibe-autotuner, nibe-gm-controller, nibe-api, nibe-mobile och nibe-smart-planner.timer är active
+  - Första live-tick efter restart verifierade filtret: raw BT1=32.0°C, Open-Meteo/planreferens=16.0°C, effective_outdoor=18.0°C och target_supply=21.7°C
+  - Första live-tick skrev GM=100 i REST/WARM_OVERRIDE_DOWNSTAIRS enligt befintlig leash-logik; bank låg vid +200 och inga failed systemd-units rapporterades
+  - smart_planner genererade ny plan till 2026-04-17 13:00:00 och framtida plan-dubbletter är fortsatt 0
   - Implementerat lokal helper `services/outdoor_temperature.py`: tydlig BT1-solbias klipps till referens + 2°C när BT1 är minst 4°C över referens och BT1 >= 15°C
   - gm_controller använder nu `effective_outdoor_temp` för `target_supply`, med aktuell planrads Open-Meteo-baserade `outdoor_temp` som referens; rå BT1 finns fortsatt i parameter_readings
   - smart_planner DB-fallback för outdoor filtrerar senaste BT1-värdet mot 6h median om väder-API saknas
@@ -467,6 +473,7 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-04-16 | Commit a1b3d26 deployad riktat till RPi; gm_controller restartad; första tick verifierade BT1-filter raw 32.0°C → effective 18.0°C mot planreferens 16.0°C och GM=100 i REST/warm override |
 | 2026-04-16 | Implementerat `effective_outdoor_temp` lokalt: gm_controller filtrerar västsolpåverkad BT1 mot planens Open-Meteo-referens; smart_planner DB-fallback dämpar BT1-spikar via 6h median; pytest 15 passed |
 | 2026-04-16 | Dokumenterat att BT1/40004-utomhusgivaren sitter på västfasad och kan ge solpåverkade eftermiddagstoppar; framtida styrlogik bör överväga filtrerad/blandad utetemp |
 | 2026-04-16 | Driftkontroll efter DB-reparation: DB quick_check/integrity_check ok, WAL aktivt, huvudtjänster active, dashboard svarar, inga framtida plan-dubbletter; komfort fortsatt varm men förbättrad och BASTU_VAKT ej observerad hittills under dagen |
