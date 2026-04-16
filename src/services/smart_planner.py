@@ -15,6 +15,7 @@ from core.config import settings
 from services.price_service import price_service
 from services.weather_service import SMHIWeatherService
 from services.optimizer import optimize_24h_plan, predict_temperatures, predict_temperatures_two_zone
+from services.outdoor_temperature import effective_outdoor_temp_from_recent_sensor_values
 
 
 def _load_calibration(conn):
@@ -73,16 +74,20 @@ def get_db_connection():
 
 
 def _outdoor_fallback_from_db(conn) -> float:
-    """Return most recent outdoor temp from DB when weather API is unavailable."""
+    """Return filtered recent outdoor temp from DB when weather API is unavailable."""
     try:
-        row = conn.execute("""
-            SELECT r.value FROM parameter_readings r
+        rows = conn.execute("""
+            SELECT r.value
+            FROM parameter_readings r
             JOIN parameters p ON r.parameter_id = p.id
             WHERE p.parameter_id = '40004'
-            ORDER BY r.timestamp DESC LIMIT 1
-        """).fetchone()
-        if row:
-            return float(row[0])
+              AND r.timestamp > datetime('now', '-6 hours')
+            ORDER BY r.timestamp DESC
+            LIMIT 72
+        """).fetchall()
+        filtered = effective_outdoor_temp_from_recent_sensor_values([r[0] for r in rows])
+        if filtered is not None:
+            return filtered
     except Exception:
         pass
     return 5.0  # Safe default for Sweden

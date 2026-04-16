@@ -164,3 +164,26 @@ def test_dexter_cold_override_still_forces_run():
     tx = db.query(GMTransaction).order_by(GMTransaction.id.desc()).first()
     assert tx.action == "RUN"
     assert tx.safety_override is None
+
+
+def test_west_facade_outdoor_spike_is_filtered_against_plan_reference():
+    now = datetime.now(timezone.utc)
+    db, device, controller, client = setup_runtime(now, planned_action="RUN", floor_temp=21.0, dexter_temp=20.8)
+
+    plan = db.query(PlannedHeatingSchedule).first()
+    plan.planned_offset = 2.0
+    plan.outdoor_temp = 14.0
+    db.commit()
+
+    client.points = [
+        {"parameterId": "40008", "value": 28.0},
+        {"parameterId": "40004", "value": 32.0},
+        {"parameterId": "40033", "value": 21.0},
+        {"parameterId": "40941", "value": -250.0},
+    ]
+
+    controller.run_tick()
+
+    tx = db.query(GMTransaction).order_by(GMTransaction.id.desc()).first()
+    assert tx.outdoor_temp == 16.0
+    assert round(tx.supply_target, 2) == 25.36

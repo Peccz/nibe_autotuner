@@ -259,7 +259,7 @@ data_logger.py  →  calibration_history   (nattlig K_LEAK/K_GAIN-kalibrering me
 
 | Parameter ID | Namn | R/W | Syfte |
 |---|---|---|---|
-| 40004 | BT1 Utomhustemp | R | Värmekurvans ingångsvärde; DB-fallback för optimizer |
+| 40004 | BT1 Utomhustemp | R | Värmekurvans ingångsvärde; DB-fallback för optimizer. Givaren sitter på fasad i västläge och kan visa solpåverkade eftermiddagstoppar som inte motsvarar verklig lufttemperatur |
 | 40008 | BT2 Tilloppstemperatur | R | Vatten till radiatorer |
 | 40012 | BT3 Returtemperatur | R | Retur från radiatorer |
 | 40013 | BT7 VV-topptemperatur | R | Detekterar VV-läge |
@@ -316,15 +316,16 @@ Alla konfigurerbara via `.env`. Smart_planner kan overrida K_LEAK och K_GAIN_FLO
 2. Läs systemläge från DB (`VP_SYSTEM_MODE`)
 3. Läs plan från `planned_heating_schedule` — offset och action för aktuell timme
 4. **Dexter-skydd:** om `HA_TEMP_DEXTER` < 19°C och action=REST → override till RUN
-5. Beräkna `target_supply = 20 + (20 − outdoor) × curve × 0.12 + offset`
-6. Beräkna `delta_gm = diff_temp × dt_min × multiplier` (turboramp 1×→3× vid deficit 2→8°C; paus vid HW och defrost)
-7. Uppdatera saldo (alltid, ingen frysning)
-8. **Klampning:** `balance = max(−2000, min(200, balance))`
-9. **Bastu-vakt:** om BT50 > 23.5°C → balance = 100, action = MUST_REST
-10. Bestäm GM att skriva: `saldo / 10` avrundat, skyddsgränser
-11. Validera via SafetyGuard
-12. Skriv till pump om avvikelse >50 GM eller mål ändrat >10 GM
-13. Logga GMTransaction
+5. Filtrera BT1/40004 mot planens Open-Meteo-baserade `outdoor_temp` om BT1 har tydlig västsolbias
+6. Beräkna `target_supply = 20 + (20 − effective_outdoor) × curve × 0.12 + offset`
+7. Beräkna `delta_gm = diff_temp × dt_min × multiplier` (turboramp 1×→3× vid deficit 2→8°C; paus vid HW och defrost)
+8. Uppdatera saldo (alltid, ingen frysning)
+9. **Klampning:** `balance = max(−2000, min(200, balance))`
+10. **Bastu-vakt:** om BT50 > 23.5°C → balance = 100, action = MUST_REST
+11. Bestäm GM att skriva: `saldo / 10` avrundat, skyddsgränser
+12. Validera via SafetyGuard
+13. Skriv till pump om avvikelse >50 GM eller mål ändrat >10 GM
+14. Logga GMTransaction
 
 **Vår/sommar:** outdoor >20°C → target_supply < faktisk supply → delta_gm positivt → balance träffar +200-taket. GM-kontrollern skriver GM=200 men pumpen kan ändå köra för VV-produktion.
 
@@ -392,6 +393,9 @@ BT50 sitter i teknikrummet — kan visa annan temp än HA_TEMP_DOWNSTAIRS. Grän
 ### 13. VV pre-heat kräver minst 2 historiska observationer per timme/veckodag
 `_get_vv_must_run_hours()` ignorerar mönster med färre än 2 observationer. Pre-heat-skyddet är passivt de första veckorna.
 
+### 14. BT1/40004 är solpåverkad i västläge
+Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificiellt höga 40004-värden, t.ex. 30°C+ när verklig lufttemperatur är lägre. Kontroll 2026-04-14 till 2026-04-16 mot Open-Meteo visade maxbias cirka 14.8°C, 19.2°C respektive 15.7°C runt kl 14-15 UTC. `gm_controller` ska därför använda filtrerad `effective_outdoor_temp` för target_supply när aktuell planrad ger Open-Meteo-referens. Rå BT1 finns kvar i parameter_readings för analys av vad pumpen faktiskt ser.
+
 ---
 
 ## 10. To-do
@@ -406,23 +410,56 @@ BT50 sitter i teknikrummet — kan visa annan temp än HA_TEMP_DOWNSTAIRS. Grän
 *AI-agenter: uppdatera detta avsnitt efter varje session.*
 
 ```
-last_updated: 2026-04-13
+last_updated: 2026-04-16
 last_agent: Codex GPT-5
-status: idle
-current_task: Varmoverride deployad till RPi och första live-tick verifierad
+status: monitoring
+current_task: Lokal implementation av effective_outdoor_temp för västfasadpåverkad BT1/40004
 recent_change: |
-  - Commit 7f4d43a pushad till origin/main och deployad till RPi via ren HEAD-export med exclude för .env och logs/
-  - gm_controller har nu varmoverride på HA-zonerna före GM-write: HA_TEMP_DOWNSTAIRS och HA_TEMP_DEXTER kan tvinga RUN -> REST när huset redan är varmt
-  - Override-logiken har hysteresis i processminnet för att undvika fladder runt tröskelvärdena
-  - Nya tester verifierar varmoverride för nedervåning, varmoverride för Dexter, hysteresis-hold och att Dexter-kallskyddet fortfarande tvingar REST -> RUN
-  - Lokal verifiering passerar: compileall + pytest (10 passed)
-  - Första live-tick efter restart på RPi gav WARM_OVERRIDE_DOWNSTAIRS och verifierad GM-write 100 i stället för fortsatt RUN
+  - Implementerat lokal helper `services/outdoor_temperature.py`: tydlig BT1-solbias klipps till referens + 2°C när BT1 är minst 4°C över referens och BT1 >= 15°C
+  - gm_controller använder nu `effective_outdoor_temp` för `target_supply`, med aktuell planrads Open-Meteo-baserade `outdoor_temp` som referens; rå BT1 finns fortsatt i parameter_readings
+  - smart_planner DB-fallback för outdoor filtrerar senaste BT1-värdet mot 6h median om väder-API saknas
+  - Mätning 2026-04-14 till 2026-04-16 mot Open-Meteo bekräftade västfasadbias: max cirka +14.8°C, +19.2°C och +15.7°C; 2026-04-15 hade 8 timmar med BT1 mer än 4°C över Open-Meteo
+  - Testtäckning tillagd för outdoor-filter och gm_controller-target_supply vid BT1-spik; hela lokala pytest-sviten passerar (15 passed)
+  - Driftkontroll 2026-04-16: Produktions-DB på RPi passerar PRAGMA quick_check=ok och integrity_check=ok; journal_mode=wal och framtida planned_heating_schedule-dubbletter är 0
+  - Ny projektfakta: BT1/40004-utomhusgivaren sitter på fasad i västläge, vilket förklarar solpåverkade eftermiddagstoppar och bör beaktas i framtida styr-/optimizerändringar
+  - nibe-autotuner, nibe-gm-controller, nibe-api, nibe-mobile och nibe-smart-planner.timer är active; inga failed systemd-units rapporteras
+  - Journalen visar endast två nibe-smart-planner-fel 2026-04-14 09:29 i samband med tidigare DB/WAL-låsproblematik; inga nya warnings/errors efter WAL-återställningen hittades i kontrollerad period
+  - Komfort 2026-04-14 till 2026-04-16: huset har fortfarande legat varmt men trenden förbättras; downstairs snitt 22.59 → 22.46 → 21.94°C och Dexter snitt 22.10 → 22.25 → 21.58°C
+  - Varmoverride arbetar aktivt: 2026-04-14 var alla GM-ticks REST via warm override, 2026-04-15 förekom 214 BASTU_VAKT-ticks, och 2026-04-16 hittills inga BASTU_VAKT-ticks
+  - Prediction_accuracy byggs upp igen efter DB-reparationen och är bra för Floor-zonen: MAE 0.148°C 2026-04-14, 0.143°C 2026-04-15 och 0.088°C hittills 2026-04-16
+  - Produktionsdatabasen på RPi visade verklig SQLite-korruption: ogiltiga sidreferenser i svansen av filen, främst i parameter_readings, prediction_accuracy och index kopplade till parameter_readings
+  - nibe-smart-planner.service failade mot live-DB med "database disk image is malformed" vid läsning av senaste timmens HA_TEMP_DOWNSTAIRS, HA_TEMP_DEXTER och 40004
+  - Tjänster stoppades kontrollerat, live-DB säkrades som backup och korrupt kopia behölls för rollback/forensik: nibe_autotuner.db.corrupt_20260414_070759 samt tidigare *.bak_
+  - Ny frisk DB byggdes med exakt prod-schema från sqlite_master/.schema; läsbara tabeller kopierades över och parameter_readings salvades upp till verifierat säker cutoff id <= 800000
+  - prediction_accuracy kunde inte salvagas rent från den korrupta filen och är tom efter reparation; tabellen finns kvar i schema
+  - Reparerad DB passerar PRAGMA quick_check=ok på RPi efter swap
+  - nibe-autotuner, nibe-gm-controller och nibe-api startades igen; smart_planner kördes manuellt framgångsrikt och genererade ny plan utan DB-fel
+  - Rotorsaksanalys: inga kernel/ext4/mmc/undervoltage-fel hittades i tillgängliga loggar; vcgencmd visar throttled=0x0
+  - RPi saknar persistent journal (journald Storage=volatile), vilket kraftigt försvårar bevisning för äldre I/O- eller power-event
+  - RPi root-mount använder ext4 med noatime,commit=600; lång commit-intervall ökar risk för större SQLite-förlust vid abrupt avbrott
+  - Tidigare crash-händelser finns i last -x historiken, men inte tidsmässigt kopplade till denna incident
+  - Efter DB-swap fortsatte nibe-mobile.service kasta "database disk image is malformed" eftersom processen hållit den gamla korrupta DB-filen öppen sedan 2026-03-24; detta var ett separat restart-behov, inte ny korruption i den reparerade DB:n
+  - nibe-mobile.service restartades därefter explicit; ny process öppnar endast data/nibe_autotuner.db och /api/v7/dashboard svarar 200 igen
+  - Persistent journald aktiverades på RPi via /etc/systemd/journald.conf.d/persistent.conf med Storage=persistent, SystemMaxUse=200M, RuntimeMaxUse=100M och MaxRetentionSec=14day
+  - systemd-journald restartades och journalctl rapporterar nu 71.0M använd diskjournal; /var/log/journal finns och används
+  - ext4 root-mount på RPi sänktes från commit=600 till commit=30 via /etc/fstab-backup + kontrollerad reboot
+  - Efter reboot verifierades root som ext4 rw,noatime,commit=30 och nibe-autotuner, nibe-gm-controller, nibe-api samt nibe-mobile kom upp igen
+  - /api/v7/dashboard svarar fortsatt 200 efter reboot
+  - Vid manuell planner-verifiering efter reboot failade smart_planner med sqlite3.OperationalError: database is locked på BEGIN EXCLUSIVE; detta är låsrelaterat, inte ny korruption
+  - Produktions-DB växlades tillbaka till WAL på RPi efter backup av livefilen (nibe_autotuner.db.prewal_20260414_093144) och kontrollerad stop/start av alla DB-konsumenter
+  - Efter WAL-återställning verifierades journal_mode=wal, planned_heating_schedule uppdaterades till 2026-04-15 06:00:00 och smart_planner körde igenom utan database is locked
+  - nibe-mobile, nibe-autotuner, nibe-gm-controller och nibe-api är active efter WAL-återställningen; /api/v7/dashboard svarar 200
 open_issues:
+  - prediction_accuracy-historik förlorades i reparationen och behöver byggas upp igen över tid eller backfillas från annan källa om sådan finns
+  - parameter_readings efter ungefär 2026-04-04 salvagades inte från den korrupta svansen; ny data skrivs igen från live-drift
+  - Trolig grundorsak är lagrings-/avbrottsrelaterad truncering eller annan SQLite-filskada i svansen av DB:n; exakt event kan inte bevisas med nuvarande loggnivå
+  - ext4 root kör nu med commit=30; följ upp eventuell påverkan på SD-slitage och normal drift kommande dagar
+  - WAL-filer beter sig normalt vid kontroll 2026-04-16; fortsätt följa upp över längre tid att inga nya database is locked- eller malformed-fel uppstår
   - Historiska plan-dubbletter finns kvar i produktionsdatabasen men framtida plan-dubbletter är 0 efter deploy
   - Behöver 24-48h uppföljning för att se om varmoverride sänker andelen tid över 22°C och minskar BASTU_VAKT
   - Ren RPi-deploy ska fortsätta exkludera/protecta .env och logs/ för att undvika servicefel
   - Vid gm_controller-restart kan regulatorn skriva GM direkt enligt befintlig leash-logik; följ första minutens write efter restart
-  - Pytest passerar lokalt (10 passed) men visar Python 3.14-deprecation-varningar för utcnow/sqlite datetime
+  - Pytest passerar lokalt (15 passed) men visar Python 3.14-deprecation-varningar för utcnow/sqlite datetime
   - myUplink-tokens som tidigare låg i repo/history bör roteras
 ```
 
@@ -430,6 +467,15 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-04-16 | Implementerat `effective_outdoor_temp` lokalt: gm_controller filtrerar västsolpåverkad BT1 mot planens Open-Meteo-referens; smart_planner DB-fallback dämpar BT1-spikar via 6h median; pytest 15 passed |
+| 2026-04-16 | Dokumenterat att BT1/40004-utomhusgivaren sitter på västfasad och kan ge solpåverkade eftermiddagstoppar; framtida styrlogik bör överväga filtrerad/blandad utetemp |
+| 2026-04-16 | Driftkontroll efter DB-reparation: DB quick_check/integrity_check ok, WAL aktivt, huvudtjänster active, dashboard svarar, inga framtida plan-dubbletter; komfort fortsatt varm men förbättrad och BASTU_VAKT ej observerad hittills under dagen |
+| 2026-04-14 | Produktions-DB återställd till WAL efter backup av livefil; journal_mode=wal verifierad; smart_planner kör nu igen utan database is locked; dashboard och huvudtjänster verifierade active |
+| 2026-04-14 | RPi rootfs ändrad från ext4 `commit=600` till `commit=30` med reboot; mount verifierad efter uppstart; dashboard och huvudtjänster uppe; planner-verifiering visade nytt `database is locked` i DELETE-mode |
+| 2026-04-14 | Persistent journald aktiverad på RPi med Storage=persistent, 200M diskgräns och 14 dagars retention; journald verifierad aktiv och skrivande till disk |
+| 2026-04-14 | nibe-mobile.service restartad efter DB-recovery; ny process verifierad mot endast data/nibe_autotuner.db och /api/v7/dashboard returnerar 200 |
+| 2026-04-14 | Rotorsaksanalys klar: inga kernel/mmc/ext4/undervoltage-fel i tillgängliga loggar; journald är volatile; rootfs kör ext4 `commit=600`; nibe-mobile visades hålla korrupt DB-fil öppen efter swap och förklarar fortsatta dashboard-500 |
+| 2026-04-14 | Produktions-DB på RPi reparerad efter SQLite-korruption; backup + korrupt kopia sparade; ny DB byggd från prod-schema med frisk data + parameter_readings upp till id 800000; quick_check ok; smart_planner kördes framgångsrikt igen |
 | 2026-04-13 | Commit 7f4d43a deployad till RPi; första live-tick gav WARM_OVERRIDE_DOWNSTAIRS och GM write 100; nibe-gm-controller verifierad active |
 | 2026-04-13 | Varmoverride i gm_controller implementerad lokalt: HA_TEMP_DOWNSTAIRS/HA_TEMP_DEXTER kan tvinga REST med hysteresis; pytest 10 passed |
 | 2026-04-10 | Commit c0a6367 deployad till RPi; tjänster verifierade; prediction_accuracy backfill skapade 47 rader; framtida plan-dubbletter 0 |
@@ -457,6 +503,13 @@ open_issues:
 
 | Datum | Beslut | Anledning |
 |-------|--------|-----------|
+| 2026-04-16 | GM-kontrollerns `target_supply` ska baseras på filtrerad `effective_outdoor_temp` när BT1/40004 tydligt överstiger Open-Meteo-referensen från aktuell planrad | BT1 sitter på västfasad och visade upp till cirka +19°C solbias mot Open-Meteo. Rå BT1 ger då orimligt låg target_supply och kan störa GM-bankens energibalans. Filtreringen är konservativ: den aktiveras bara vid tydlig varm bias och klipper till referens + 2°C, medan rå BT1 behålls i mätdata. |
+| 2026-04-14 | Produktions-DB på RPi ska köras i WAL-läge | DELETE-mode i kombination med samtidiga läsare gjorde att smart_planner failade på `BEGIN EXCLUSIVE` med `database is locked`. WAL återställde den samtidighetsmodell som projektet utgår från och plannern verifierades fungera igen. |
+| 2026-04-14 | ext4 rootfs på RPi ska inte använda `commit=600`; `commit=30` används tills vidare | 600 sekunders commit-intervall ökar mängden osynkad data vid abrupt avbrott. 30 sekunder minskar återhämtningsfönstret utan att vara extremt aggressivt mot SD-kortet. |
+| 2026-04-14 | Persistent journald ska vara standard på RPi för denna installation, med explicit storleksgräns | SQLite-/driftincidenten kunde inte bevisas i efterhand när journald var volatile. Persistent journal med begränsad storlek ger incidentspår utan okontrollerad loggtillväxt på SD-kortet. |
+| 2026-04-14 | Vid framtida DB-swap/recovery på RPi måste även `nibe-mobile.service` räknas som DB-konsument och restartas eller stoppas explicit | Flask-PWA:n kan hålla gamla DB/WAL-filhandtag öppna i veckor. Efter recovery fortsatte den läsa `nibe_autotuner.db.corrupt_20260414_070759`, vilket gav falska fortsatta `malformed`-fel trots frisk live-DB. |
+| 2026-04-14 | Raspberry Pi-observability för DB-incidenter ska inte förlita sig på volatil journal ensam | `Storage=volatile` gjorde att tidigare bootloggar saknades. För att kunna bevisa SD/I/O/power-orsaker vid SQLite-korruption behövs persistent journald eller separat loggning. |
+| 2026-04-14 | Vid partiell SQLite-korruption på RPi ska återställning ske via exakt prod-schema + selektiv table-copy från läsbara tabeller, inte via lokal ORM-init eller blind `.recover` | Prod-schema hade drivit från lokala modeller och `.recover` gav inte användbar databas för denna skada. Exakt schema från sqlite_master bevarar kompatibilitet, och selektiv copy möjliggör kontrollerad salvage med tydlig rollback. |
 | 2026-04-13 | Varm-sida override ska ske i gm_controller med HA-zoner och hysteresis | Övervärmen kvarstod trots fungerande planner/feedbackloop. BT50/BASTU_VAKT reagerar för sent; HA_TEMP_DOWNSTAIRS och HA_TEMP_DEXTER ska kunna blockera fortsatt uppvärmning innan huset blir bastuvarmt. |
 | 2026-04-10 | Hårdkodade myUplink-tokens får inte finnas i repo eller maintenance-script | Tokens har WRITESYSTEM-scope och kan påverka verklig värmepump; autentisering ska ske via OAuth-flödet till `~/.myuplink_tokens.json`. |
 | 2026-04-10 | Live-GM-verktyg måste kräva explicit dubbel bekräftelse | GM 40940 påverkar live-styrning direkt; manuella verktyg ska inte kunna köras av misstag eller via automatisk testkörning. |

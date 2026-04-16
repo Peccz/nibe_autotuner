@@ -18,6 +18,7 @@ from data.database import SessionLocal
 from data.models import GMAccount, Device, PlannedHeatingSchedule, Parameter, ParameterReading, GMTransaction
 from services.analyzer import HeatPumpAnalyzer
 from services.safety_guard import SafetyGuard
+from services.outdoor_temperature import effective_outdoor_temp
 from integrations.api_client import MyUplinkClient
 from integrations.auth import MyUplinkAuth
 from core.config import settings
@@ -199,6 +200,7 @@ class GMController:
 
         offset = plan.planned_offset if plan else 0.0
         action = plan.planned_action if plan else "RUN"
+        reference_outdoor = plan.outdoor_temp if plan and plan.outdoor_temp is not None else None
 
         try:
             action, zone_override = self._apply_zone_temperature_overrides(device, now, action)
@@ -211,6 +213,12 @@ class GMController:
             safety_override = None
 
         # 3. Calculate Target & Delta
+        raw_outdoor = cur_outdoor
+        cur_outdoor = effective_outdoor_temp(raw_outdoor, reference_outdoor)
+        if cur_outdoor != raw_outdoor:
+            logger.info(
+                f"BT1 solar filter: raw={raw_outdoor:.1f}C, reference={reference_outdoor:.1f}C, effective={cur_outdoor:.1f}C"
+            )
         target_supply = 20 + (20 - cur_outdoor) * settings.DEFAULT_HEATING_CURVE * 0.12 + offset
         
         dt_min = (now - self.last_tick_time).total_seconds() / 60.0
