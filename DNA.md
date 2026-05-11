@@ -212,6 +212,20 @@ data_logger.py  →  calibration_history   (nattlig K_LEAK/K_GAIN-kalibrering me
 
 ---
 
+## 5b. Available Codex Skills In This Workspace
+- `workspace-governance`: Workspace-level DNA, project registry, and governance handoff workflow.
+- `nibe-autotuner`: Project-specific Nibe F730 optimization, GM safety, DB, dashboard, and deploy workflow.
+- `security-best-practices`: Security review support for credentials, env files, deploy, and live-control boundaries.
+- `security-threat-model`: Threat-modeling support for control-loop, stale telemetry, and trust-boundary changes.
+
+### Skill Usage Rule
+- Use `workspace-governance` for cross-project or `MASTER_DNA.md` work.
+- Use `nibe-autotuner` for all project-local optimizer, GM controller, data logger, DB, dashboard, deploy, and documentation tasks.
+- Use `security-best-practices` when touching credentials, env files, deploy flow, service config, or live write boundaries.
+- Use `security-threat-model` before broadening automation authority, safety limits, or trust assumptions.
+
+---
+
 ## 6. Databas & Parametrar
 
 ### Databastabeller
@@ -410,11 +424,30 @@ Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificie
 *AI-agenter: uppdatera detta avsnitt efter varje session.*
 
 ```
-last_updated: 2026-04-16
+last_updated: 2026-05-11
 last_agent: Codex GPT-5
 status: monitoring
-current_task: effective_outdoor_temp deployad till RPi och första live-tick verifierad
+current_task: Delay-compensated control deployed and monitoring
 recent_change: |
+  - Implementerat fördröjningskompensation i optimizer/planner/GM-controller: `heat_in_flight`, lead-shedding inför kväll/natt, BOOST-blockering vid restvärme och current-hour correction mot nästa planrad
+  - Ingen DB-migration och inga safety limits ändrade; ny diagnostik går till logg (`lag_state`, `lag_adjustment`, `heat_in_flight`)
+  - Lokal verifiering: full pytest-svit passerar (34 passed)
+  - RPi-verifiering före restart: riktade tester passerar (24 passed), DB quick_check=ok och huvudtjänster active
+  - Smart planner kördes manuellt 2026-05-11 13:32 CEST: `lag_state heat_in_flight=0.02C`, plan med REST 1h, RUN 22h och BOOST 1h
+  - `nibe-gm-controller` restartades 2026-05-11 13:33 CEST; första 3 ticks loggade lag_state, höll REST/WARM_OVERRIDE_DOWNSTAIRS, bank kvar 200 och inga failed systemd-units
+  - RPi-backup före deploy: `/tmp/nibe_delay_deploy_20260511`
+  - Added `workspace-governance`, `nibe-autotuner`, `security-best-practices`, and `security-threat-model` to Available Codex Skills
+  - Created `/home/peccz/.codex/skills/nibe-autotuner/SKILL.md` for reusable Nibe F730 optimizer, GM safety, DB, dashboard, and deploy workflow guidance
+  - Added `agents/openai.yaml` metadata for the `nibe-autotuner` skill
+  - Driftkontroll 2026-05-07: DB på RPi är frisk (journal_mode=wal, quick_check=ok) och huvudtjänsterna är active
+  - RPi kör senare commits än lokal HEAD (bl.a. fysik-/konfigkalibrering) och har mycket smutsig arbetskatalog; livebeteende analyserades därför primärt via DB och journal
+  - HA/IKEA-zonsensorerna är unavailable i Home Assistant sedan ca 2026-05-07 00:54 UTC; data_logger får därför inga nya HA_TEMP_DOWNSTAIRS/HA_TEMP_DEXTER-värden
+  - Senaste zonvärden i DB vid kontroll var ca 141 min gamla, medan myUplink/BT50/BT1/väder fortfarande uppdaterades
+  - Smart_planner genererar nästan bara RUN/offset 0-positivt; de senaste planerna saknar REST eftersom Pass 2 kräver att hela horisonten håller target_indoor_temp_max=22.0 och target_radiator_temp=21.0, inte bara komfortgolvet
+  - VV pre-heat blockerar dessutom ofta 8-11 timmar per 24h från reduktion, eftersom hot_water_usage har många timmar med >=2 historiska observationer
+  - Kritisk regulatorbugg hittad: WARM_OVERRIDE tvingade REST/GM=100 men GM-banken fortsatte bygga negativ skuld mot target_supply; när HA-zonerna blev stale släppte warmoverride och regulatorn skrev -350 från en skuld nära -2000
+  - Lokal fix implementerad i gm_controller: vid WARM_OVERRIDE ackumuleras ingen negativ GM-skuld och bank lyfts minst till 100; regressionstest tillagt
+  - Lokal verifiering: pytest 16 passed; inga produktionsfiler deployade och ingen service restartad i denna felsökningsrunda
   - Commit a1b3d26 pushad till origin/main och riktat deployad till RPi utan att ta med orelaterade arbetskatalogändringar
   - RPi-verifiering före restart passerade: compileall för outdoor_temperature/gm_controller/smart_planner och pytest för berörda tester (9 passed)
   - nibe-gm-controller restartades och nibe-smart-planner.service kördes manuellt; nibe-autotuner, nibe-gm-controller, nibe-api, nibe-mobile och nibe-smart-planner.timer är active
@@ -456,6 +489,9 @@ recent_change: |
   - Efter WAL-återställning verifierades journal_mode=wal, planned_heating_schedule uppdaterades till 2026-04-15 06:00:00 och smart_planner körde igenom utan database is locked
   - nibe-mobile, nibe-autotuner, nibe-gm-controller och nibe-api är active efter WAL-återställningen; /api/v7/dashboard svarar 200
 open_issues:
+  - Följ upp 2026-05-12 om fördröjningskompensationen minskar nattlig övertemperatur, morgonundershoot, warmoverride-ticks och BOOST efter hög framledning
+  - HA/IKEA-sensorerna har varit återkommande svaga/unavailable; systemet har fallback men primär zonfeedback behöver fortsatt bevakas
+  - VV pre-heat kan fortfarande blockera REST vid enstaka timmar; följ upp om mönstret behöver ytterligare recency-filter
   - prediction_accuracy-historik förlorades i reparationen och behöver byggas upp igen över tid eller backfillas från annan källa om sådan finns
   - parameter_readings efter ungefär 2026-04-04 salvagades inte från den korrupta svansen; ny data skrivs igen från live-drift
   - Trolig grundorsak är lagrings-/avbrottsrelaterad truncering eller annan SQLite-filskada i svansen av DB:n; exakt event kan inte bevisas med nuvarande loggnivå
@@ -473,6 +509,8 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-05-11 | Fördröjningskompenserad styrning implementerad och deployad: heat_in_flight, lead-shedding, BOOST-blockering vid restvärme och GM current-hour correction; lokal pytest 34 passed, RPi riktade tester 24 passed, första 3 live-ticks stabila |
+| 2026-05-07 | Felsökning av upplevt trasig optimering: HA-zonsensorer unavailable, planner genererar nästan bara RUN, VV pre-heat blockerar många timmar och WARM_OVERRIDE byggde negativ GM-skuld; lokal gm_controller-fix + test skapad, pytest 16 passed, ej deployad |
 | 2026-04-16 | Commit a1b3d26 deployad riktat till RPi; gm_controller restartad; första tick verifierade BT1-filter raw 32.0°C → effective 18.0°C mot planreferens 16.0°C och GM=100 i REST/warm override |
 | 2026-04-16 | Implementerat `effective_outdoor_temp` lokalt: gm_controller filtrerar västsolpåverkad BT1 mot planens Open-Meteo-referens; smart_planner DB-fallback dämpar BT1-spikar via 6h median; pytest 15 passed |
 | 2026-04-16 | Dokumenterat att BT1/40004-utomhusgivaren sitter på västfasad och kan ge solpåverkade eftermiddagstoppar; framtida styrlogik bör överväga filtrerad/blandad utetemp |
@@ -510,6 +548,7 @@ open_issues:
 
 | Datum | Beslut | Anledning |
 |-------|--------|-----------|
+| 2026-05-11 | Planner och GM-controller ska kompensera explicit för värmetröghet via loggbaserad `heat_in_flight` och planålders-/nästa-timme-korrigering | Driftanalys visade att timplanner, Nibes framledningsrespons och husets termiska massa gav 1-3 timmars styrfördröjning. Utan lagkompensation blev warmoverride praktisk huvudregulator och morgonboost gav eftervärme in på dagen. |
 | 2026-04-16 | GM-kontrollerns `target_supply` ska baseras på filtrerad `effective_outdoor_temp` när BT1/40004 tydligt överstiger Open-Meteo-referensen från aktuell planrad | BT1 sitter på västfasad och visade upp till cirka +19°C solbias mot Open-Meteo. Rå BT1 ger då orimligt låg target_supply och kan störa GM-bankens energibalans. Filtreringen är konservativ: den aktiveras bara vid tydlig varm bias och klipper till referens + 2°C, medan rå BT1 behålls i mätdata. |
 | 2026-04-14 | Produktions-DB på RPi ska köras i WAL-läge | DELETE-mode i kombination med samtidiga läsare gjorde att smart_planner failade på `BEGIN EXCLUSIVE` med `database is locked`. WAL återställde den samtidighetsmodell som projektet utgår från och plannern verifierades fungera igen. |
 | 2026-04-14 | ext4 rootfs på RPi ska inte använda `commit=600`; `commit=30` används tills vidare | 600 sekunders commit-intervall ökar mängden osynkad data vid abrupt avbrott. 30 sekunder minskar återhämtningsfönstret utan att vara extremt aggressivt mot SD-kortet. |
@@ -532,6 +571,7 @@ open_issues:
 | 2025-12-01 | Raspberry Pi 4 som produktionsenhet | Låg energiförbrukning (2W), nära värmepumpen, stabilt Linux. Engångsinvestering ~500 SEK. |
 | 2025-12-01 | SQLite med WAL-mode | Enkel att underhålla, inga databasservrar. WAL-mode löser concurrent read/write (data_logger + gm_controller). |
 | 2025-12-01 | systemd Restart=always för alla tjänster | Garanterar återstart vid krasch utan manuell intervention. Watchdog (120s) för gm_controller ger extra skydd. |
+| 2026-05-10 | Added project-specific Codex skill `nibe-autotuner` | Repeated optimizer, GM controller, DB, dashboard, deploy, and safety workflows should be reusable scaffolding instead of re-explained in prompts |
 
 ---
 
