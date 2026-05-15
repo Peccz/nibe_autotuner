@@ -14,6 +14,7 @@ from core.config import settings
 from services.price_service import price_service
 from services.weather_service import SMHIWeatherService
 from services.optimizer import optimize_24h_plan, predict_temperatures, predict_temperatures_two_zone
+from services.v15_mpc import compare_shadow_summary, plan_v15_shadow
 from services.outdoor_temperature import effective_outdoor_temp_from_recent_sensor_values
 from services.comfort_profile import (
     DAY_DEXTER_MAX_C,
@@ -240,14 +241,23 @@ def _build_comfort_profiles(start_utc: datetime, hours: int):
     for i in range(hours):
         bounds = comfort_bounds_for_time(start_utc + timedelta(hours=i))
         floor_min.append(bounds["floor_min"])
-        floor_max.append(bounds["floor_max"])
+        floor_max.append(bounds.get("planning_floor_max", bounds["floor_max"]))
         dexter_min.append(bounds["dexter_min"])
-        dexter_max.append(bounds["dexter_max"])
+        dexter_max.append(bounds.get("planning_dexter_max", bounds["dexter_max"]))
         if bounds["boost_allowed"]:
             boost_allowed.add(i)
         profile_counts[bounds["profile"]] = profile_counts.get(bounds["profile"], 0) + 1
 
     return floor_min, floor_max, dexter_min, dexter_max, boost_allowed, profile_counts
+
+
+def _calculate_room_heat_surplus(start_floor: float, start_radiator: float, bounds: dict) -> float:
+    """Estimate room heat surplus above the active planning upper band."""
+    floor_max = bounds.get("planning_floor_max", bounds["floor_max"])
+    dexter_max = bounds.get("planning_dexter_max", bounds["dexter_max"])
+    floor_surplus = max(0.0, float(start_floor) - float(floor_max))
+    dexter_surplus = max(0.0, float(start_radiator) - float(dexter_max))
+    return min(2.0, max(floor_surplus, dexter_surplus))
 
 
 def _calculate_heat_in_flight(conn, now: datetime) -> float:
@@ -382,6 +392,8 @@ def calculate_plan():
     # Align data to 24h grid
     price_list   = []
     outdoor_list = []
+    wind_list    = []
+    cloud_list   = []
 
     for i in range(24):
         future_time = now + timedelta(hours=i)
@@ -402,8 +414,12 @@ def calculate_plan():
                 None
             )
             outdoor_list.append(w_obj.temperature if w_obj else fallback_outdoor or 5.0)
+            wind_list.append(float(w_obj.wind_speed) if w_obj else 0.0)
+            cloud_list.append(float(w_obj.cloud_cover) if w_obj else 8.0)
         else:
             outdoor_list.append(fallback_outdoor)
+            wind_list.append(0.0)
+            cloud_list.append(8.0)
 
     # 3. Load calibrated constants and VV patterns
     cal_k_leak, cal_k_gain = _load_calibration(conn)
@@ -429,7 +445,12 @@ def calculate_plan():
         f"profiles={profile_counts} boost_allowed={sorted(boost_allowed)}"
     )
     heat_in_flight = _calculate_heat_in_flight(conn, sensor_now)
-    logger.info(f"lag_state heat_in_flight={heat_in_flight:.2f}C")
+    current_bounds = comfort_bounds_for_time(now)
+    room_heat_surplus = _calculate_room_heat_surplus(start_floor, start_radiator, current_bounds)
+    logger.info(
+        f"lag_state heat_in_flight={heat_in_flight:.2f}C "
+        f"room_heat_surplus={room_heat_surplus:.2f}C profile={current_bounds['profile']}"
+    )
 
     # 4. Run two-zone optimization
     offsets = optimize_24h_plan(
@@ -444,10 +465,41 @@ def calculate_plan():
         must_run_hours        = must_run,
         boost_allowed_hours   = boost_allowed,
         heat_in_flight        = heat_in_flight,
+        room_heat_surplus     = room_heat_surplus,
         lead_shed_hours       = 4,
         k_leak                = cal_k_leak,
         k_gain_floor          = cal_k_gain,
     )
+
+    try:
+        v15_shadow = plan_v15_shadow(
+            start_utc          = now,
+            start_floor        = start_floor,
+            start_dexter       = start_radiator,
+            outdoor_temps      = outdoor_list,
+            prices             = price_list,
+            wind_speeds        = wind_list,
+            cloud_cover        = cloud_list,
+            must_run_hours     = must_run,
+            heat_in_flight     = heat_in_flight,
+            room_heat_surplus  = room_heat_surplus,
+            k_leak_floor       = cal_k_leak,
+            k_gain_floor       = cal_k_gain,
+        )
+        shadow = compare_shadow_summary(offsets, v15_shadow, price_list)
+        logger.info(
+            "v15_shadow "
+            f"actions={{'REST': {shadow.get('v15_rest', 0)}, "
+            f"'RUN': {v15_shadow.actions.count('RUN')}, "
+            f"'BOOST': {shadow.get('v15_boost', 0)}}} "
+            f"min_floor={shadow.get('v15_min_floor', 0.0):.2f}C "
+            f"min_dexter={shadow.get('v15_min_dexter', 0.0):.2f}C "
+            f"weighted_price={shadow.get('v15_weighted_price', 0.0):.3f} "
+            f"vs_v14={shadow.get('v14_weighted_price', 0.0):.3f} "
+            f"reasons={v15_shadow.reasons} first_offsets={v15_shadow.offsets[:6]}"
+        )
+    except Exception as e:
+        logger.warning(f"v15_shadow failed: {e}")
 
     # 5. Simulate both zones for plan storage (use same calibrated constants)
     floor_temps, rad_temps = predict_temperatures_two_zone(
@@ -474,7 +526,7 @@ def calculate_plan():
             floor_temps[i],
             rad_temps[i],
             outdoor_list[i],
-            0,  # wind_speed placeholder
+            wind_list[i],
         ))
 
     action_counts = {}

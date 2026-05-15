@@ -154,6 +154,7 @@ def optimize_24h_plan(
     must_run_hours: Optional[set] = None,
     boost_allowed_hours: Optional[set] = None,
     heat_in_flight: float = 0.0,
+    room_heat_surplus: float = 0.0,
     lead_shed_hours: int = 4,
     k_leak: Optional[float] = None,
     k_gain_floor: Optional[float] = None,
@@ -185,6 +186,7 @@ def optimize_24h_plan(
     min_offset = settings.OPTIMIZER_MIN_OFFSET
     k_leak     = k_leak if k_leak is not None else settings.OPTIMIZER_K_LEAK
     heat_in_flight = max(0.0, float(heat_in_flight or 0.0))
+    room_heat_surplus = max(0.0, float(room_heat_surplus or 0.0))
     lead_shed_hours = max(0, int(lead_shed_hours or 0))
 
     two_zone = current_radiator_temp is not None
@@ -200,7 +202,7 @@ def optimize_24h_plan(
             rad_adjusted.append(r_temps[i] + heat_in_flight * 0.8 * decay)
         return floor_adjusted, rad_adjusted
 
-    def _check_temps(offsets):
+    def _check_temps(offsets, include_residual_heat: bool = True):
         if two_zone:
             f_temps, r_temps = predict_temperatures_two_zone(
                 current_temp, current_radiator_temp, outdoor_temps, offsets, loss_factors,
@@ -210,11 +212,13 @@ def optimize_24h_plan(
             f_temps = predict_temperatures(current_temp, outdoor_temps, offsets, loss_factors,
                                            k_leak=k_leak, k_gain=k_gain_floor)
             r_temps = f_temps
-        return _with_residual_heat(f_temps, r_temps)
+        if include_residual_heat:
+            return _with_residual_heat(f_temps, r_temps)
+        return f_temps, r_temps
 
     # --- PASS 1: Raise offsets to enforce comfort floors for both zones ---
     for _ in range(300):
-        f_temps, r_temps = _check_temps(offsets)
+        f_temps, r_temps = _check_temps(offsets, include_residual_heat=False)
 
         floor_ok = all(temp >= min_temps[i] for i, temp in enumerate(f_temps))
         rad_ok = all(temp >= min_rad_temps[i] for i, temp in enumerate(r_temps)) if two_zone else True
@@ -247,13 +251,12 @@ def optimize_24h_plan(
             if offsets[h] >= max_offset:
                 continue
             if (
-                heat_in_flight >= 0.4
+                boost_allowed_hours is not None
+                and h not in boost_allowed_hours
                 and offsets[h] >= 0.0
-                and boost_allowed_hours is not None
-                and h in boost_allowed_hours
+                and bind_idx > 2
             ):
                 continue
-
             avg_water_temp = 30.0 + offsets[h] * 2.0
             cop = COPModel._interpolate_cop(outdoor_temps[h], avg_water_temp) or 3.0
             cop = max(1.0, cop)
@@ -301,6 +304,14 @@ def optimize_24h_plan(
             return _overheat_amount(hour, f_temps, r_temps)
         return max(_overheat_amount(i, f_temps, r_temps) for i in range(hour, end_hour))
 
+    def _room_surplus_bias(hour: int) -> float:
+        # Room heat surplus is slow house mass, not hydronic heat. Keep it visible
+        # through the evening horizon so price logic starts shedding early enough.
+        return room_heat_surplus * max(0.0, 1.0 - (hour / 8.0))
+
+    def _effective_overheat_amount(hour: int, f_temps, r_temps) -> float:
+        return max(0.0, _overheat_amount(hour, f_temps, r_temps) + _room_surplus_bias(hour))
+
     def _objective(test_offsets) -> float:
         f_temps, r_temps = _check_temps(test_offsets)
         score = 0.0
@@ -310,13 +321,13 @@ def optimize_24h_plan(
             score += heat_intensity * max(0.01, prices[i])
 
             floor_under = max(0.0, min_temps[i] - f_temps[i])
-            floor_over = max(0.0, f_temps[i] - max_temps[i])
+            floor_over = max(0.0, f_temps[i] - max_temps[i] + _room_surplus_bias(i))
             score += floor_under * 10000.0
             score += floor_over * floor_over * 300.0
 
             if two_zone:
                 rad_under = max(0.0, min_rad_temps[i] - r_temps[i])
-                rad_over = max(0.0, r_temps[i] - max_rad_temps[i])
+                rad_over = max(0.0, r_temps[i] - max_rad_temps[i] + _room_surplus_bias(i))
                 score += rad_under * 10000.0
                 score += rad_over * rad_over * 300.0
 
@@ -339,13 +350,15 @@ def optimize_24h_plan(
     if two_zone:
         current_overheat = max(current_overheat, r_current[0] - max_rad_temps[0])
 
+    current_overheat = max(current_overheat, room_heat_surplus)
+
     if current_overheat >= 0.3:
         forced_shed_hours = 0
         for h in range(hours):
             if boost_allowed_hours is not None and h in boost_allowed_hours:
                 continue
             f_temps, r_temps = _check_temps(offsets)
-            if _lead_overheat_amount(h, f_temps, r_temps) <= 0.0:
+            if max(_lead_overheat_amount(h, f_temps, r_temps), _effective_overheat_amount(h, f_temps, r_temps)) <= 0.0:
                 continue
 
             changed = True
@@ -360,10 +373,24 @@ def optimize_24h_plan(
                 trial = offsets.copy()
                 trial[h] = candidate
                 trial_f, trial_r = _check_temps(trial)
+                margin = 0.2 if room_heat_surplus >= 0.3 else 0.1
                 floors_safe = (
                     _hard_floors_ok_window(trial_f, trial_r, h)
                     if heat_in_flight > 0.0 else _hard_floors_ok(trial_f, trial_r)
                 )
+                if floors_safe:
+                    floor_margin_ok = all(
+                        trial_f[i] >= min_temps[i] + margin
+                        for i in range(h, min(hours, h + lead_shed_hours + 1))
+                    )
+                    rad_margin_ok = (
+                        all(
+                            trial_r[i] >= min_rad_temps[i] + margin
+                            for i in range(h, min(hours, h + lead_shed_hours + 1))
+                        )
+                        if two_zone else True
+                    )
+                    floors_safe = floor_margin_ok and rad_margin_ok
                 if floors_safe:
                     offsets = trial
                     changed = True
@@ -412,7 +439,7 @@ def optimize_24h_plan(
                     and _overheat_amount(h, f_temps, r_temps) > 0.0
                 ):
                     continue
-                if offsets[h] < 0.0 and _lead_overheat_amount(h, f_temps, r_temps) > 0.0:
+                if offsets[h] < 0.0 and _effective_overheat_amount(h, f_temps, r_temps) > 0.0:
                     continue
                 if boost_allowed_hours is not None and h not in boost_allowed_hours and offsets[h] >= 0.0:
                     continue
@@ -476,14 +503,14 @@ def optimize_24h_plan(
         overheat_order = sorted(
             range(hours),
             key=lambda h: (
-                max(0.0, f_temps[h] - max_temps[h])
-                + (max(0.0, r_temps[h] - max_rad_temps[h]) if two_zone else 0.0),
+                max(0.0, f_temps[h] - max_temps[h] + _room_surplus_bias(h))
+                + (max(0.0, r_temps[h] - max_rad_temps[h] + _room_surplus_bias(h)) if two_zone else 0.0),
                 prices[h],
             ),
             reverse=True,
         )
         for h in overheat_order:
-            overheated = f_temps[h] > max_temps[h] or (two_zone and r_temps[h] > max_rad_temps[h])
+            overheated = _effective_overheat_amount(h, f_temps, r_temps) > 0.0
             if not overheated or offsets[h] <= min_offset:
                 continue
             trial = offsets.copy()
@@ -491,7 +518,11 @@ def optimize_24h_plan(
             if _rest_blocked(h, trial[h]):
                 continue
             trial_f, trial_r = _check_temps(trial)
-            if _floors_ok(trial_f, trial_r):
+            floors_safe = (
+                _hard_floors_ok_window(trial_f, trial_r, h, margin=-0.2)
+                if room_heat_surplus >= 0.3 else _floors_ok(trial_f, trial_r)
+            )
+            if floors_safe:
                 offsets = trial
                 improved = True
                 break

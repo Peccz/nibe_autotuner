@@ -10,6 +10,7 @@ from services.optimizer import optimize_24h_plan, predict_temperatures_two_zone
 from services.smart_planner import (
     _build_comfort_profiles,
     _calculate_heat_in_flight,
+    _calculate_room_heat_surplus,
     _get_vv_must_run_hours,
     _resolve_zone_temperatures,
     DEXTER_COMFORT_MAX_C,
@@ -53,6 +54,25 @@ def test_time_profile_has_sval_natt_and_early_morning_warmth():
     assert morning["dexter_min"] == 20.8
 
 
+def test_evening_preshed_uses_night_upper_band_for_planning():
+    evening = comfort_bounds_for_time(datetime(2026, 5, 8, 16, 30, tzinfo=timezone.utc))
+
+    assert evening["profile"] == "evening_preshed"
+    assert evening["floor_min"] == 20.5
+    assert evening["floor_max"] == 21.8
+    assert evening["planning_floor_max"] == 21.2
+    assert evening["planning_dexter_max"] == 20.8
+    assert evening["boost_allowed"] is False
+
+
+def test_room_heat_surplus_uses_planning_upper_band():
+    evening = comfort_bounds_for_time(datetime(2026, 5, 8, 16, 30, tzinfo=timezone.utc))
+
+    surplus = _calculate_room_heat_surplus(21.9, 21.1, evening)
+
+    assert round(surplus, 2) == 0.70
+
+
 def test_profiled_optimizer_sheds_heat_through_night_without_floor_breach():
     start_utc = datetime(2026, 5, 8, 18, 0, 0)  # 20:00 Europe/Stockholm
     floor_min, floor_max, dexter_min, dexter_max, boost_allowed, _ = _build_comfort_profiles(start_utc, 24)
@@ -73,6 +93,49 @@ def test_profiled_optimizer_sheds_heat_through_night_without_floor_breach():
     assert any(offset <= -2.5 for offset in offsets[:8])
     assert all(temp >= floor_min[i] - 0.1 for i, temp in enumerate(floor_temps))
     assert all(temp >= dexter_min[i] - 0.1 for i, temp in enumerate(dexter_temps))
+    assert not any(offset > 0.0 for i, offset in enumerate(offsets) if i not in boost_allowed)
+
+
+def test_evening_room_heat_surplus_starts_preshed_before_sleep_window():
+    start_utc = datetime(2026, 5, 8, 15, 0, 0)  # 17:00 Europe/Stockholm
+    floor_min, floor_max, dexter_min, dexter_max, boost_allowed, _ = _build_comfort_profiles(start_utc, 24)
+
+    offsets = optimize_24h_plan(
+        current_temp=21.9,
+        outdoor_temps=[8.0] * 24,
+        prices=[1.0] * 24,
+        min_temp=floor_min,
+        target_temp=floor_max,
+        current_radiator_temp=21.8,
+        min_radiator_temp=dexter_min,
+        target_radiator_temp=dexter_max,
+        boost_allowed_hours=boost_allowed,
+        room_heat_surplus=0.7,
+    )
+
+    assert any(offset < 0.0 for offset in offsets[:4])
+    floor_temps, dexter_temps = predict_temperatures_two_zone(21.9, 21.8, [8.0] * 24, offsets)
+    assert all(temp >= floor_min[i] - 0.1 for i, temp in enumerate(floor_temps[:4]))
+    assert all(temp >= dexter_min[i] - 0.1 for i, temp in enumerate(dexter_temps[:4]))
+
+
+def test_cheap_night_does_not_boost_before_morning_window_when_floors_hold():
+    start_utc = datetime(2026, 5, 8, 21, 0, 0)  # 23:00 Europe/Stockholm
+    floor_min, floor_max, dexter_min, dexter_max, boost_allowed, _ = _build_comfort_profiles(start_utc, 24)
+    prices = [0.1] * 6 + [2.5] * 18
+
+    offsets = optimize_24h_plan(
+        current_temp=20.9,
+        outdoor_temps=[8.0] * 24,
+        prices=prices,
+        min_temp=floor_min,
+        target_temp=floor_max,
+        current_radiator_temp=20.4,
+        min_radiator_temp=dexter_min,
+        target_radiator_temp=dexter_max,
+        boost_allowed_hours=boost_allowed,
+    )
+
     assert not any(offset > 0.0 for i, offset in enumerate(offsets) if i not in boost_allowed)
 
 
@@ -138,24 +201,27 @@ def test_profiled_optimizer_allows_early_morning_boost_when_needed():
     assert any(offset > 0.0 for i, offset in enumerate(offsets) if i in boost_allowed)
 
 
-def test_heat_in_flight_blocks_early_morning_boost():
-    start_utc = datetime(2026, 5, 8, 2, 0, 0)  # 04:00 Europe/Stockholm
+def test_heat_in_flight_does_not_block_morning_floor_recovery():
+    start_utc = datetime(2026, 5, 13, 3, 0, 0)  # 05:00 Europe/Stockholm
     floor_min, floor_max, dexter_min, dexter_max, boost_allowed, _ = _build_comfort_profiles(start_utc, 24)
 
     offsets = optimize_24h_plan(
-        current_temp=21.0,
-        outdoor_temps=[4.0] * 24,
-        prices=[1.0] * 24,
+        current_temp=21.16,
+        outdoor_temps=[6.0] * 24,
+        prices=[2.0] * 24,
         min_temp=floor_min,
         target_temp=floor_max,
-        current_radiator_temp=20.6,
+        current_radiator_temp=20.89,
         min_radiator_temp=dexter_min,
         target_radiator_temp=dexter_max,
         boost_allowed_hours=boost_allowed,
-        heat_in_flight=0.8,
+        heat_in_flight=0.4,
     )
+    floor_temps, dexter_temps = predict_temperatures_two_zone(21.16, 20.89, [6.0] * 24, offsets)
 
-    assert not any(offset > 0.0 for i, offset in enumerate(offsets) if i in boost_allowed)
+    assert any(offset > 0.0 for i, offset in enumerate(offsets[:3]) if i in boost_allowed)
+    assert all(temp >= floor_min[i] - 0.12 for i, temp in enumerate(floor_temps[:3]))
+    assert all(temp >= dexter_min[i] - 0.1 for i, temp in enumerate(dexter_temps[:3]))
 
 
 def test_heat_in_flight_starts_shedding_before_night_profile():

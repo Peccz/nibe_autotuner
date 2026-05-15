@@ -221,6 +221,22 @@ class GMController:
         self._warm_override_active = warm_override
         return action, override_reason
 
+    def _room_heat_surplus(self, bounds):
+        floor_temp = getattr(self, "_last_floor_temp", None)
+        dexter_temp = getattr(self, "_last_dexter_temp", None)
+        floor_max = bounds.get("planning_floor_max", bounds["floor_max"])
+        dexter_max = bounds.get("planning_dexter_max", bounds["dexter_max"])
+        floor_surplus = max(0.0, float(floor_temp) - floor_max) if floor_temp is not None else 0.0
+        dexter_surplus = max(0.0, float(dexter_temp) - dexter_max) if dexter_temp is not None else 0.0
+        return min(2.0, max(floor_surplus, dexter_surplus))
+
+    def _zones_at_or_near_floors(self, bounds, margin: float = -0.05) -> bool:
+        floor_temp = getattr(self, "_last_floor_temp", None)
+        dexter_temp = getattr(self, "_last_dexter_temp", None)
+        floor_ok = floor_temp is not None and floor_temp >= bounds["floor_min"] + margin
+        dexter_ok = dexter_temp is None or dexter_temp >= bounds["dexter_min"] + margin
+        return floor_ok and dexter_ok
+
     def _apply_plan_delay_correction(self, now, plan, next_plan, action, offset, cur_supply, cur_outdoor):
         if not plan or plan.timestamp is None:
             return action, offset
@@ -236,6 +252,7 @@ class GMController:
             (floor_temp is not None and floor_temp > bounds["floor_max"]) or
             (dexter_temp is not None and dexter_temp > bounds["dexter_max"])
         )
+        room_heat_surplus = self._room_heat_surplus(bounds)
 
         target_supply_now = 20 + (20 - cur_outdoor) * settings.DEFAULT_HEATING_CURVE * 0.12 + float(offset or 0.0)
         heat_in_flight = cur_supply > 35.0 or cur_supply - target_supply_now > 4.0
@@ -244,29 +261,30 @@ class GMController:
         corrected_offset = float(offset or 0.0)
         reason = None
 
-        if plan_age_minutes >= 40.0 and next_offset < corrected_offset and over_max:
+        if plan_age_minutes >= 40.0 and next_offset < corrected_offset and (over_max or room_heat_surplus >= 0.2):
             corrected_offset = next_offset
             corrected_action = "REST" if next_action == "REST" or next_offset <= settings.OPTIMIZER_REST_THRESHOLD else "RUN"
             reason = "early_next_shed"
-        elif plan_age_minutes >= 40.0 and next_action == "BOOST" and (over_max or heat_in_flight):
+        elif plan_age_minutes >= 40.0 and next_action == "BOOST" and (over_max or heat_in_flight or room_heat_surplus >= 0.2):
             corrected_offset = min(corrected_offset, 0.0)
             corrected_action = "RUN"
             reason = "block_stale_next_boost"
-        elif action == "BOOST" and (over_max or heat_in_flight):
+        elif action == "BOOST" and (over_max or heat_in_flight or room_heat_surplus >= 0.2):
             corrected_offset = min(corrected_offset, 0.0)
             corrected_action = "RUN"
-            reason = "block_current_boost_heat_in_flight"
+            reason = "block_current_boost_heat_surplus"
 
         if reason:
             logger.info(
                 f"lag_adjustment={reason} plan_age_minutes={plan_age_minutes:.0f} "
                 f"offset={offset:.1f}->{corrected_offset:.1f} action={action}->{corrected_action} "
-                f"next_offset={next_offset:.1f} heat_in_flight={heat_in_flight} over_max={over_max}"
+                f"next_offset={next_offset:.1f} heat_in_flight={heat_in_flight} "
+                f"room_heat_surplus={room_heat_surplus:.2f} over_max={over_max}"
             )
         else:
             logger.debug(
                 f"lag_state plan_age_minutes={plan_age_minutes:.0f} next_offset={next_offset:.1f} "
-                f"heat_in_flight={heat_in_flight} over_max={over_max}"
+                f"heat_in_flight={heat_in_flight} room_heat_surplus={room_heat_surplus:.2f} over_max={over_max}"
             )
 
         return corrected_action, corrected_offset
@@ -406,6 +424,17 @@ class GMController:
                     f"({account.balance:.1f} → 0.0) while zones are above comfort floors."
                 )
                 account.balance = 0.0
+        elif (
+            action == "RUN"
+            and not safety_override
+            and account.balance < -250.0
+            and self._zones_at_or_near_floors(getattr(self, "_last_comfort_bounds", None) or comfort_bounds_for_time(now))
+        ):
+            logger.info(
+                f"Zones are at/near comfort floors — capping recovery GM bank "
+                f"{account.balance:.1f} → -250.0 to avoid aggressive post-delay catch-up."
+            )
+            account.balance = -250.0
 
         # 5. SAFETY OVERRIDES
         if cur_indoor > 23.5:

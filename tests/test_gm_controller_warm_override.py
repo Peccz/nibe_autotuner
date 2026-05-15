@@ -215,9 +215,22 @@ def test_stale_zone_sensors_use_bt50_gap_fallback_for_warm_override():
     assert client.writes[-1] == (device.device_id, controller.PARAM_GM_WRITE, 100)
 
 
-def test_fallback_suppresses_stale_negative_bank_debt_when_comfortable():
+def test_fallback_suppresses_stale_negative_bank_debt_when_comfortable(monkeypatch):
     now = datetime.now(timezone.utc)
     db, device, controller, client = setup_runtime(now, planned_action="RUN", floor_temp=20.7, dexter_temp=20.2)
+    monkeypatch.setattr(
+        "services.gm_controller.comfort_bounds_for_time",
+        lambda now: {
+            "profile": "day",
+            "floor_min": 20.5,
+            "floor_max": 21.8,
+            "dexter_min": 20.0,
+            "dexter_max": 21.3,
+            "planning_floor_max": 21.8,
+            "planning_dexter_max": 21.3,
+            "boost_allowed": False,
+        },
+    )
 
     stale_time = (now - timedelta(hours=2)).replace(tzinfo=None)
     stale_readings = db.query(ParameterReading).join(Parameter).filter(
@@ -374,3 +387,60 @@ def test_current_boost_is_blocked_when_supply_heat_is_in_flight(monkeypatch):
     tx = db.query(GMTransaction).order_by(GMTransaction.id.desc()).first()
     assert tx.action == "RUN"
     assert round(tx.supply_target, 2) == 32.60
+
+
+def test_current_boost_is_blocked_when_room_heat_surplus_exists(monkeypatch):
+    now = datetime(2026, 5, 8, 15, 30, tzinfo=timezone.utc)  # 17:30 local evening_preshed
+    db, device, controller, client = setup_runtime(now, planned_action="BOOST", floor_temp=21.9, dexter_temp=21.1)
+
+    plan = db.query(PlannedHeatingSchedule).first()
+    plan.planned_offset = 3.0
+    db.commit()
+
+    monkeypatch.setattr(
+        controller,
+        "_apply_zone_temperature_overrides",
+        lambda device, now, action, bt50_indoor=None: (action, None),
+    )
+
+    controller.run_tick()
+
+    tx = db.query(GMTransaction).order_by(GMTransaction.id.desc()).first()
+    assert tx.action == "RUN"
+    assert round(tx.supply_target, 2) == 32.60
+
+
+def test_recovery_bank_is_capped_when_zones_are_near_floors(monkeypatch):
+    now = datetime.now(timezone.utc)
+    db, device, controller, client = setup_runtime(now, planned_action="RUN", floor_temp=21.0, dexter_temp=20.8)
+    monkeypatch.setattr(
+        "services.gm_controller.comfort_bounds_for_time",
+        lambda now: {
+            "profile": "day",
+            "floor_min": 20.5,
+            "floor_max": 21.8,
+            "dexter_min": 20.0,
+            "dexter_max": 21.3,
+            "planning_floor_max": 21.8,
+            "planning_dexter_max": 21.3,
+            "boost_allowed": False,
+        },
+    )
+
+    account = db.query(GMAccount).first()
+    account.balance = -900.0
+    db.commit()
+
+    client.points = [
+        {"parameterId": "40008", "value": 21.0},
+        {"parameterId": "40004", "value": 5.0},
+        {"parameterId": "40033", "value": 21.0},
+        {"parameterId": "40941", "value": -250.0},
+    ]
+
+    controller.run_tick()
+
+    tx = db.query(GMTransaction).order_by(GMTransaction.id.desc()).first()
+    assert tx.action == "RUN"
+    assert tx.new_balance == -250.0
+    assert client.writes[-1] == (device.device_id, controller.PARAM_GM_WRITE, -250)
