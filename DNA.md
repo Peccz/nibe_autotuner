@@ -426,9 +426,18 @@ Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificie
 ```
 last_updated: 2026-06-07
 last_agent: Codex GPT-5
-status: v16_active_deployed
-current_task: V16 robust styrlogik riktat deployad och aktiverad på RPi
+status: v16_active_clean_release_deployed
+current_task: Lokal arbetskatalog städad och RPi ersatt med ren release från Git HEAD
 recent_change: |
+  - 2026-06-07 lokal arbetskatalog städad i separata commits: `34b167e` V16 robust planner rollout, `aebc236` förenklad projektdokumentation och `6206a92` ignore av Codex-mount; local `main` pushad och `git status` ren
+  - Gamla toppnivådokument `PROJECT_SUMMARY.md`, `TO_CLAUDE.md` och `architecture.md` är borttagna ur Git; `CLAUDE.md` pekar nu på `DNA.md` som source of truth. `.codex` kunde inte tas bort eftersom den är en read-only tmpfs bind mount från Codex-miljön och ignoreras i `.gitignore`
+  - RPi-cleanup backup före katalogbyte finns i `/tmp/nibe_cleanup_20260607_2335/` med `code_before.tgz`, `nibe_before.db`, `env_before`, git-/servicestatus; gamla live-katalogen ligger kvar som `/home/peccz/nibe_autotuner.backup_20260607_2335`
+  - Första RPi-releaseförsöket slog i `/tmp` när `venv` kopierades; produktionen återstartades på befintlig katalog, partiell release rensades och andra försöket byggde release under `/home/peccz` samt flyttade `venv` i stället för att duplicera den
+  - Ren RPi-release från Git HEAD `6206a92` är nu live med `.env`, produktions-DB/WAL och `venv` bevarade; `logs/` återskapades eftersom `nibe-autotuner.service` använder `StandardOutput=append:/home/peccz/nibe_autotuner/logs/data_logger.log`
+  - RPi-verifiering efter cleanup: DB `quick_check=ok`, journal_mode WAL, `PLANNER_ENGINE=v16_active`, borttagna docs saknas, `src/services/ventilation_guard.py` finns, huvudtjänster active och `systemctl --failed` visar 0 units
+  - RPi `py_compile` passerade för V16/planner/GM/config/backtest, riktade tester passerade 33 passed och full RPi `pytest -q` passerade 61 passed
+  - `nibe-smart-planner.service` kördes manuellt 2026-06-07 23:40 CEST och skrev V16-plan: 5 REST, 17 RUN, 2 BOOST, min simulated floor 20.88°C, min simulated Dexter 20.01°C, `sensor_mode=fallback`, `price_fallback_hours=[]`
+  - GM-ticks efter cleanup verifierade skyddsläge: `MUST_REST`, GM-write 100, `new_balance=100`, `BASTU_VAKT`; ingen manuell GM-skrivning gjordes och inga safety limits ändrades
   - 2026-06-07 V16 robust styrlogik riktat deployad och aktiverad på RPi utan `deploy_v4.sh` på grund av kraftigt smutsiga lokal/RPi-arbetskataloger; endast V16-relaterade styr-/test-/backtestfiler och DNA synkades
   - RPi-backup före deploy finns i `/tmp/nibe_v16_deploy_20260607/`: `code_before.tgz`, `nibe_before.db` och `env_before`; rollback är att återställa filerna, kopiera tillbaka `env_before` eller sätta `PLANNER_ENGINE=v15_active`, köra smart planner manuellt och restarta `nibe-gm-controller`
   - RPi-verifiering före aktivering: DB `quick_check=ok`, journal_mode WAL, huvudtjänster active och `systemctl --failed` 0 units; RPi `py_compile` passerade och riktade pytest passerade (34 passed)
@@ -619,6 +628,7 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-06-07 | Lokal arbetskatalog städad och pushad i tre commits; RPi live-katalog ersatt med ren release från Git HEAD `6206a92`, gamla katalogen backupad, V16-plan och GM-ticks verifierade; RPi full pytest 61 passed |
 | 2026-06-06 | V16 robust styrlogik implementerad lokalt: strikt komfort/övervärme/pris-prioritet, `PLANNER_ENGINE=v16_active`, V16 i backtestrapporten och full pytest 61 passed; ej deployad |
 | 2026-06-06 | V15 active drift utvärderad: tekniskt stabilt och billigare än V14 i journal, men kraftig övervärme kvarstår; senaste 7d Dexter över max 100%, GM helt safety/warmoverride/BASTU-dominerad, HA-zoner stale igen |
 | 2026-05-19 | V15 active aktiverad på RPi: `.env` backupad, `PLANNER_ENGINE=v15_active`, manuell planner skrev V15-plan 8 REST/12 RUN/4 BOOST med min_dexter 20.07°C; första GM-ticks stabila REST/GM=100/bank=200 och 0 failed units |
@@ -671,6 +681,7 @@ open_issues:
 
 | Datum | Beslut | Anledning |
 |-------|--------|-----------|
+| 2026-06-07 | När RPi-arbetskatalogen är kraftigt smutsig ska cleanup/deploy ske via ren releasekatalog från Git HEAD, med `.env`, produktions-DB/WAL, `venv` och `logs/` explicit bevarade eller återskapade | RPi Git-status var så långt från lokal Git att `git reset` eller brett `deploy_v4.sh` riskerade att blanda in gammalt skräp eller tappa runtimefiler. Releasekatalog ger reproducerbar kod, men `logs/` krävs för systemd `StandardOutput=append` och `venv` ska flyttas, inte kopieras via `/tmp`, för att undvika utrymmesproblem. |
 | 2026-06-06 | V16 ska vara en separat robust live-styrväg (`PLANNER_ENGINE=v16_active`) där komfort/safety prioriteras före övervärme-shedding och prisoptimering sist; pumpens 13°C/8h-värmespärr används inte som styrvillkor | V15 var tekniskt stabil och billigare än V14 men missade komfortmålet åt varma hållet. Robustheten kräver en tydlig huvudpolicy som inte låter lågt pris eller recovery skapa BOOST/RUN när huset redan är varmt. Pumpens egen spärr ska vara backup och höjas i pumpen om den stör styrningen. |
 | 2026-05-19 | Riktad RPi-sync används för vädringsskyddet i stället för `deploy_v4.sh` | Lokal och RPi-arbetskatalog är smutsiga med många orelaterade ändringar. Ett brett deployflöde riskerar att blanda in oavsiktliga filer; därför synkades endast berörda styr-/testfiler och V15 ligger fortsatt i `v15_shadow`. |
 | 2026-05-16 | Lokal snabb zon-dipp ska behandlas som vädringsstörning i 2h innan den får driva aggressiv recovery | Dexter-fönsterhändelsen 2026-05-15 visade att en lokal vädring kan få plannern att BOOST:a hela huset i timmar och skapa övervärme. Eftersom det saknas fönsterkontaktsensorer används temperaturförlopp relativt andra zoner/BT50; kritiskt låg temperatur bypassar skyddet. |
