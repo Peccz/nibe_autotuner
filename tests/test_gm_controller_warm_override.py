@@ -46,6 +46,22 @@ def add_param_with_reading(db, device, parameter_code, value, now):
     db.flush()
 
 
+def add_param_history(db, device, parameter_code, values, start):
+    param = db.query(Parameter).filter_by(parameter_id=parameter_code).first()
+    if not param:
+        param = Parameter(parameter_id=parameter_code, parameter_name=parameter_code)
+        db.add(param)
+        db.flush()
+    for index, value in enumerate(values):
+        db.add(ParameterReading(
+            device_id=device.id,
+            parameter_id=param.id,
+            timestamp=(start + timedelta(minutes=15 * index)).replace(tzinfo=None),
+            value=value,
+        ))
+    db.flush()
+
+
 def build_controller(db, client, now):
     ctrl = GMController.__new__(GMController)
     ctrl.db = db
@@ -61,6 +77,7 @@ def build_controller(db, client, now):
     ctrl._last_floor_temp = None
     ctrl._last_dexter_temp = None
     ctrl._last_comfort_bounds = None
+    ctrl._active_ventilation_events = {}
     return ctrl
 
 
@@ -308,6 +325,37 @@ def test_dexter_cold_override_still_forces_run():
     assert tx.safety_override is None
 
 
+def test_dexter_window_event_suppresses_cold_run_override():
+    now = datetime.now(timezone.utc)
+    db, device, controller, client = setup_runtime(now, planned_action="REST", floor_temp=21.7, dexter_temp=18.8)
+    start = now - timedelta(hours=1)
+    add_param_history(db, device, "HA_TEMP_DOWNSTAIRS", [21.7, 21.7, 21.7, 21.7, 21.7], start)
+    add_param_history(db, device, "HA_TEMP_DEXTER", [20.6, 20.0, 19.3, 18.9, 18.8], start)
+    add_param_history(db, device, "40033", [21.5, 21.5, 21.5, 21.5, 21.5], start)
+    db.commit()
+
+    controller.run_tick()
+
+    tx = db.query(GMTransaction).order_by(GMTransaction.id.desc()).first()
+    assert tx.action == "REST"
+    assert client.writes[-1] == (device.device_id, controller.PARAM_GM_WRITE, 100)
+
+
+def test_window_event_blocks_current_boost():
+    now = datetime.now(timezone.utc)
+    db, device, controller, client = setup_runtime(now, planned_action="BOOST", floor_temp=20.9, dexter_temp=18.8)
+    start = now - timedelta(hours=1)
+    add_param_history(db, device, "HA_TEMP_DOWNSTAIRS", [20.9, 20.9, 20.9, 20.9, 20.9], start)
+    add_param_history(db, device, "HA_TEMP_DEXTER", [20.6, 20.0, 19.3, 18.9, 18.8], start)
+    add_param_history(db, device, "40033", [20.9, 20.9, 20.9, 20.9, 20.9], start)
+    db.commit()
+
+    controller.run_tick()
+
+    tx = db.query(GMTransaction).order_by(GMTransaction.id.desc()).first()
+    assert tx.action == "RUN"
+
+
 def test_west_facade_outdoor_spike_is_filtered_against_plan_reference():
     now = datetime.now(timezone.utc)
     db, device, controller, client = setup_runtime(now, planned_action="RUN", floor_temp=21.0, dexter_temp=20.8)
@@ -408,6 +456,22 @@ def test_current_boost_is_blocked_when_room_heat_surplus_exists(monkeypatch):
     tx = db.query(GMTransaction).order_by(GMTransaction.id.desc()).first()
     assert tx.action == "RUN"
     assert round(tx.supply_target, 2) == 32.60
+
+
+def test_overheated_boost_plan_is_forced_to_rest_by_gm_controller():
+    now = datetime.now(timezone.utc)
+    db, device, controller, client = setup_runtime(now, planned_action="BOOST", floor_temp=22.4, dexter_temp=21.1)
+
+    plan = db.query(PlannedHeatingSchedule).first()
+    plan.planned_offset = 3.0
+    db.commit()
+
+    controller.run_tick()
+
+    tx = db.query(GMTransaction).order_by(GMTransaction.id.desc()).first()
+    assert tx.action == "REST"
+    assert tx.safety_override == "WARM_OVERRIDE_DOWNSTAIRS"
+    assert client.writes[-1] == (device.device_id, controller.PARAM_GM_WRITE, 100)
 
 
 def test_recovery_bank_is_capped_when_zones_are_near_floors(monkeypatch):

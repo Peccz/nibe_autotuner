@@ -424,11 +424,63 @@ Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificie
 *AI-agenter: uppdatera detta avsnitt efter varje session.*
 
 ```
-last_updated: 2026-05-15
+last_updated: 2026-06-07
 last_agent: Codex GPT-5
-status: targeted_deploy_completed_monitoring
-current_task: Targeted deploy of sleep/morning control, room_heat_surplus, V15 shadow and backtest completed; monitoring live behavior
+status: v16_active_deployed
+current_task: V16 robust styrlogik riktat deployad och aktiverad på RPi
 recent_change: |
+  - 2026-06-07 V16 robust styrlogik riktat deployad och aktiverad på RPi utan `deploy_v4.sh` på grund av kraftigt smutsiga lokal/RPi-arbetskataloger; endast V16-relaterade styr-/test-/backtestfiler och DNA synkades
+  - RPi-backup före deploy finns i `/tmp/nibe_v16_deploy_20260607/`: `code_before.tgz`, `nibe_before.db` och `env_before`; rollback är att återställa filerna, kopiera tillbaka `env_before` eller sätta `PLANNER_ENGINE=v15_active`, köra smart planner manuellt och restarta `nibe-gm-controller`
+  - RPi-verifiering före aktivering: DB `quick_check=ok`, journal_mode WAL, huvudtjänster active och `systemctl --failed` 0 units; RPi `py_compile` passerade och riktade pytest passerade (34 passed)
+  - `.env` ändrad från `PLANNER_ENGINE=v15_active` till `PLANNER_ENGINE=v16_active`; `nibe-smart-planner.service` kördes manuellt och skrev V16-plan med 9 REST, 14 RUN och 1 BOOST, min simulerad Dexter ca 20.0°C
+  - Planner-journal verifierad: `v16_candidate`, `PLANNER_ENGINE=v16_active — writing V16 robust plan`, `planned_actions=... engine=v16`; sensorläge är fallback och huset är över max, så V16/GM går konservativt
+  - `nibe-gm-controller.service` restartades 2026-06-07 15:14 CEST; första GM-ticks efter restart verifierade REST via `WARM_OVERRIDE_DOWNSTAIRS`, GM-write 100, bank 200 och ingen negativ skuldackumulering
+  - Efter deploy är `nibe-gm-controller`, `nibe-smart-planner.timer`, `nibe-autotuner`, `nibe-api` och `nibe-mobile` active och `systemctl --failed` visar 0 units; ingen DB-migration, inga nya beroenden och inga safety limits ändrades
+  - 2026-06-06 V16 robust styrlogik implementerad lokalt: `plan_v16_robust` återanvänder V15:s sol/vind/tröghet/shunt-/radiatorfysik men prioriterar komfort/safety, övervärme-shedding och därefter pris; pumpens 13°C/8h-spärr används inte som styrvillkor
+  - `smart_planner` kan nu köra `PLANNER_ENGINE=v16_active`, loggar `v16_candidate` med actionfördelning, min/max simulerade zoner, sensor_mode, fallback-pristimmar och skäl; V14/V15 finns kvar som fallback/jämförelse
+  - V16 blockerar positiv offset/BOOST utanför morgonfönstret, vid aktuell övervärme, vid vädringscap och när prisdata faller tillbaka till 1.0; övervarmt hus får REST/negativ offset även om elpriset är lågt
+  - Read-only backtestscriptet `scripts/backtest_v15_shadow.py` rapporterar nu V14, V15 och V16 sida vid sida inklusive REST/BOOST, under-/överkomfort, undvikbar övervärme och viktat pris
+  - Regressionstester tillagda för V16 övervärmeshedding, fallback-prisblockerad morgonBOOST, morgonBOOST endast vid verkligt golvrisk, varm sensorfallback samt GM-controller som tvingar överhettad BOOST-plan till REST
+  - Lokal verifiering 2026-06-06: riktade styrtester passerar, full `pytest -q` 61 passed och `py_compile` passerar för V16/planner/GM/config/backtest; endast Python/SQLAlchemy deprecation-varningar
+  - Read-only RPi-backtest via SQLite-backup till `/tmp` över jämförbara fönster 2026-06-04 till 2026-06-05: V16 blev identisk med V15 i REST/BOOST/komfort/pris eftersom seed-planens positiva offset inte kunde blockeras utan simulerad golvrisk; V16 är därmed säkerhetsmässigt konservativ men inte ännu bättre än V15 på dessa få fönster
+  - Ingen deploy, service restart, DB-migration, live configändring eller manuell/live GM-skrivning gjordes i denna session; RPi-utrullning kräver kontrollerad deploy och första GM-ticks-verifiering
+  - 2026-06-06 driftutvärdering read-only: `PLANNER_ENGINE=v15_active`, DB `quick_check=ok`, `nibe-gm-controller`, `nibe-smart-planner.timer`, `nibe-autotuner`, `nibe-api` och `nibe-mobile` är active, `systemctl --failed` visar 0 units
+  - Sedan V15 active 2026-05-19 21:27 till 2026-06-06 08:05 CEST: downstairs 20.40/23.10/25.95°C min/avg/max, Dexter 20.95/23.26/26.84°C, BT50 19.7/23.24/26.2°C; mycket låg undershoot men kraftig övervärme
+  - Senaste 7 dygn: downstairs över 21.8°C i 93.9% av samples, Dexter över 21.3°C i 100%, BT50 över 21.8°C i 95.3%; senaste 24h alla zonmått över övre bandet
+  - GM-regulatorn är säker men safety-dominerad: sedan V15 active 19 618 GM-ticks med 11 681 warmoverride och 7 647 BASTU_VAKT; inga GM<=-300 och bank hålls inom -239..200, senaste 7 dygn GM=100 hela tiden
+  - V15-planeraren är aktiv och stabil i tillgänglig journal: 39 analyserade körningar sedan 2026-05-20, alla `engine=v15`, 0 errors, viktat V15-pris lägre än V14 i 38/39 körningar; loggad min Dexter hålls vid 20.00°C efter hard-floor-fixen
+  - Planner-journalen visar återkommande `sensor_mode=fallback`; HA/IKEA-zonsensorerna är stale igen från 2026-06-05 19:03 UTC medan BT50/myUplink fortsätter uppdateras
+  - Nuvarande aktiva plan 2026-06-06 har 6 REST, 14 RUN och 4 BOOST kommande 24h; simulerat min Dexter 20.02°C men planen innehåller nattliga BOOST-timmar när kommande prisdata verkar vara fallback 1.0
+  - Slutsats: V15 fungerar tekniskt och prisoptimeringen ser bättre ut än V14, men komfortmålet missas åt varma hållet. Nästa styrfix bör fokusera på sommar-/övervärmeläge: stoppa natt-BOOST vid övervärme/fallbackpriser, minska morgonrecovery när huset redan är varmt, och göra HA-sensorstale till tydligare konservativ REST snarare än recovery
+  - 2026-05-19 21:27 CEST: `PLANNER_ENGINE=v15_active` satt i RPi `.env` efter backup till `/tmp/nibe_env_before_v15_active_20260519_2127`; settings verifierade `v15_active`
+  - `nibe-smart-planner.service` kördes manuellt i active-läge 2026-05-19 21:27 CEST och skrev V15-plan till `planned_heating_schedule`: actions 8 REST, 12 RUN, 4 BOOST, `engine=v15`, min simulated floor 21.21°C, min simulated Dexter 20.07°C
+  - Första GM-ticks efter V15-plan verifierade REST/GM=100 med `WARM_OVERRIDE_DOWNSTAIRS`, bank 200 och fortsatt undertryckt negativ skuld; flera tickar fram till 21:35 CEST var stabila utan failed units
+  - Produktions-DB `quick_check=ok`; `nibe-gm-controller`, `nibe-smart-planner.timer`, `nibe-autotuner`, `nibe-api` och `nibe-mobile` är active; `systemctl --failed` visar 0 units
+  - Rollback för V15 active: återställ `.env` från `/tmp/nibe_env_before_v15_active_20260519_2127` eller sätt `PLANNER_ENGINE=v15_shadow`, kör `nibe-smart-planner.service` manuellt för V14-planwrite och verifiera nästa GM-tick
+  - 2026-05-19 21:20 CEST: V15 justerad så Dexter-golvet klampas till `settings.DEXTER_MIN_TEMP` (20.0°C) före vädringsmjukning; aktiv vädring kan fortfarande temporärt sänka lokalt golv
+  - V15:s övervärme-/prisreduktion får inte längre acceptera små komfortundershoots via 0.08-0.12°C marginal; floor/Dexter måste hålla aktiva golv strikt i kandidatplanen
+  - Regressionstest tillagt för 2026-05-19-liknande övervärmeläge: V15 utan vädring måste hålla Dexter minst 20.0°C
+  - Verifiering: lokal riktad svit 28 passed, lokal full svit 56 passed, RPi riktad svit 28 passed och `py_compile` OK
+  - Manuell smart_planner-körning i fortsatt `v15_shadow` 2026-05-19 21:20 CEST gav `v15_shadow actions={'REST': 8, 'RUN': 11, 'BOOST': 5}`, `min_floor=21.22C`, `min_dexter=20.04C`, `weighted_price=1.688 vs_v14=1.729`; aktiv plan skrivs fortsatt av V14 (`engine=v14`)
+  - 2026-05-19 21:13 CEST: V15-shadow utvärderad read-only efter deploy. Inga planner-/GM-fel hittades, inga vädringshändelser detekterades och huvudtjänsterna fortsätter stabilt
+  - Senaste 24h är huset fortfarande för varmt: downstairs 22.21/22.59/23.50°C och Dexter 21.72/22.43/24.11°C min/avg/max; båda zonerna låg över övre komfortbandet i 100% av samples
+  - Sedan vädringsdeployen är GM helt warmoverride-dominerad: 33 REST-ticks med `WARM_OVERRIDE_DOWNSTAIRS`, GM=100 och bank=200; negativ skuld byggs inte
+  - Aktiv V14-plan efter manuell körning har 3 REST + 21 RUN kommande 24h och simulerar Dexter ned till ca 20.44°C; V15-shadow för samma körning ville ha 8 REST + 12 RUN + 4 BOOST, lägre viktat pris 1.646 vs 1.711 men simulerade min_dexter=19.84°C
+  - Slutsats: V15 har bättre pris-/REST-beteende men får inte aktiveras live innan Dexter-golvet i shadow/backtest är säkert över accepterad morgon-/nattkomfort eller explicit nattgolv beslutas
+  - 2026-05-19 20:30 CEST: vädringsskyddet och `PLANNER_ENGINE`-vägen är riktat deployade till RPi utan `deploy_v4.sh`; bara berörda `src/`, `tests/` och `DNA.md` synkades eftersom både lokal och RPi-arbetskatalog är dirty
+  - RPi-verifiering före restart: tempkopian i `/tmp/nibe_v15_guard_probe` passerade riktade tester (27 passed) och `py_compile`; live-katalogen passerade därefter `py_compile` och riktade tester (27 passed)
+  - `nibe-gm-controller.service` restartades 2026-05-19 20:30 CEST och första tick verifierades: warmoverride höll GM=100, bank=200 och negativ skuld undertrycktes
+  - `nibe-smart-planner.service` kördes manuellt 2026-05-19 20:30 CEST i default `PLANNER_ENGINE=v15_shadow`; loggen visar `engine=v14`, `v15_shadow actions={'REST': 8, 'RUN': 12, 'BOOST': 4}`, `ventilation_floor_hours=0`, `ventilation_dexter_hours=0`
+  - Live-planen skrivs fortfarande av V14; V15 active är inte aktiverad och kräver explicit konfigändring till `PLANNER_ENGINE=v15_active`
+  - Produktions-DB `quick_check=ok`, `nibe-gm-controller`, `nibe-smart-planner.timer` och `nibe-autotuner` är active efter deploy; ingen DB-migration, inga nya beroenden och inga safety limits ändrades
+  - Implementerat lokalt vädringsskydd i `services/ventilation_guard.py`: snabb lokal temperaturdipp i floor/Dexter mot stabil annan zon/BT50 klassas som `ventilation_event` i 2h utan DB-schemaändring
+  - V15 tar nu emot vädringshändelser, mjukar temporärt komfortgolvet för drabbad zon och cappar recovery-offset till mild värme under aktiv vädring; kritiskt låg zon under 18.5°C behandlas inte som aktiv vädring
+  - `smart_planner` detekterar vädring från befintlig `parameter_readings`-historik, loggar `ventilation_event`, skickar signalen till V15 och har ny `PLANNER_ENGINE=v14|v15_shadow|v15_active` där default fortsatt är `v15_shadow`
+  - `gm_controller` detekterar samma lokala vädringsmönster, blockerar aktuell/nästa BOOST vid aktiv vädring och låter Dexter REST→RUN-skyddet vila under vädring i stället för att värma hela huset aggressivt
+  - V15 kan nu skriva plan endast om `PLANNER_ENGINE=v15_active` sätts; live default är oförändrad skuggdrift och ingen RPi-config/deploy gjordes i denna session
+  - Testtäckning tillagd för Dexter-/nedervåningsvädring, helhuskyla som inte ska klassas som vädring, kritiskt kall zon, V15 recovery-cap och GM-controller BOOST/Dexter-override-blockering vid vädring
+  - Lokal verifiering 2026-05-16: riktade tester passerar (27 passed), full `pytest -q` passerar (55 passed) och `py_compile` passerar för ventilation_guard, V15, smart_planner, gm_controller och config
+  - Ingen DB-migration, inga nya beroenden, inga safety limits ändrade, ingen deploy/restart och inga manuella/live GM-skrivningar gjordes
   - 2026-05-15 18:15 CEST riktad deploy genomförd till RPi utan `deploy_v4.sh` eftersom både lokal och RPi-arbetskatalog är smutsiga; endast berörda styr-/testfiler synkades med rsync
   - RPi-backup före deploy: `/tmp/nibe_v15_deploy_20260515_1814/` innehåller `code_before.tgz` och SQLite-backup `nibe_before.db`
   - RPi-verifiering före restart: `py_compile` för comfort_profile/gm_controller/optimizer/smart_planner/v15_mpc/backtest passerade och riktade pytest på RPi passerade (37 passed)
@@ -527,6 +579,15 @@ recent_change: |
   - Efter WAL-återställning verifierades journal_mode=wal, planned_heating_schedule uppdaterades till 2026-04-15 06:00:00 och smart_planner körde igenom utan database is locked
   - nibe-mobile, nibe-autotuner, nibe-gm-controller och nibe-api är active efter WAL-återställningen; /api/v7/dashboard svarar 200
 open_issues:
+  - Följ upp V16 active efter 12-24h: övervärmetid, REST/BOOST-fördelning, morgonkomfort, warmoverride/BASTU-ticks och om HA fallback fortsätter dominera
+  - HA/IKEA-zonsensorerna är fortfarande huvudrisk; V16 kör konservativt på BT50/gap-fallback men primär zonfeedback bör repareras
+  - Huset är fortfarande för varmt trots V15 active: åtgärda övervärmeläge och natt-BOOST innan ytterligare prisoptimering prioriteras
+  - HA/IKEA-zonsensorerna är stale igen från 2026-06-05 19:03 UTC; primär zonfeedback behöver repareras eller fallback-logiken göras striktare
+  - Current V15-plan kan BOOST:a nattetid när framtida priser saknas/faller tillbaka till 1.0; blockera sådan BOOST när aktuell/fallbackad zon ligger över övre komfortband
+  - Följ upp V15 active efter första natten: Dexter-min, nedervåningsmin, övervärmetid, REST/BOOST-fördelning, warmoverride-ticks och om morgonkomforten håller
+  - Vädringsskyddet är deployat och körs i GM-controller; följ upp 12-24h att det inte ger falska vädringshändelser och att riktig lokal vädring blockerar BOOST/recovery
+  - V15 active path är deployad men inte aktiverad; `PLANNER_ENGINE=v15_active` får först sättas efter shadow-loggar/backtest visar bättre komfort, mindre övervärme och rimlig prisstyrning än V14
+  - Backtest bör inkludera Dexter-fönsterhändelsen 2026-05-15 22:00 till 2026-05-16 09:00 och minst ett syntetiskt nedervåningsvädringsfall innan aktiv V15-planwrite
   - Följ upp efter 12-24h om deployen minskar warmoverride-ticks, Dexter-övertemperatur och kvälls-/nattövervärme utan morgonundershoot
   - Live-planen skrivs fortfarande av V14; V15 är endast skuggmodell/backtest tills zonkonflikten är bättre hanterad
   - `logrotate.service` är failed på RPi och bör felsökas separat
@@ -558,6 +619,13 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-06-06 | V16 robust styrlogik implementerad lokalt: strikt komfort/övervärme/pris-prioritet, `PLANNER_ENGINE=v16_active`, V16 i backtestrapporten och full pytest 61 passed; ej deployad |
+| 2026-06-06 | V15 active drift utvärderad: tekniskt stabilt och billigare än V14 i journal, men kraftig övervärme kvarstår; senaste 7d Dexter över max 100%, GM helt safety/warmoverride/BASTU-dominerad, HA-zoner stale igen |
+| 2026-05-19 | V15 active aktiverad på RPi: `.env` backupad, `PLANNER_ENGINE=v15_active`, manuell planner skrev V15-plan 8 REST/12 RUN/4 BOOST med min_dexter 20.07°C; första GM-ticks stabila REST/GM=100/bank=200 och 0 failed units |
+| 2026-05-19 | V15 Dexter hard-floor fix deployad i shadow: Dexter-min klampas till 20.0°C utan vädring, lokal full pytest 56 passed, RPi riktade tester 28 passed, ny shadow-körning min_dexter=20.04°C och weighted_price 1.688 vs V14 1.729 |
+| 2026-05-19 | V15-shadow utvärderad efter deploy: inga fel/vädringshändelser, GM warmoverride stabilt GM=100/bank=200, V15 lägre viktat pris än V14 men simulerar Dexter-min 19.84°C och hålls därför inaktiv |
+| 2026-05-19 | Vädringsskydd och `PLANNER_ENGINE` deployade riktat till RPi i `v15_shadow`; RPi temp/live tester 27 passed, py_compile OK, smart_planner manuell körning `engine=v14`, gm_controller restartad och första tick GM=100/bank=200 |
+| 2026-05-16 | Lokalt vädringsskydd och V15-aktiveringsflagga implementerade: temperaturbaserad `ventilation_event` för floor/Dexter, V15 recovery-cap, GM BOOST/Dexter-override-dämpning och `PLANNER_ENGINE`; full pytest 55 passed, ej deployad |
 | 2026-05-15 | Riktad RPi-deploy genomförd av sleep/morning/room_heat_surplus/V15-shadow/backtest-filer; RPi py_compile + riktade tester 37 passed; smart_planner manuell körning loggade v15_shadow; gm_controller restartad och första tre ticks stabila med GM=100/bank=200 |
 | 2026-05-15 | Live-drift utvärderad read-only: tjänster active, DB ok, HA-zoner friska, men produktion kör äldre V14 utan lokala V15-/room_heat_surplus-ändringar; senaste 24h är warmoverride-dominerat och Dexter för varm |
 | 2026-05-14 | Read-only V14-vs-V15-backtest tillagt: 48 fönster på senaste lokala RPi-kopian visar V15 tar bort simulerad undershoot men kvar har zonkonflikt där Dexter nära golv driver värme trots varm nedervåning; pytest 47 passed |
@@ -603,6 +671,10 @@ open_issues:
 
 | Datum | Beslut | Anledning |
 |-------|--------|-----------|
+| 2026-06-06 | V16 ska vara en separat robust live-styrväg (`PLANNER_ENGINE=v16_active`) där komfort/safety prioriteras före övervärme-shedding och prisoptimering sist; pumpens 13°C/8h-värmespärr används inte som styrvillkor | V15 var tekniskt stabil och billigare än V14 men missade komfortmålet åt varma hållet. Robustheten kräver en tydlig huvudpolicy som inte låter lågt pris eller recovery skapa BOOST/RUN när huset redan är varmt. Pumpens egen spärr ska vara backup och höjas i pumpen om den stör styrningen. |
+| 2026-05-19 | Riktad RPi-sync används för vädringsskyddet i stället för `deploy_v4.sh` | Lokal och RPi-arbetskatalog är smutsiga med många orelaterade ändringar. Ett brett deployflöde riskerar att blanda in oavsiktliga filer; därför synkades endast berörda styr-/testfiler och V15 ligger fortsatt i `v15_shadow`. |
+| 2026-05-16 | Lokal snabb zon-dipp ska behandlas som vädringsstörning i 2h innan den får driva aggressiv recovery | Dexter-fönsterhändelsen 2026-05-15 visade att en lokal vädring kan få plannern att BOOST:a hela huset i timmar och skapa övervärme. Eftersom det saknas fönsterkontaktsensorer används temperaturförlopp relativt andra zoner/BT50; kritiskt låg temperatur bypassar skyddet. |
+| 2026-05-16 | V15 får aktiveras med explicit `PLANNER_ENGINE=v15_active`, men default ska vara `v15_shadow` | V15 behöver en kontrollerad rollout där V14 kan fortsätta vara fallback. Aktiv planwrite är produktions-/säkerhetsbeteende och ska kräva explicit konfigändring, RPi-test och verifiering av första GM-ticks. |
 | 2026-05-14 | V15-backtest ska rapportera undvikbar övervärme separat från zonkonflikt | Total tid över övre band kan vara missvisande när nedervåningen är varm men Dexter ligger nära komfortgolvet. Då är problemet inte bara "sänk mer", utan att få mer radiator/Dexter-effekt utan att ladda golvzonen. |
 | 2026-05-14 | En komplett V15-styrlogik ska först köras som skuggmodell innan den får ersätta V14-planen | Tidigare logik blev krånglig eftersom hotfixar för pris, warmoverride, fördröjning och komfort lades i flera lager. V15 samlar modellen, men eftersom projektet styr verklig värme ska den först jämföras mot V14 i logg/backtest utan DB-planwrite eller GM-effekt. |
 | 2026-05-13 | `heat_in_flight` får inte räknas som komfortgolvskredit i optimizer Pass 1 | Morgonen 2026-05-13 blev kall trots planerad RUN 0 eftersom residual värme i systemet fick plannern att tro att morgongolvet skulle hållas. Restvärme är användbar för att blockera onödig BOOST och modellera övervärmerisk, men ska inte maskera faktisk rumstemperatur vid minimumkomfort. |

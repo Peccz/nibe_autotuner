@@ -184,6 +184,9 @@ class Settings(BaseSettings):
     OPTIMIZER_HOURLY_LOSS_FACTORS: str = "1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,4.0,4.0,4.0,4.0,1.0,1.0,1.0,1.0,1.0"
     """Per-hour K_LEAK multipliers (comma-separated, 24 values). Hours 15-18 have 4x loss due to occupancy/activity."""
 
+    PLANNER_ENGINE: str = "v15_shadow"
+    """Planner write mode: v14, v15_shadow, v15_active, or v16_active."""
+
     # ============================================================================
     # Feature Flags
     # ============================================================================

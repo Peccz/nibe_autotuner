@@ -14,8 +14,9 @@ from core.config import settings
 from services.price_service import price_service
 from services.weather_service import SMHIWeatherService
 from services.optimizer import optimize_24h_plan, predict_temperatures, predict_temperatures_two_zone
-from services.v15_mpc import compare_shadow_summary, plan_v15_shadow
+from services.v15_mpc import compare_shadow_summary, plan_v15_shadow, plan_v16_robust
 from services.outdoor_temperature import effective_outdoor_temp_from_recent_sensor_values
+from services.ventilation_guard import ZoneReading, detect_ventilation_events
 from services.comfort_profile import (
     DAY_DEXTER_MAX_C,
     DAY_DEXTER_MIN_C,
@@ -260,6 +261,47 @@ def _calculate_room_heat_surplus(start_floor: float, start_radiator: float, boun
     return min(2.0, max(floor_surplus, dexter_surplus))
 
 
+def _load_ventilation_readings(conn, now: datetime) -> dict:
+    """Load recent zone readings for local ventilation disturbance detection."""
+    parameter_map = {
+        "floor": "HA_TEMP_DOWNSTAIRS",
+        "dexter": "HA_TEMP_DEXTER",
+        "bt50": "40033",
+    }
+    readings = {zone: [] for zone in parameter_map}
+    try:
+        rows = conn.execute("""
+            SELECT p.parameter_id, r.value, r.timestamp
+            FROM parameter_readings r
+            JOIN parameters p ON r.parameter_id = p.id
+            WHERE r.timestamp >= ?
+              AND p.parameter_id IN ('HA_TEMP_DOWNSTAIRS', 'HA_TEMP_DEXTER', '40033')
+            ORDER BY r.timestamp
+        """, (now - timedelta(hours=2),)).fetchall()
+        reverse_map = {parameter: zone for zone, parameter in parameter_map.items()}
+        for parameter_id, value, timestamp in rows:
+            zone = reverse_map.get(parameter_id)
+            if zone:
+                readings[zone].append(ZoneReading(_parse_db_timestamp(timestamp), float(value)))
+    except Exception as e:
+        logger.debug(f"ventilation_guard reading query failed: {e}")
+    return readings
+
+
+def _log_ventilation_events(events):
+    if not events:
+        return
+    parts = [
+        (
+            f"{event.zone}:drop={event.temp_drop:.2f}C "
+            f"ref_drop={event.reference_drop:.2f}C conf={event.confidence:.2f} "
+            f"until={event.active_until.isoformat()}"
+        )
+        for event in events
+    ]
+    logger.warning("ventilation_event active " + "; ".join(parts))
+
+
 def _calculate_heat_in_flight(conn, now: datetime) -> float:
     """Estimate residual heat already in the hydronic system, in degC forecast bias."""
     score = 0.0
@@ -394,6 +436,7 @@ def calculate_plan():
     outdoor_list = []
     wind_list    = []
     cloud_list   = []
+    price_fallback_hours = set()
 
     for i in range(24):
         future_time = now + timedelta(hours=i)
@@ -404,7 +447,11 @@ def calculate_plan():
              and p.time_start.astimezone(timezone.utc).day  == future_time.day),
             None
         )
-        price_list.append(p_obj.price_per_kwh if p_obj else 1.0)
+        if p_obj:
+            price_list.append(p_obj.price_per_kwh)
+        else:
+            price_list.append(1.0)
+            price_fallback_hours.add(i)
 
         if forecasts:
             w_obj = next(
@@ -447,6 +494,8 @@ def calculate_plan():
     heat_in_flight = _calculate_heat_in_flight(conn, sensor_now)
     current_bounds = comfort_bounds_for_time(now)
     room_heat_surplus = _calculate_room_heat_surplus(start_floor, start_radiator, current_bounds)
+    ventilation_events = detect_ventilation_events(_load_ventilation_readings(conn, sensor_now), sensor_now)
+    _log_ventilation_events(ventilation_events)
     logger.info(
         f"lag_state heat_in_flight={heat_in_flight:.2f}C "
         f"room_heat_surplus={room_heat_surplus:.2f}C profile={current_bounds['profile']}"
@@ -485,6 +534,7 @@ def calculate_plan():
             room_heat_surplus  = room_heat_surplus,
             k_leak_floor       = cal_k_leak,
             k_gain_floor       = cal_k_gain,
+            ventilation_events = ventilation_events,
         )
         shadow = compare_shadow_summary(offsets, v15_shadow, price_list)
         logger.info(
@@ -499,13 +549,74 @@ def calculate_plan():
             f"reasons={v15_shadow.reasons} first_offsets={v15_shadow.offsets[:6]}"
         )
     except Exception as e:
+        v15_shadow = None
         logger.warning(f"v15_shadow failed: {e}")
 
+    try:
+        v16_plan = plan_v16_robust(
+            start_utc            = now,
+            start_floor          = start_floor,
+            start_dexter         = start_radiator,
+            outdoor_temps        = outdoor_list,
+            prices               = price_list,
+            wind_speeds          = wind_list,
+            cloud_cover          = cloud_list,
+            must_run_hours       = must_run,
+            heat_in_flight       = heat_in_flight,
+            room_heat_surplus    = room_heat_surplus,
+            k_leak_floor         = cal_k_leak,
+            k_gain_floor         = cal_k_gain,
+            ventilation_events   = ventilation_events,
+            price_fallback_hours = price_fallback_hours,
+            sensor_mode          = sensor_mode,
+        )
+        logger.info(
+            "v16_candidate "
+            f"actions={{'REST': {v16_plan.actions.count('REST')}, "
+            f"'RUN': {v16_plan.actions.count('RUN')}, "
+            f"'BOOST': {v16_plan.actions.count('BOOST')}}} "
+            f"min_floor={min(v16_plan.floor_temps):.2f}C "
+            f"max_floor={max(v16_plan.floor_temps):.2f}C "
+            f"min_dexter={min(v16_plan.dexter_temps):.2f}C "
+            f"max_dexter={max(v16_plan.dexter_temps):.2f}C "
+            f"sensor_mode={sensor_mode} price_fallback_hours={sorted(price_fallback_hours)} "
+            f"reasons={v16_plan.reasons} first_offsets={v16_plan.offsets[:6]}"
+        )
+    except Exception as e:
+        v16_plan = None
+        logger.warning(f"v16_candidate failed: {e}")
+
+    planner_engine = str(getattr(settings, "PLANNER_ENGINE", "v15_shadow")).lower()
+    active_offsets = offsets
+    active_engine = "v14"
+    if planner_engine == "v16_active" and v16_plan is not None:
+        active_offsets = v16_plan.offsets
+        active_engine = "v16"
+        logger.warning("PLANNER_ENGINE=v16_active — writing V16 robust plan to planned_heating_schedule")
+    elif planner_engine == "v16_active":
+        logger.warning("PLANNER_ENGINE=v16_active requested but V16 failed; falling back to V15/V14 writer")
+        if v15_shadow is not None:
+            active_offsets = v15_shadow.offsets
+            active_engine = "v15"
+    elif planner_engine == "v15_active" and v15_shadow is not None:
+        active_offsets = v15_shadow.offsets
+        active_engine = "v15"
+        logger.warning("PLANNER_ENGINE=v15_active — writing V15 plan to planned_heating_schedule")
+    elif planner_engine == "v15_active":
+        logger.warning("PLANNER_ENGINE=v15_active requested but V15 failed; falling back to V14 writer")
+    elif planner_engine not in ("v14", "v15_shadow"):
+        logger.warning(f"Unknown PLANNER_ENGINE={planner_engine}; using V14 writer")
+
     # 5. Simulate both zones for plan storage (use same calibrated constants)
-    floor_temps, rad_temps = predict_temperatures_two_zone(
-        start_floor, start_radiator, outdoor_list, offsets,
-        k_leak_floor=cal_k_leak, k_gain_floor=cal_k_gain,
-    )
+    if active_engine == "v16" and v16_plan is not None:
+        floor_temps, rad_temps = v16_plan.floor_temps, v16_plan.dexter_temps
+    elif active_engine == "v15" and v15_shadow is not None:
+        floor_temps, rad_temps = v15_shadow.floor_temps, v15_shadow.dexter_temps
+    else:
+        floor_temps, rad_temps = predict_temperatures_two_zone(
+            start_floor, start_radiator, outdoor_list, active_offsets,
+            k_leak_floor=cal_k_leak, k_gain_floor=cal_k_gain,
+        )
 
     # 6. Save plan
     plan_rows = []
@@ -513,15 +624,15 @@ def calculate_plan():
         future_time = now + timedelta(hours=i)
 
         action = "RUN"
-        if offsets[i] <= settings.OPTIMIZER_REST_THRESHOLD:
+        if active_offsets[i] <= settings.OPTIMIZER_REST_THRESHOLD:
             action = "REST"
-        elif offsets[i] > 0.0:
+        elif active_offsets[i] > 0.0:
             action = "BOOST"
 
         plan_rows.append((
             future_time,
             action,
-            float(offsets[i]),
+            float(active_offsets[i]),
             price_list[i],
             floor_temps[i],
             rad_temps[i],
@@ -533,7 +644,8 @@ def calculate_plan():
     for _, action, *_ in plan_rows:
         action_counts[action] = action_counts.get(action, 0) + 1
     logger.info(
-        f"planned_actions={action_counts} min_offset={min(offsets):.1f} max_offset={max(offsets):.1f}"
+        f"planned_actions={action_counts} engine={active_engine} "
+        f"min_offset={min(active_offsets):.1f} max_offset={max(active_offsets):.1f}"
     )
 
     try:

@@ -20,6 +20,7 @@ from services.analyzer import HeatPumpAnalyzer
 from services.safety_guard import SafetyGuard
 from services.outdoor_temperature import effective_outdoor_temp
 from services.comfort_profile import comfort_bounds_for_time
+from services.ventilation_guard import ZoneReading, detect_ventilation_events, event_by_zone
 from integrations.api_client import MyUplinkClient
 from integrations.auth import MyUplinkAuth
 from core.config import settings
@@ -61,6 +62,7 @@ class GMController:
         self._last_floor_temp = None
         self._last_dexter_temp = None
         self._last_comfort_bounds = None
+        self._active_ventilation_events = {}
 
     def _open_session(self):
         self.db = SessionLocal()
@@ -168,19 +170,61 @@ class GMController:
         self._last_dexter_temp = dexter_temp
         return floor_temp, dexter_temp, sensor_mode
 
+    def _recent_zone_readings(self, now):
+        parameter_map = {
+            "floor": "HA_TEMP_DOWNSTAIRS",
+            "dexter": "HA_TEMP_DEXTER",
+            "bt50": "40033",
+        }
+        readings = {zone: [] for zone in parameter_map}
+        cutoff = now.replace(tzinfo=None) - timedelta(hours=2)
+        for zone, parameter_code in parameter_map.items():
+            param = self.db.query(Parameter).filter_by(parameter_id=parameter_code).first()
+            if not param:
+                continue
+            rows = self.db.query(ParameterReading).filter(
+                ParameterReading.parameter_id == param.id,
+                ParameterReading.timestamp >= cutoff,
+                ParameterReading.timestamp <= now.replace(tzinfo=None),
+            ).order_by(ParameterReading.timestamp.asc()).all()
+            readings[zone] = [
+                ZoneReading(timestamp=row.timestamp, value=float(row.value))
+                for row in rows
+            ]
+        return readings
+
+    def _detect_ventilation_events(self, now):
+        events = detect_ventilation_events(self._recent_zone_readings(now), now.replace(tzinfo=None))
+        active = event_by_zone(events)
+        self._active_ventilation_events = active
+        for event in active.values():
+            logger.warning(
+                f"ventilation_event active zone={event.zone} drop={event.temp_drop:.2f}C "
+                f"ref_drop={event.reference_drop:.2f}C conf={event.confidence:.2f} "
+                f"until={event.active_until.isoformat()}"
+            )
+        return active
+
     def _apply_zone_temperature_overrides(self, device, now, action, bt50_indoor=None):
         floor_temp, dexter_temp, sensor_mode = self._get_zone_temperatures(now, bt50_indoor)
+        ventilation_events = getattr(self, "_active_ventilation_events", {}) or self._detect_ventilation_events(now)
         bounds = comfort_bounds_for_time(now)
         self._last_comfort_bounds = bounds
         if sensor_mode == "fallback":
             logger.info("sensor_mode=fallback GM zone override evaluation")
 
         dexter_cold_threshold = min(19.0, bounds["dexter_min"] - 0.5)
-        if dexter_temp is not None and dexter_temp < dexter_cold_threshold and action == 'REST':
+        dexter_ventilating = "dexter" in ventilation_events
+        if dexter_temp is not None and dexter_temp < dexter_cold_threshold and action == 'REST' and not dexter_ventilating:
             logger.warning(
                 f"⚠️ Dexter-skydd: {dexter_temp:.1f}°C < {dexter_cold_threshold}°C — REST → RUN"
             )
             action = 'RUN'
+        elif dexter_temp is not None and dexter_temp < dexter_cold_threshold and action == 'REST':
+            logger.warning(
+                f"ventilation_event zone=dexter suppresses Dexter REST→RUN recovery "
+                f"at {dexter_temp:.1f}°C"
+            )
 
         floor_trigger = bounds["floor_max"]
         dexter_trigger = bounds["dexter_max"]
@@ -253,6 +297,7 @@ class GMController:
             (dexter_temp is not None and dexter_temp > bounds["dexter_max"])
         )
         room_heat_surplus = self._room_heat_surplus(bounds)
+        ventilation_active = bool(getattr(self, "_active_ventilation_events", {}))
 
         target_supply_now = 20 + (20 - cur_outdoor) * settings.DEFAULT_HEATING_CURVE * 0.12 + float(offset or 0.0)
         heat_in_flight = cur_supply > 35.0 or cur_supply - target_supply_now > 4.0
@@ -265,14 +310,14 @@ class GMController:
             corrected_offset = next_offset
             corrected_action = "REST" if next_action == "REST" or next_offset <= settings.OPTIMIZER_REST_THRESHOLD else "RUN"
             reason = "early_next_shed"
-        elif plan_age_minutes >= 40.0 and next_action == "BOOST" and (over_max or heat_in_flight or room_heat_surplus >= 0.2):
+        elif plan_age_minutes >= 40.0 and next_action == "BOOST" and (over_max or heat_in_flight or room_heat_surplus >= 0.2 or ventilation_active):
             corrected_offset = min(corrected_offset, 0.0)
             corrected_action = "RUN"
             reason = "block_stale_next_boost"
-        elif action == "BOOST" and (over_max or heat_in_flight or room_heat_surplus >= 0.2):
+        elif action == "BOOST" and (over_max or heat_in_flight or room_heat_surplus >= 0.2 or ventilation_active):
             corrected_offset = min(corrected_offset, 0.0)
             corrected_action = "RUN"
-            reason = "block_current_boost_heat_surplus"
+            reason = "block_current_boost_ventilation" if ventilation_active else "block_current_boost_heat_surplus"
 
         if reason:
             logger.info(
@@ -351,6 +396,7 @@ class GMController:
             )
 
         floor_temp, dexter_temp, sensor_mode = self._get_zone_temperatures(now, cur_indoor)
+        self._detect_ventilation_events(now)
         self._last_comfort_bounds = comfort_bounds_for_time(now)
         action, offset = self._apply_plan_delay_correction(
             now, plan, next_plan, action, offset, cur_supply, cur_outdoor

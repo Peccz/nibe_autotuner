@@ -5,12 +5,13 @@ parallel with the deployed V14 planner before it is allowed to write schedules.
 """
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Sequence, Set
+from typing import Dict, Iterable, List, Optional, Sequence, Set
 
 from core.config import settings
 from services.comfort_profile import comfort_bounds_for_time, to_local
 from services.cop_model import COPModel
 from services.optimizer import _approx_supply
+from services.ventilation_guard import VentilationEvent, event_by_zone
 
 
 @dataclass(frozen=True)
@@ -151,7 +152,7 @@ def _comfort_profiles(start_utc: datetime, hours: int):
         bounds = comfort_bounds_for_time(start_utc + timedelta(hours=i))
         floor_min.append(bounds["floor_min"])
         floor_max.append(bounds.get("planning_floor_max", bounds["floor_max"]))
-        dexter_min.append(bounds["dexter_min"])
+        dexter_min.append(max(bounds["dexter_min"], settings.DEXTER_MIN_TEMP))
         dexter_max.append(bounds.get("planning_dexter_max", bounds["dexter_max"]))
         if bounds["boost_allowed"]:
             boost_allowed.add(i)
@@ -163,6 +164,40 @@ def _floor_deficit_index(floor_temps, dexter_temps, floor_min, dexter_min) -> Op
         if floor < floor_min[i] or dexter < dexter_min[i]:
             return i
     return None
+
+
+def _apply_ventilation_softening(
+    start_utc: datetime,
+    floor_min: List[float],
+    dexter_min: List[float],
+    ventilation_events: Optional[Iterable[VentilationEvent]],
+) -> tuple[List[float], List[float], Dict[str, int]]:
+    softened_floor = list(floor_min)
+    softened_dexter = list(dexter_min)
+    softened_hours = {"floor": 0, "dexter": 0}
+    events = event_by_zone(ventilation_events or [])
+
+    for zone, event in events.items():
+        for i in range(len(softened_floor)):
+            hour = start_utc + timedelta(hours=i)
+            if hour > event.active_until:
+                continue
+            soft_floor = min(
+                floor_min[i] if zone != "floor" else max(event.current_temp + 0.15, 18.5),
+                floor_min[i],
+            )
+            soft_dexter = min(
+                dexter_min[i] if zone != "dexter" else max(event.current_temp + 0.15, 18.5),
+                dexter_min[i],
+            )
+            if zone == "floor" and soft_floor < softened_floor[i]:
+                softened_floor[i] = soft_floor
+                softened_hours["floor"] += 1
+            if zone == "dexter" and soft_dexter < softened_dexter[i]:
+                softened_dexter[i] = soft_dexter
+                softened_hours["dexter"] += 1
+
+    return softened_floor, softened_dexter, softened_hours
 
 
 def _score_plan(
@@ -212,6 +247,7 @@ def plan_v15_shadow(
     room_heat_surplus: float = 0.0,
     k_leak_floor: Optional[float] = None,
     k_gain_floor: Optional[float] = None,
+    ventilation_events: Optional[Iterable[VentilationEvent]] = None,
 ) -> V15PlanResult:
     """Build a complete V15 candidate plan for logging/backtest only."""
     hours = min(24, len(outdoor_temps), len(prices))
@@ -219,11 +255,25 @@ def plan_v15_shadow(
     price_list = [float(v) for v in prices[:hours]]
     winds = _expand(wind_speeds, hours, 0.0)
     clouds = _expand(cloud_cover, hours, 8.0)
-    floor_min, floor_max, dexter_min, dexter_max, boost_allowed = _comfort_profiles(start_utc, hours)
+    raw_floor_min, floor_max, raw_dexter_min, dexter_max, boost_allowed = _comfort_profiles(start_utc, hours)
+    floor_min, dexter_min, softened_hours = _apply_ventilation_softening(
+        start_utc, raw_floor_min, raw_dexter_min, ventilation_events
+    )
+    ventilation_cap_hours: Set[int] = set()
+    for event in event_by_zone(ventilation_events or []).values():
+        for i in range(hours):
+            if start_utc + timedelta(hours=i) <= event.active_until:
+                ventilation_cap_hours.add(i)
     must_run_hours = must_run_hours or set()
 
     offsets = [0.0] * hours
-    reasons: Dict[str, int] = {"floor_recovery": 0, "shed_overheat": 0, "price_shift": 0}
+    reasons: Dict[str, int] = {
+        "floor_recovery": 0,
+        "shed_overheat": 0,
+        "price_shift": 0,
+        "ventilation_floor_hours": softened_hours["floor"],
+        "ventilation_dexter_hours": softened_hours["dexter"],
+    }
 
     def simulate(test_offsets):
         return simulate_v15(
@@ -256,6 +306,8 @@ def plan_v15_shadow(
             for h in range(bind + 1):
                 if candidate_offsets[h] >= settings.OPTIMIZER_MAX_OFFSET:
                     continue
+                if h in ventilation_cap_hours and candidate_offsets[h] >= 1.0:
+                    continue
                 if h not in boost_allowed and not urgent and bind - h > 2:
                     continue
 
@@ -281,7 +333,7 @@ def plan_v15_shadow(
     def floors_ok_window(floor_temps, dexter_temps, start_hour: int, length: int = 6) -> bool:
         end = min(hours, start_hour + length)
         return all(
-            floor_temps[i] >= floor_min[i] - 0.12 and dexter_temps[i] >= dexter_min[i] - 0.12
+            floor_temps[i] >= floor_min[i] and dexter_temps[i] >= dexter_min[i]
             for i in range(start_hour, end)
         )
 
@@ -346,7 +398,7 @@ def plan_v15_shadow(
                 continue
             candidate, recovery_additions = recover_candidate(candidate)
             cand_floor, cand_dexter = simulate(candidate)
-            if _floors_ok(cand_floor, cand_dexter, floor_min, dexter_min, margin=0.08):
+            if _floors_ok(cand_floor, cand_dexter, floor_min, dexter_min):
                 old_score = _score_plan(offsets, floor_temps, dexter_temps, price_list, floor_min, floor_max, dexter_min, dexter_max)
                 new_score = _score_plan(candidate, cand_floor, cand_dexter, price_list, floor_min, floor_max, dexter_min, dexter_max)
                 if new_score < old_score:
@@ -358,6 +410,251 @@ def plan_v15_shadow(
                         reasons["price_shift"] += 1
                     improved = True
                     break
+
+    floor_temps, dexter_temps = simulate(offsets)
+    score = _score_plan(offsets, floor_temps, dexter_temps, price_list, floor_min, floor_max, dexter_min, dexter_max)
+    return V15PlanResult(
+        offsets=offsets,
+        floor_temps=floor_temps,
+        dexter_temps=dexter_temps,
+        actions=_actions_for_offsets(offsets),
+        score=score,
+        reasons=reasons,
+    )
+
+
+def plan_v16_robust(
+    start_utc: datetime,
+    start_floor: float,
+    start_dexter: float,
+    outdoor_temps: Sequence[float],
+    prices: Sequence[float],
+    wind_speeds: Optional[Sequence[float]] = None,
+    cloud_cover: Optional[Sequence[float]] = None,
+    must_run_hours: Optional[Set[int]] = None,
+    heat_in_flight: float = 0.0,
+    room_heat_surplus: float = 0.0,
+    k_leak_floor: Optional[float] = None,
+    k_gain_floor: Optional[float] = None,
+    ventilation_events: Optional[Iterable[VentilationEvent]] = None,
+    price_fallback_hours: Optional[Set[int]] = None,
+    sensor_mode: str = "normal",
+) -> V15PlanResult:
+    """Build the V16 live plan: comfort first, overheat shed second, price last."""
+    hours = min(24, len(outdoor_temps), len(prices))
+    outdoor = [float(v) for v in outdoor_temps[:hours]]
+    price_list = [float(v) for v in prices[:hours]]
+    winds = _expand(wind_speeds, hours, 0.0)
+    clouds = _expand(cloud_cover, hours, 8.0)
+    price_fallback_hours = price_fallback_hours or set()
+    must_run_hours = must_run_hours or set()
+
+    raw_floor_min, floor_max, raw_dexter_min, dexter_max, boost_allowed = _comfort_profiles(start_utc, hours)
+    floor_min, dexter_min, softened_hours = _apply_ventilation_softening(
+        start_utc, raw_floor_min, raw_dexter_min, ventilation_events
+    )
+
+    ventilation_cap_hours: Set[int] = set()
+    for event in event_by_zone(ventilation_events or []).values():
+        for i in range(hours):
+            if start_utc + timedelta(hours=i) <= event.active_until:
+                ventilation_cap_hours.add(i)
+
+    reasons: Dict[str, int] = {
+        "morning_recovery": 0,
+        "shed_overheat": 0,
+        "price_shed": 0,
+        "blocked_boost_overheat": 0,
+        "blocked_boost_price_fallback": 0,
+        "ventilation_floor_hours": softened_hours["floor"],
+        "ventilation_dexter_hours": softened_hours["dexter"],
+        "sensor_fallback": 1 if sensor_mode == "fallback" else 0,
+    }
+    seed = plan_v15_shadow(
+        start_utc=start_utc,
+        start_floor=start_floor,
+        start_dexter=start_dexter,
+        outdoor_temps=outdoor,
+        prices=price_list,
+        wind_speeds=winds,
+        cloud_cover=clouds,
+        must_run_hours=must_run_hours,
+        heat_in_flight=heat_in_flight,
+        room_heat_surplus=room_heat_surplus,
+        k_leak_floor=k_leak_floor,
+        k_gain_floor=k_gain_floor,
+        ventilation_events=ventilation_events,
+    )
+    offsets = list(seed.offsets)
+
+    def simulate(test_offsets):
+        return simulate_v15(
+            start_utc,
+            start_floor,
+            start_dexter,
+            outdoor,
+            test_offsets,
+            winds,
+            clouds,
+            heat_in_flight=heat_in_flight,
+            room_heat_surplus=room_heat_surplus,
+            k_leak_floor=k_leak_floor,
+            k_gain_floor=k_gain_floor,
+        )
+
+    def floors_hold(test_offsets, start_hour: int = 0, length: Optional[int] = None, margin: float = 0.0) -> bool:
+        floor_temps, dexter_temps = simulate(test_offsets)
+        end = hours if length is None else min(hours, start_hour + length)
+        return all(
+            floor_temps[i] >= floor_min[i] - margin and dexter_temps[i] >= dexter_min[i] - margin
+            for i in range(start_hour, end)
+        )
+
+    start_over_max = start_floor > floor_max[0] + 0.2 or start_dexter > dexter_max[0] + 0.2
+    start_overheat = max(
+        0.0,
+        float(start_floor) - floor_max[0],
+        float(start_dexter) - dexter_max[0],
+        float(room_heat_surplus or 0.0),
+    )
+
+    def shed_hour(hour: int, reason: str) -> bool:
+        nonlocal offsets
+        if hour >= hours:
+            return False
+        lower_limit = -2.0 if hour in must_run_hours else settings.OPTIMIZER_MIN_OFFSET
+        changed = False
+        while offsets[hour] > lower_limit:
+            candidate = offsets.copy()
+            candidate[hour] = max(lower_limit, candidate[hour] - 1.0)
+            if floors_hold(candidate, hour, length=6, margin=0.03):
+                offsets = candidate
+                reasons[reason] += 1
+                changed = True
+            else:
+                break
+        return changed
+
+    # 1. If the house is already warm, force the first hours to shed heat before
+    # any cost optimization is considered.
+    if start_overheat > 0.2:
+        for h in range(min(3, hours)):
+            shed_hour(h, "shed_overheat")
+
+    def recover_morning() -> None:
+        nonlocal offsets
+        if start_over_max:
+            reasons["blocked_boost_overheat"] += len(boost_allowed)
+            return
+
+        for _ in range(80):
+            floor_temps, dexter_temps = simulate(offsets)
+            bind = None
+            for i, (floor, dexter) in enumerate(zip(floor_temps, dexter_temps)):
+                if i not in boost_allowed:
+                    continue
+                if floor < floor_min[i] or dexter < dexter_min[i]:
+                    bind = i
+                    break
+            if bind is None:
+                return
+
+            best_hour = None
+            best_score = float("inf")
+            for h in sorted(boost_allowed):
+                if h > bind or bind - h > 3:
+                    continue
+                if h in ventilation_cap_hours and offsets[h] >= 1.0:
+                    continue
+                if h in price_fallback_hours:
+                    reasons["blocked_boost_price_fallback"] += 1
+                    continue
+                if offsets[h] >= settings.OPTIMIZER_MAX_OFFSET:
+                    continue
+                candidate = offsets.copy()
+                candidate[h] += 1.0
+                cand_floor, cand_dexter = simulate(candidate)
+                remaining_deficit = max(0.0, floor_min[bind] - cand_floor[bind]) + max(
+                    0.0, dexter_min[bind] - cand_dexter[bind]
+                )
+                score = remaining_deficit * 1000.0 + price_list[h]
+                if score < best_score:
+                    best_score = score
+                    best_hour = h
+
+            if best_hour is None:
+                return
+            offsets[best_hour] += 1.0
+            reasons["morning_recovery"] += 1
+
+    # 2. Recover only the explicit morning comfort window. No cheap-night
+    # preheat and no fallback-price BOOST.
+    recover_morning()
+
+    # 3. Continue reducing heat in over-max and expensive hours as long as the
+    # forecast remains above floors after any allowed morning recovery.
+    for _ in range(72):
+        floor_temps, dexter_temps = simulate(offsets)
+        min_price = min(price_list) if price_list else 0.0
+        ordered_hours = sorted(
+            range(hours),
+            key=lambda h: (
+                max(0.0, floor_temps[h] - floor_max[h]) * 3.0
+                + max(0.0, dexter_temps[h] - dexter_max[h]) * 3.0
+                + max(0.0, price_list[h] - min_price),
+            ),
+            reverse=True,
+        )
+        changed = False
+        for h in ordered_hours:
+            if offsets[h] <= settings.OPTIMIZER_MIN_OFFSET:
+                continue
+            candidate = offsets.copy()
+            lower_limit = -2.0 if h in must_run_hours else settings.OPTIMIZER_MIN_OFFSET
+            candidate[h] = max(lower_limit, candidate[h] - 1.0)
+            if candidate[h] == offsets[h]:
+                continue
+
+            candidate_floor, candidate_dexter = simulate(candidate)
+            if not _floors_ok(candidate_floor, candidate_dexter, floor_min, dexter_min, margin=0.02):
+                continue
+
+            over_now = floor_temps[h] > floor_max[h] or dexter_temps[h] > dexter_max[h]
+            price_shed_ok = price_list[h] > min_price and h not in price_fallback_hours
+            if over_now or price_shed_ok:
+                offsets = candidate
+                if over_now:
+                    reasons["shed_overheat"] += 1
+                else:
+                    reasons["price_shed"] += 1
+                recover_morning()
+                changed = True
+                break
+        if not changed:
+            break
+
+    # Final invariant: V16 never schedules positive offsets outside the morning
+    # window, during current overheat, during active ventilation caps, or on
+    # fallback price hours.
+    for h, offset in enumerate(list(offsets)):
+        if offset <= 0.0:
+            continue
+        blocked = (
+            h not in boost_allowed
+            or start_over_max
+            or h in ventilation_cap_hours
+            or h in price_fallback_hours
+        )
+        if blocked:
+            candidate = offsets.copy()
+            candidate[h] = 0.0
+            cand_floor, cand_dexter = simulate(candidate)
+            if _floors_ok(cand_floor, cand_dexter, floor_min, dexter_min, margin=0.02):
+                offsets = candidate
+                if start_over_max:
+                    reasons["blocked_boost_overheat"] += 1
+                if h in price_fallback_hours:
+                    reasons["blocked_boost_price_fallback"] += 1
 
     floor_temps, dexter_temps = simulate(offsets)
     score = _score_plan(offsets, floor_temps, dexter_temps, price_list, floor_min, floor_max, dexter_min, dexter_max)

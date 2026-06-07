@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from core.config import settings
 from services.comfort_profile import comfort_bounds_for_time
 from services.optimizer import predict_temperatures_two_zone
-from services.v15_mpc import compare_shadow_summary, plan_v15_shadow
+from services.v15_mpc import compare_shadow_summary, plan_v15_shadow, plan_v16_robust
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,14 @@ class WindowResult:
     v15_avoidable_over_hours: int
     v14_weighted_price: float
     v15_weighted_price: float
+    v16_rest: int = 0
+    v16_boost: int = 0
+    v16_min_floor: float = 0.0
+    v16_min_dexter: float = 0.0
+    v16_under_floor_hours: int = 0
+    v16_over_floor_hours: int = 0
+    v16_avoidable_over_hours: int = 0
+    v16_weighted_price: float = 0.0
 
 
 def _parse_dt(value) -> datetime:
@@ -227,6 +235,15 @@ def evaluate_window(conn: sqlite3.Connection, start: datetime, hours: int = 24) 
         cloud_cover=cloud,
     )
     shadow = compare_shadow_summary(offsets, v15, prices)
+    v16 = plan_v16_robust(
+        start_utc=start,
+        start_floor=start_floor,
+        start_dexter=start_dexter,
+        outdoor_temps=outdoor,
+        prices=prices,
+        wind_speeds=wind,
+        cloud_cover=cloud,
+    )
 
     return WindowResult(
         start=start,
@@ -248,6 +265,14 @@ def evaluate_window(conn: sqlite3.Connection, start: datetime, hours: int = 24) 
         v15_avoidable_over_hours=_count_avoidable_overheat_hours(v15.floor_temps, v15.dexter_temps, start),
         v14_weighted_price=_weighted_price(offsets, prices),
         v15_weighted_price=float(shadow.get("v15_weighted_price", 0.0)),
+        v16_rest=v16.actions.count("REST"),
+        v16_boost=v16.actions.count("BOOST"),
+        v16_min_floor=min(v16.floor_temps),
+        v16_min_dexter=min(v16.dexter_temps),
+        v16_under_floor_hours=_count_band_hours(v16.floor_temps, v16.dexter_temps, start, under=True),
+        v16_over_floor_hours=_count_band_hours(v16.floor_temps, v16.dexter_temps, start, under=False),
+        v16_avoidable_over_hours=_count_avoidable_overheat_hours(v16.floor_temps, v16.dexter_temps, start),
+        v16_weighted_price=_weighted_price(v16.offsets, prices),
     )
 
 
@@ -263,21 +288,21 @@ def print_summary(results: List[WindowResult]) -> None:
     print(f"Comparable windows: {len(results)}")
     print(f"Period: {results[0].start} -> {results[-1].start}")
     print()
-    print("Metric                         V14        V15        Delta")
-    print("-----------------------------  ---------  ---------  ---------")
+    print("Metric                         V14        V15        V16        V16-V15")
+    print("-----------------------------  ---------  ---------  ---------  ---------")
 
     rows = [
-        ("REST h / window", _mean([r.v14_rest for r in results]), _mean([r.v15_rest for r in results])),
-        ("BOOST h / window", _mean([r.v14_boost for r in results]), _mean([r.v15_boost for r in results])),
-        ("min floor C", _mean([r.v14_min_floor for r in results]), _mean([r.v15_min_floor for r in results])),
-        ("min Dexter C", _mean([r.v14_min_dexter for r in results]), _mean([r.v15_min_dexter for r in results])),
-        ("under floor h", _mean([r.v14_under_floor_hours for r in results]), _mean([r.v15_under_floor_hours for r in results])),
-        ("over upper h", _mean([r.v14_over_floor_hours for r in results]), _mean([r.v15_over_floor_hours for r in results])),
-        ("avoidable over h", _mean([r.v14_avoidable_over_hours for r in results]), _mean([r.v15_avoidable_over_hours for r in results])),
-        ("weighted price", _mean([r.v14_weighted_price for r in results]), _mean([r.v15_weighted_price for r in results])),
+        ("REST h / window", _mean([r.v14_rest for r in results]), _mean([r.v15_rest for r in results]), _mean([r.v16_rest for r in results])),
+        ("BOOST h / window", _mean([r.v14_boost for r in results]), _mean([r.v15_boost for r in results]), _mean([r.v16_boost for r in results])),
+        ("min floor C", _mean([r.v14_min_floor for r in results]), _mean([r.v15_min_floor for r in results]), _mean([r.v16_min_floor for r in results])),
+        ("min Dexter C", _mean([r.v14_min_dexter for r in results]), _mean([r.v15_min_dexter for r in results]), _mean([r.v16_min_dexter for r in results])),
+        ("under floor h", _mean([r.v14_under_floor_hours for r in results]), _mean([r.v15_under_floor_hours for r in results]), _mean([r.v16_under_floor_hours for r in results])),
+        ("over upper h", _mean([r.v14_over_floor_hours for r in results]), _mean([r.v15_over_floor_hours for r in results]), _mean([r.v16_over_floor_hours for r in results])),
+        ("avoidable over h", _mean([r.v14_avoidable_over_hours for r in results]), _mean([r.v15_avoidable_over_hours for r in results]), _mean([r.v16_avoidable_over_hours for r in results])),
+        ("weighted price", _mean([r.v14_weighted_price for r in results]), _mean([r.v15_weighted_price for r in results]), _mean([r.v16_weighted_price for r in results])),
     ]
-    for label, v14, v15 in rows:
-        print(f"{label:<29}  {v14:>9.2f}  {v15:>9.2f}  {v15 - v14:>9.2f}")
+    for label, v14, v15, v16 in rows:
+        print(f"{label:<29}  {v14:>9.2f}  {v15:>9.2f}  {v16:>9.2f}  {v16 - v15:>9.2f}")
 
     worst_v15 = min(results, key=lambda r: min(r.v15_min_floor, r.v15_min_dexter))
     print()
@@ -285,6 +310,12 @@ def print_summary(results: List[WindowResult]) -> None:
         "Worst V15 comfort window: "
         f"{worst_v15.start} floor={worst_v15.v15_min_floor:.2f}C "
         f"dexter={worst_v15.v15_min_dexter:.2f}C"
+    )
+    worst_v16 = min(results, key=lambda r: min(r.v16_min_floor, r.v16_min_dexter))
+    print(
+        "Worst V16 comfort window: "
+        f"{worst_v16.start} floor={worst_v16.v16_min_floor:.2f}C "
+        f"dexter={worst_v16.v16_min_dexter:.2f}C"
     )
 
 
