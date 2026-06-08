@@ -232,6 +232,27 @@ def test_stale_zone_sensors_use_bt50_gap_fallback_for_warm_override():
     assert client.writes[-1] == (device.device_id, controller.PARAM_GM_WRITE, 100)
 
 
+def test_bt50_downstairs_calibration_uses_bucketed_history():
+    now = datetime.now(timezone.utc)
+    db, device, controller, client = setup_runtime(now, floor_temp=20.8)
+    bt50_param = db.query(Parameter).filter_by(parameter_id="40033").first()
+    floor_param = db.query(Parameter).filter_by(parameter_id="HA_TEMP_DOWNSTAIRS").first()
+    start = now - timedelta(days=1)
+
+    for index in range(24):
+        ts = (start + timedelta(minutes=5 * index)).replace(tzinfo=None)
+        db.add(ParameterReading(device_id=device.id, parameter_id=bt50_param.id, timestamp=ts, value=20.9))
+        db.add(ParameterReading(
+            device_id=device.id,
+            parameter_id=floor_param.id,
+            timestamp=ts + timedelta(seconds=30),
+            value=20.7,
+        ))
+    db.commit()
+
+    assert round(controller._get_bt50_downstairs_gap(), 2) == -0.20
+
+
 def test_fallback_suppresses_stale_negative_bank_debt_when_comfortable(monkeypatch):
     now = datetime.now(timezone.utc)
     db, device, controller, client = setup_runtime(now, planned_action="RUN", floor_temp=20.7, dexter_temp=20.2)

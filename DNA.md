@@ -424,11 +424,15 @@ Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificie
 *AI-agenter: uppdatera detta avsnitt efter varje session.*
 
 ```
-last_updated: 2026-06-07
+last_updated: 2026-06-08
 last_agent: Codex GPT-5
-status: v16_active_clean_release_deployed
-current_task: Lokal arbetskatalog städad och RPi ersatt med ren release från Git HEAD
+status: bt50_calibration_local_not_deployed
+current_task: BT50-fallback kalibrerad lokalt mot historisk HA/IKEA-nedervåning
 recent_change: |
+  - 2026-06-08 BT50-kalibrering analyserad read-only mot RPi-DB: 5-minutersbucketade par före HA-stale 2026-06-05 visar HA nedervåning minus BT50 ca -0.13°C senaste 14d, -0.10°C senaste 30d, -0.08°C senaste 90d/all; enkel offsetmodell räcker nästan lika bra som linjär modell (30d RMSE 0.198°C vs 0.194°C)
+  - Lokal kodändring ej deployad: `smart_planner` och `gm_controller` använder nu dedikerad bucketad BT50→nedervåning-kalibrering över 30d med minst 24 par och fallback 0.0; Dexter-gapet lämnas i befintlig historisk gap-logik eftersom Dexter-nedervåning är mycket mer variabelt
+  - Testtäckning tillagd/uppdaterad för bucketad BT50-kalibrering när timestamps inte matchar exakt; lokal verifiering 2026-06-08: riktade tester 3 passed, full `pytest -q` 62 passed och `py_compile` passerar för `smart_planner`/`gm_controller`
+  - Ingen RPi-deploy, service restart, DB-migration, live configändring, safety-limit-ändring eller manuell/live GM-skrivning gjordes i denna kalibreringssession
   - 2026-06-07 lokal arbetskatalog städad i separata commits: `34b167e` V16 robust planner rollout, `aebc236` förenklad projektdokumentation och `6206a92` ignore av Codex-mount; local `main` pushad och `git status` ren
   - Gamla toppnivådokument `PROJECT_SUMMARY.md`, `TO_CLAUDE.md` och `architecture.md` är borttagna ur Git; `CLAUDE.md` pekar nu på `DNA.md` som source of truth. `.codex` kunde inte tas bort eftersom den är en read-only tmpfs bind mount från Codex-miljön och ignoreras i `.gitignore`
   - RPi-cleanup backup före katalogbyte finns i `/tmp/nibe_cleanup_20260607_2335/` med `code_before.tgz`, `nibe_before.db`, `env_before`, git-/servicestatus; gamla live-katalogen ligger kvar som `/home/peccz/nibe_autotuner.backup_20260607_2335`
@@ -628,6 +632,7 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-06-08 | BT50→nedervåning kalibrerad lokalt från historisk HA/IKEA-data: 30d offset ca -0.10°C, bucketad fallback implementerad i planner/GM-controller, full pytest 62 passed; ej deployad |
 | 2026-06-07 | Lokal arbetskatalog städad och pushad i tre commits; RPi live-katalog ersatt med ren release från Git HEAD `6206a92`, gamla katalogen backupad, V16-plan och GM-ticks verifierade; RPi full pytest 61 passed |
 | 2026-06-06 | V16 robust styrlogik implementerad lokalt: strikt komfort/övervärme/pris-prioritet, `PLANNER_ENGINE=v16_active`, V16 i backtestrapporten och full pytest 61 passed; ej deployad |
 | 2026-06-06 | V15 active drift utvärderad: tekniskt stabilt och billigare än V14 i journal, men kraftig övervärme kvarstår; senaste 7d Dexter över max 100%, GM helt safety/warmoverride/BASTU-dominerad, HA-zoner stale igen |

@@ -136,6 +136,45 @@ def _avg_same_timestamp_gap(conn, warm_param, base_param, default_gap, now, days
     return default_gap
 
 
+def _avg_bucketed_bt50_downstairs_gap(conn, default_gap, now, days=30, bucket_seconds=300, min_pairs=24):
+    """Calibrate BT50 to downstairs HA using 5-minute buckets.
+
+    BT50 and IKEA/HA readings are not always written with identical timestamps.
+    Bucket matching avoids falling back to 0.0 just because the seconds differ.
+    """
+    try:
+        row = conn.execute("""
+            WITH readings AS (
+                SELECT p.parameter_id, r.value, CAST(strftime('%s', r.timestamp) / ? AS INTEGER) AS bucket
+                FROM parameter_readings r
+                JOIN parameters p ON r.parameter_id = p.id
+                WHERE p.parameter_id IN ('HA_TEMP_DOWNSTAIRS', '40033')
+                  AND r.timestamp > ?
+                  AND r.value BETWEEN 10.0 AND 30.0
+            ),
+            bucketed AS (
+                SELECT parameter_id, bucket, AVG(value) AS value
+                FROM readings
+                GROUP BY parameter_id, bucket
+            ),
+            gaps AS (
+                SELECT down.value - bt.value AS gap
+                FROM bucketed down
+                JOIN bucketed bt ON bt.bucket = down.bucket
+                WHERE down.parameter_id = 'HA_TEMP_DOWNSTAIRS'
+                  AND bt.parameter_id = '40033'
+                  AND ABS(down.value - bt.value) <= 2.0
+            )
+            SELECT COUNT(*), AVG(gap)
+            FROM gaps
+        """, (bucket_seconds, now - timedelta(days=days))).fetchone()
+        if row and int(row[0] or 0) >= min_pairs and row[1] is not None:
+            return float(row[1])
+    except Exception as e:
+        logger.debug(f"Could not calculate bucketed BT50 calibration gap: {e}")
+    return default_gap
+
+
 def _resolve_zone_temperatures(conn, now, opt_target_temp):
     latest = _get_latest_readings(
         conn,
@@ -160,8 +199,8 @@ def _resolve_zone_temperatures(conn, now, opt_target_temp):
 
         if downstairs is None:
             if bt50_fresh:
-                downstairs_bt50_gap = _avg_same_timestamp_gap(
-                    conn, "HA_TEMP_DOWNSTAIRS", "40033", 0.0, now
+                downstairs_bt50_gap = _avg_bucketed_bt50_downstairs_gap(
+                    conn, default_gap=0.0, now=now
                 )
                 downstairs = bt50[0] + downstairs_bt50_gap
                 logger.warning(

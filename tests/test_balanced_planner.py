@@ -338,9 +338,11 @@ def _make_sensor_conn(now):
         conn.execute("INSERT INTO parameters VALUES (?, ?)", (idx, parameter_id))
 
     historical = now - timedelta(days=1)
-    conn.execute("INSERT INTO parameter_readings VALUES (1, ?, ?)", (historical, 21.0))
+    for index in range(24):
+        ts = historical + timedelta(minutes=5 * index)
+        conn.execute("INSERT INTO parameter_readings VALUES (1, ?, ?)", (ts + timedelta(seconds=20), 21.0))
+        conn.execute("INSERT INTO parameter_readings VALUES (3, ?, ?)", (ts, 20.8))
     conn.execute("INSERT INTO parameter_readings VALUES (2, ?, ?)", (historical, 20.2))
-    conn.execute("INSERT INTO parameter_readings VALUES (3, ?, ?)", (historical, 20.8))
 
     stale = now - timedelta(hours=2)
     conn.execute("INSERT INTO parameter_readings VALUES (1, ?, ?)", (stale, 22.8))

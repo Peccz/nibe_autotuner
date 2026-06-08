@@ -12,7 +12,7 @@ from loguru import logger
 # Add src to path
 sys.path.insert(0, os.path.abspath('src'))
 
-from sqlalchemy import desc
+from sqlalchemy import desc, text
 
 from data.database import SessionLocal
 from data.models import GMAccount, Device, PlannedHeatingSchedule, Parameter, ParameterReading, GMTransaction
@@ -142,6 +142,47 @@ class GMController:
             logger.debug(f"Could not calculate historical gap {warm_param}-{base_param}: {e}")
         return default_gap
 
+    def _get_bt50_downstairs_gap(self, default_gap=0.0):
+        try:
+            warm = self.db.query(Parameter).filter_by(parameter_id='HA_TEMP_DOWNSTAIRS').first()
+            base = self.db.query(Parameter).filter_by(parameter_id='40033').first()
+            if not warm or not base:
+                return default_gap
+
+            since = datetime.utcnow() - timedelta(days=30)
+            rows = self.db.execute(
+                text("""
+                WITH readings AS (
+                    SELECT parameter_id, value, CAST(strftime('%s', timestamp) / 300 AS INTEGER) AS bucket
+                    FROM parameter_readings
+                    WHERE parameter_id IN (:warm_id, :base_id)
+                      AND timestamp > :since
+                      AND value BETWEEN 10.0 AND 30.0
+                ),
+                bucketed AS (
+                    SELECT parameter_id, bucket, AVG(value) AS value
+                    FROM readings
+                    GROUP BY parameter_id, bucket
+                ),
+                gaps AS (
+                    SELECT warm.value - base.value AS gap
+                    FROM bucketed warm
+                    JOIN bucketed base ON base.bucket = warm.bucket
+                    WHERE warm.parameter_id = :warm_id
+                      AND base.parameter_id = :base_id
+                      AND ABS(warm.value - base.value) <= 2.0
+                )
+                SELECT COUNT(*) AS samples, AVG(gap) AS avg_gap
+                FROM gaps
+                """),
+                {"warm_id": warm.id, "base_id": base.id, "since": since.replace(tzinfo=None)},
+            ).first()
+            if rows and int(rows[0] or 0) >= 24 and rows[1] is not None:
+                return float(rows[1])
+        except Exception as e:
+            logger.debug(f"Could not calculate bucketed BT50 calibration gap: {e}")
+        return default_gap
+
     def _get_zone_temperatures(self, now, bt50_indoor):
         dexter_temp = self._get_recent_reading_value('HA_TEMP_DEXTER', now)
         floor_temp = self._get_recent_reading_value('HA_TEMP_DOWNSTAIRS', now)
@@ -150,7 +191,7 @@ class GMController:
         if floor_temp is None or dexter_temp is None:
             sensor_mode = "fallback"
             if floor_temp is None and bt50_indoor is not None:
-                floor_gap = self._get_historical_gap('HA_TEMP_DOWNSTAIRS', '40033', 0.0)
+                floor_gap = self._get_bt50_downstairs_gap(default_gap=0.0)
                 floor_temp = float(bt50_indoor) + floor_gap
                 logger.warning(
                     f"sensor_mode=fallback GM downstairs={floor_temp:.2f}C from BT50 "
