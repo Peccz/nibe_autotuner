@@ -29,6 +29,9 @@ def main() -> int:
                         help="Skriv till databasen (default: dry-run)")
     parser.add_argument("--limit", type=int, default=0,
                         help="Max antal dygn att behandla (0 = alla)")
+    parser.add_argument("--recompute-all", action="store_true",
+                        help="Räkna om ALLA dygn (även de med gamla "
+                             "ai_evaluator-värden) för en metodkonsistent serie")
     args = parser.parse_args()
 
     init_db()
@@ -38,12 +41,10 @@ def main() -> int:
         print("Ingen device i databasen — avbryter")
         return 1
 
-    rows = (
-        session.query(DailyPerformance)
-        .filter(DailyPerformance.savings_sek.is_(None))
-        .order_by(DailyPerformance.date)
-        .all()
-    )
+    query = session.query(DailyPerformance)
+    if not args.recompute_all:
+        query = query.filter(DailyPerformance.savings_sek.is_(None))
+    rows = query.order_by(DailyPerformance.date).all()
     if args.limit:
         rows = rows[: args.limit]
 
@@ -66,7 +67,13 @@ def main() -> int:
                 dp.baseline_cost_sek = sav.baseline_cost_sek
                 dp.savings_sek = sav.savings_sek
                 dp.savings_percent = sav.savings_percent
-                if dp.actual_cost_sek is None:
+                if args.recompute_all:
+                    # Metodkonsistens: kostnads-/energisidan ska komma från
+                    # samma modell som baseline (gamla ai_evaluator-värden
+                    # finns kvar i deploy-backupen).
+                    dp.actual_kwh = sav.actual_kwh
+                    dp.actual_cost_sek = sav.actual_cost_sek
+                elif dp.actual_cost_sek is None:
                     dp.actual_cost_sek = sav.actual_cost_sek
                 session.commit()
         time.sleep(REQUEST_PAUSE_S)
