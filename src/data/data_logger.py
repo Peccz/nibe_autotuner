@@ -526,6 +526,23 @@ class DataLogger:
                 if priced > 0:
                     actual_cost_sek = round(cost, 2)
 
+            # Besparing mot prisoaptimerad baseline (samma energi, fördelad
+            # efter värmebehov i stället för pris). Får aldrig fälla
+            # aggregeringen — vid tunt underlag lämnas kolumnerna NULL.
+            baseline_kwh = baseline_cost = savings_sek = savings_percent = None
+            try:
+                from services.savings_report import compute_savings_for_day
+                sav = compute_savings_for_day(self.session, device.id, day_start)
+                if sav:
+                    baseline_kwh = sav.baseline_kwh
+                    baseline_cost = sav.baseline_cost_sek
+                    savings_sek = sav.savings_sek
+                    savings_percent = sav.savings_percent
+                    if actual_cost_sek is None:
+                        actual_cost_sek = sav.actual_cost_sek
+            except Exception as e:
+                logger.warning(f"Savings computation failed for {date}: {e}")
+
             dp = DailyPerformance(
                 date=day_start,
                 avg_indoor_temp=avg_indoor,
@@ -535,12 +552,17 @@ class DataLogger:
                 avg_outdoor_temp=avg_outdoor,
                 avg_cop=avg_cop,
                 actual_kwh=actual_kwh,
-                actual_cost_sek=actual_cost_sek
+                actual_cost_sek=actual_cost_sek,
+                baseline_kwh=baseline_kwh,
+                baseline_cost_sek=baseline_cost,
+                savings_sek=savings_sek,
+                savings_percent=savings_percent
             )
             self.session.add(dp)
             self.session.commit()
             logger.info(f"✓ Daily performance aggregated for {date}: "
-                        f"indoor={avg_indoor}°C, COP={avg_cop}, cost≈{actual_cost_sek} SEK")
+                        f"indoor={avg_indoor}°C, COP={avg_cop}, cost≈{actual_cost_sek} SEK, "
+                        f"savings≈{savings_sek} SEK")
 
             self._calibrate_thermal_model(day_start)
 
