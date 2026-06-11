@@ -30,44 +30,16 @@
 - Bekräfta alltid innan: push till remote, radering av filer, modifiering av systemd-units
 - Undvik överkonstruktion — håll lösningar minimala och direkta
 
-### AI Project Review Protocol
-Before final response, merge, deploy, or handoff, perform this review:
-- **Scope check:** The change solves the requested task and nothing materially outside it
-- **Canonical check:** Only canonical files from section 3 were changed, unless an exception is documented
-- **Architecture check:** No duplicate patterns, `_v2` files, or bypassed layers were introduced
-- **Safety/data check:** No secrets, live data, DB schema, service units, safety limits, GM writes, or production paths were changed without explicit approval
-- **Verification check:** Tests, lint, build, or manual validation were run; if not, document verification debt in section 11
-- **State check:** Section 11 reflects what changed, what was verified, and what remains open
-- **Decision check:** Any durable system decision is recorded in section 12
+### AI Project Review Protocol, Review Trigger & Scope, AI Feedback Loop
+Detta projekt följer det workspace-gemensamma protokollet i `/home/peccz/AI/MASTER_DNA.md` §0: AI Project Review Protocol, Review Trigger & Scope (Level 0–4) och AI Feedback Loop. Läs det där — det dupliceras inte här.
 
-Production-sensitive changes require explicit user approval, a rollback path, and exact verification steps. Do not restart services, deploy, migrate databases, write GM values, or alter live configuration unless the task explicitly requires it.
-
-### AI Review Trigger & Scope
-Initiate review at the earliest matching level:
-
-#### Level 0 - No Formal Review
-Use only for pure reading, answering questions, or planning with no file changes. No DNA update is required unless a durable decision or new project fact is discovered.
-
-#### Level 1 - Light Review
-Use for docs-only changes, comments, formatting, typo fixes, or non-runtime governance updates. Required: scope check, canonical check, and state check if project state changed.
-
-#### Level 2 - Standard Review
-Use for normal code changes, tests, scripts, non-live config, or project-local tooling. Required: full AI Project Review Protocol, relevant test/lint/build when available, and documented verification debt if not verified.
-
-#### Level 3 - Deep Review
-Use for architecture changes, data model changes, cross-project changes, generated code, refactors, dependency changes, auth/API behavior, optimizer logic, control-loop behavior, or anything touching persistent data. Required: full protocol, explicit architecture check against DNA.md, before/after behavior explanation, verification, and Decision Log entry if design changed.
-
-#### Level 4 - Production/Safety Review
-Use for service units, deploy scripts, DB migrations, live config, secrets, safety limits, GM writes, heat-pump control behavior, automation controlling real devices, or destructive file operations. Required: explicit user approval before action, rollback path, exact verification steps, no service restart/deploy/migration/deletion/live write/GM write unless explicitly requested, and updates to Active Work & State plus Decision Log.
-
-Review must be initiated when AI writes or edits files, a diff crosses project boundaries, a canonical file map entry changes, a new file is created, DB/schema/data migration is proposed, service/deploy/secret/env/production path is touched, tests cannot be run, architecture drift is noticed, DNA is stale, or the outcome affects money, safety, live automation, heat-pump behavior, or user decisions.
-
-### AI Feedback Loop
-When working in this project, actively surface reusable improvements instead of keeping them local. If you discover a smarter workflow, safer constraint, better review rule, recurring failure mode, useful script, architecture pattern, or project-specific lesson:
-- Record it in this project DNA under Active Work, Known Pitfalls, Decision Log, or the relevant canonical section
-- If it could benefit other projects, also update `/home/peccz/AI/MASTER_DNA.md` or explicitly report it in the final response as a cross-project recommendation
-- Do not apply cross-project changes automatically unless the task asks for it; propose or document the transfer first
-- Prefer concrete, reusable rules over vague advice
+**Projektspecifika skärpningar utöver masterprotokollet:**
+- Safety/data check inkluderar explicit: GM writes — `No secrets, live data, DB schema, service units, safety limits, GM writes, or production paths were changed without explicit approval`
+- Produktionsnoten inkluderar explicit: write GM values — `Do not restart services, deploy, migrate databases, write GM values, or alter live configuration unless the task explicitly requires it`
+- Level 3 inkluderar explicit: optimizer logic, control-loop behavior — `optimizer logic, control-loop behavior, or anything touching persistent data`
+- Level 4 inkluderar explicit: GM writes, heat-pump control behavior — `Use for service units, deploy scripts, DB migrations, live config, secrets, safety limits, GM writes, heat-pump control behavior, automation controlling real devices, or destructive file operations`
+- Level 4 no-action-listan inkluderar explicit: /GM write — `no service restart/deploy/migration/deletion/live write/GM write unless explicitly requested`
+- Review-triggern inkluderar explicit: heat-pump behavior — `or the outcome affects money, safety, live automation, heat-pump behavior, or user decisions`
 
 
 ---
@@ -131,6 +103,7 @@ When working in this project, actively surface reusable improvements instead of 
 | GM-kontroller | `src/services/gm_controller.py` | GM-bank, skriver till pump varje minut |
 | Säkerhet | `src/services/safety_guard.py` | Validerar GM-skrivningar |
 | Priser | `src/services/price_service.py` | elprisetjustnu.se (gratis, ingen nyckel) |
+| Besparing | `src/services/savings_report.py` | Faktisk kostnad vs prisoaptimerad baseline; fyller daily_performance |
 | Väder | `src/services/weather_service.py` | Open-Meteo (klassen heter `SMHIWeatherService` — bakåtkompatibilitet) |
 | FastAPI | `src/api/api_server.py` | Port 8000, CORS allow_origins=["*"] |
 | Flask PWA | `src/mobile/mobile_app.py` | Port 5001, primärt användargränssnitt |
@@ -429,6 +402,12 @@ last_agent: Claude Opus 4.8
 status: robustness_fixes_local_not_deployed
 current_task: Robusthet/konsistens-fixar i styrloopen (stale/saknad data), lokalt + tester
 recent_change: |
+  - 2026-06-11 (Claude, Level 3 + deploy): Besparingsmätning implementerad och deployad. Ny `src/services/savings_report.py` fyller daily_performance-kolumnerna baseline_kwh/baseline_cost_sek/savings_sek/savings_percent (fanns i schemat sedan start, aldrig populerade). Baseline = samma kompressorenergi fördelad efter värmebehov (max(0, 17°C − ute)) i stället för pris; mäter ren prisförflyttning, VV ingår på båda sidor (konservativt). Hook i `_aggregate_daily_performance` (midnatt), `scripts/backfill_savings.py` (historik via elprisetjustnu, dry-run default, `--recompute-all` för metodkonsistens) och `scripts/savings_report.py` (månadsrapport, read-only).
+  - ROTORSAK ai_evaluator: cron 05:30 (`run_ai_evaluation.sh`) har kraschat varje natt sedan ~2026-03-25 med UNIQUE constraint på daily_performance.date — data_logger-aggregeringen (midnatt) skapar raden först, ai_evaluator INSERT:ar i stället för UPDATE. Dess sommarbaseline är dessutom trasig (0 kWh → negativ nonsensbesparing). BESLUTSPUNKT till peccz: ta bort cron-raden (auto-mode-klassificeraren nekade borttagning; crontab-backup i `/tmp/nibe_savings_deploy_20260611/crontab_before`).
+  - Hela serien omräknad metodkonsistent på RPi: 144/158 dygn ifyllda. Resultat: total prisförflyttningsbesparing +68 kr på 158 dygn (+1,9 %); vinter (jan–mar) ±0 kr, vår/försommar +5–8 %. Slutsats: prisförflyttning i VP är nästan värdelös i högvinter (kontinuerligt behov + warm-override-dominerad GM); den flyttbara lasten i hushållet är EV-laddningen. Gamla ai_evaluator-siffror (~10 kr/dygn december) var metodologiskt uppblåsta.
+  - Deploy via `deploy_v4.sh` (commit 0703ef1 + tidigare robusthetscommits 7cb5c2c/d6c077e/3818205 gick live samtidigt). Backup: `/tmp/nibe_savings_deploy_20260611/` (code_before.tgz, nibe_before_backfill.db, env_before). Verifierat: tjänster active, 0 nya failed units (logrotate sedan tidigare), DB quick_check=ok, lokal+RPi pytest grön (86 passed), GM-tick Verified 21:51/22:01.
+  - BEVAKNING: myUplink PATCH-skrivningar fick ~10 read-timeouts (15s) 21:50–22:05; skrivningar lyckades 21:51 och 22:01 och pumpen höll säkert läge (REST/GM=100). Nya timeout-defaulten failar snabbt i stället för att hänga loopen — avsett beteende, men följ upp om timeouts kvarstår dagtid.
+  - 2026-06-11 (Claude, Level 1 docs-only): §0-boilerplate ersatt med referens till MASTER_DNA §0; projektspecifika skärpningar bevarade inline
   - 2026-06-11 (Claude, Level 3): robusthets- och konsistensfixar implementerade lokalt + tester, INGEN RPi-deploy. Styrande princip (från drifthistorik: systemets enda återkommande fel är övervärme): stale/saknad data → fail-toward-REST i regulatorn, fail-toward-safe(varm) endast i SafetyGuard (frysskyddet). Se Decision Log.
   - #1 `api_client._make_request` sätter nu default `timeout=(5,15)` (DEFAULT_TIMEOUT) via `kwargs.setdefault`, täcker GET/PATCH + 401-retry. Förhindrar oändlig hängning → watchdog-omstartsloop (GM) / evig hängning (data_logger).
   - #2 `gm_controller.run_tick` hoppar nu över ticken (skriver ingen GM) om någon av 40008/40004/40033 saknas i API-svaret, i stället för tyst `default=0.0` (som fejkade djupkyla/slog ut BASTU-VAKT). Pumpen håller förra setpointen.
@@ -731,6 +710,8 @@ open_issues:
 | 2025-12-01 | SQLite med WAL-mode | Enkel att underhålla, inga databasservrar. WAL-mode löser concurrent read/write (data_logger + gm_controller). |
 | 2025-12-01 | systemd Restart=always för alla tjänster | Garanterar återstart vid krasch utan manuell intervention. Watchdog (120s) för gm_controller ger extra skydd. |
 | 2026-05-10 | Added project-specific Codex skill `nibe-autotuner` | Repeated optimizer, GM controller, DB, dashboard, deploy, and safety workflows should be reusable scaffolding instead of re-explained in prompts |
+| 2026-06-11 | `savings_report.py` är enda kanoniska besparingsväg; ai_evaluator-cronen är legacy | Två skrivare till daily_performance gav nattlig UNIQUE-krasch sedan mars; besparing måste mätas med en metod över hela serien. Den enkla demand-viktade baselinen är symmetrisk och robust, ai_evaluators termiska simulering gav nonsens sommartid |
+| 2026-06-11 | Besparing mäts som prisförflyttning vid lika energi, inte som termisk kontrafaktisk simulering | Symmetrin (samma energimodell på båda sidor) gör SEK-siffran okänslig för effektmodellfel; uppmätt resultat +1,9 % på 158 dygn visar att VP-prisflytt är marginell och att optimeringens värde främst ligger i komfort och undviken eltillsats — inte i jagande av billiga timmar |
 
 ---
 
