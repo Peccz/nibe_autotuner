@@ -404,8 +404,8 @@ BT50 sitter i teknikrummet — kan visa annan temp än HA_TEMP_DOWNSTAIRS. Grän
 ### 12. Kalibrering aktiveras först efter 24 rena prediction_accuracy-rader
 `_calibrate_thermal_model()` kräver minst 24 samples med `|error_c| < 1.5°C`. De första 1–2 dygnen används config-defaults.
 
-### 13. VV pre-heat kräver minst 2 historiska observationer per timme/veckodag
-`_get_vv_must_run_hours()` ignorerar mönster med färre än 2 observationer. Pre-heat-skyddet är passivt de första veckorna.
+### 13. VV pre-heat kräver minst 3 historiska observationer per timme/veckodag
+`_get_vv_must_run_hours()` kräver `COUNT(*) >= 3 AND AVG(duration_minutes) >= 15` (se `smart_planner.py`) och ignorerar mönster som inte når dit. Pre-heat-skyddet är därför passivt de första veckorna.
 
 ### 14. BT1/40004 är solpåverkad i västläge
 Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificiellt höga 40004-värden, t.ex. 30°C+ när verklig lufttemperatur är lägre. Kontroll 2026-04-14 till 2026-04-16 mot Open-Meteo visade maxbias cirka 14.8°C, 19.2°C respektive 15.7°C runt kl 14-15 UTC. `gm_controller` ska därför använda filtrerad `effective_outdoor_temp` för target_supply när aktuell planrad ger Open-Meteo-referens. Rå BT1 finns kvar i parameter_readings för analys av vad pumpen faktiskt ser.
@@ -424,11 +424,22 @@ Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificie
 *AI-agenter: uppdatera detta avsnitt efter varje session.*
 
 ```
-last_updated: 2026-06-08
-last_agent: Codex GPT-5
-status: bt50_calibration_local_not_deployed
-current_task: BT50-fallback kalibrerad lokalt mot historisk HA/IKEA-nedervåning
+last_updated: 2026-06-11
+last_agent: Claude Opus 4.8
+status: robustness_fixes_local_not_deployed
+current_task: Robusthet/konsistens-fixar i styrloopen (stale/saknad data), lokalt + tester
 recent_change: |
+  - 2026-06-11 (Claude, Level 3): robusthets- och konsistensfixar implementerade lokalt + tester, INGEN RPi-deploy. Styrande princip (från drifthistorik: systemets enda återkommande fel är övervärme): stale/saknad data → fail-toward-REST i regulatorn, fail-toward-safe(varm) endast i SafetyGuard (frysskyddet). Se Decision Log.
+  - #1 `api_client._make_request` sätter nu default `timeout=(5,15)` (DEFAULT_TIMEOUT) via `kwargs.setdefault`, täcker GET/PATCH + 401-retry. Förhindrar oändlig hängning → watchdog-omstartsloop (GM) / evig hängning (data_logger).
+  - #2 `gm_controller.run_tick` hoppar nu över ticken (skriver ingen GM) om någon av 40008/40004/40033 saknas i API-svaret, i stället för tyst `default=0.0` (som fejkade djupkyla/slog ut BASTU-VAKT). Pumpen håller förra setpointen.
+  - #3 `gm_controller` läser `VP_SYSTEM_MODE` med 30-min åldersgräns (SENSOR_MAX_AGE_MINUTES); stale läge → heating (1.0) så banken inte fryses av ett infruset varmvatten-/defrostläge.
+  - #4 `safety_guard.validate_decision` behandlar BT50 (40033) äldre än 30 min (INDOOR_MAX_AGE_MINUTES) som unknown → befintlig gren blockerar sänkning (enda stället där fail-riktningen medvetet är varm).
+  - #5 pris-fallback centraliserat: `PriceService.FALLBACK_PRICE_SEK = 1.0` används i `price_service.get_price_details_at` och `smart_planner` (tidigare 1.0/1.92/1.50 på olika vägar).
+  - #6 `price_service.get_price_details_at` matchar pris-timme i UTC (naiv = systemlokal) i stället för naiv lokal `.hour` — eliminerar DNA-fallgrop #2 i dashboard-/historikvägen.
+  - #7 `weather_service.get_forecast` skyddar mot `None` per timme (hoppar över timme utan temperatur, defaultar sekundära fält) i stället för att låta `int(None)` slänga hela prognosen.
+  - #8 DNA-fallgrop #13 korrigerad: VV pre-heat kräver `COUNT>=3 AND AVG(duration)>=15`, inte ">=2".
+  - Verifiering 2026-06-11: nya tester `tests/test_price_fallback.py`, `tests/test_weather_nullguard.py`, `tests/test_control_loop_robustness.py`; full `pytest -q` 75 passed (baseline 62) och `py_compile` OK för alla rörda filer. Inga safety-gränser, GM-skrivningar, DB-scheman eller service-units ändrade.
+  - 2026-06-10 (Claude, Level 1 docs-only): `CLAUDE.md` uppdaterad via /init. Lade till PLANNER_ENGINE-switchen (v14/v15_shadow/v15_active/v16_active) och noterade att V16 robust planner är aktiv produktion medan optimizer-basen är V14; varnade för att repo-roten innehåller icke-kanoniska scratch-filer (kanoniska filer endast under `src/`); förtydligade deploy_v4.sh (startar ej nibe-mobile, sed:ar sökväg) och test-körning med PYTHONPATH + enskilda tester. Ingen kodändring, ingen deploy, inga safety-/GM-/DB-ändringar.
   - 2026-06-08 BT50-kalibrering analyserad read-only mot RPi-DB: 5-minutersbucketade par före HA-stale 2026-06-05 visar HA nedervåning minus BT50 ca -0.13°C senaste 14d, -0.10°C senaste 30d, -0.08°C senaste 90d/all; enkel offsetmodell räcker nästan lika bra som linjär modell (30d RMSE 0.198°C vs 0.194°C)
   - Lokal kodändring ej deployad: `smart_planner` och `gm_controller` använder nu dedikerad bucketad BT50→nedervåning-kalibrering över 30d med minst 24 par och fallback 0.0; Dexter-gapet lämnas i befintlig historisk gap-logik eftersom Dexter-nedervåning är mycket mer variabelt
   - Testtäckning tillagd/uppdaterad för bucketad BT50-kalibrering när timestamps inte matchar exakt; lokal verifiering 2026-06-08: riktade tester 3 passed, full `pytest -q` 62 passed och `py_compile` passerar för `smart_planner`/`gm_controller`
@@ -686,6 +697,7 @@ open_issues:
 
 | Datum | Beslut | Anledning |
 |-------|--------|-----------|
+| 2026-06-11 | Vid stale/saknad indata ska regulatorn (gm_controller) fail-toward-REST (hoppa över tick / behandla stale läge som heating), medan SafetyGuard (frysskyddet) är det enda stället som fail-toward-safe (varm, blockerar sänkning). Färskhetsgräns 30 min överallt. | Drifthistoriken (V15-active maj–juni 2026: snitt ~23°C mot komforttak ~21.8°C, ~60% warm-override, ~39% BASTU-VAKT, frysskydd aldrig nära) visar att systemets enda återkommande fel är övervärme. Att agera på gammal/saknad data i "fortsätt värma/recover"-riktning förstärker övervärmen; därför är REST rätt fail-safe i regulatorn. Frysskyddet förblir konservativt varmt eftersom det är sista linan mot frysning. |
 | 2026-06-07 | När RPi-arbetskatalogen är kraftigt smutsig ska cleanup/deploy ske via ren releasekatalog från Git HEAD, med `.env`, produktions-DB/WAL, `venv` och `logs/` explicit bevarade eller återskapade | RPi Git-status var så långt från lokal Git att `git reset` eller brett `deploy_v4.sh` riskerade att blanda in gammalt skräp eller tappa runtimefiler. Releasekatalog ger reproducerbar kod, men `logs/` krävs för systemd `StandardOutput=append` och `venv` ska flyttas, inte kopieras via `/tmp`, för att undvika utrymmesproblem. |
 | 2026-06-06 | V16 ska vara en separat robust live-styrväg (`PLANNER_ENGINE=v16_active`) där komfort/safety prioriteras före övervärme-shedding och prisoptimering sist; pumpens 13°C/8h-värmespärr används inte som styrvillkor | V15 var tekniskt stabil och billigare än V14 men missade komfortmålet åt varma hållet. Robustheten kräver en tydlig huvudpolicy som inte låter lågt pris eller recovery skapa BOOST/RUN när huset redan är varmt. Pumpens egen spärr ska vara backup och höjas i pumpen om den stör styrningen. |
 | 2026-05-19 | Riktad RPi-sync används för vädringsskyddet i stället för `deploy_v4.sh` | Lokal och RPi-arbetskatalog är smutsiga med många orelaterade ändringar. Ett brett deployflöde riskerar att blanda in oavsiktliga filer; därför synkades endast berörda styr-/testfiler och V15 ligger fortsatt i `v15_shadow`. |

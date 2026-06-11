@@ -10,6 +10,12 @@ from core.config import settings
 
 API_BASE_URL = settings.MYUPLINK_API_BASE_URL
 
+# (connect, read) timeout in seconds. Without this a hung connection blocks the
+# control loop forever: gm_controller's 120s systemd watchdog would kill the
+# service (restart loop) and data_logger (no watchdog) would hang indefinitely,
+# starving every downstream service of fresh data.
+DEFAULT_TIMEOUT = (5, 15)
+
 
 class MyUplinkClient:
     """Client for interacting with myUplink API"""
@@ -47,6 +53,10 @@ class MyUplinkClient:
         """
         url = f"{self.base_url}{endpoint}"
         headers = self._get_headers()
+
+        # Apply a default timeout unless the caller specified one. Covers both
+        # the initial request and the 401-refresh retry below.
+        kwargs.setdefault("timeout", DEFAULT_TIMEOUT)
 
         try:
             response = self.session.request(

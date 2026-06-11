@@ -48,6 +48,7 @@ class GMController:
     WARM_OVERRIDE_RELEASE_MARGIN = 0.1
     
     SESSION_REFRESH_INTERVAL = 3600  # Refresh DB session every hour
+    SENSOR_MAX_AGE_MINUTES = 30  # Treat readings older than this as stale
 
     def __init__(self):
         self._open_session()
@@ -392,9 +393,29 @@ class GMController:
         def get_val(pid, default=0.0):
             return float(p[pid]['value']) if pid in p else default
 
+        # Critical sensors must NOT silently default to 0.0: a 0.0 outdoor fakes
+        # deep cold (→ turbo over-heating) and a 0.0 indoor disables BASTU-VAKT
+        # (>23.5) and the critical-temp guard (>19). The dominant real failure
+        # mode is over-heating, so fail toward REST: skip the tick and let the
+        # pump hold its last setpoint; the next tick (1 min) retries.
+        missing = [
+            pid for pid in (self.PARAM_SUPPLY_READ, self.PARAM_OUTDOOR_READ, self.PARAM_INDOOR_READ)
+            if pid not in p
+        ]
+        if missing:
+            logger.warning(
+                f"Missing critical sensor(s) {missing} in API response — "
+                "skipping tick (pump holds last setpoint)."
+            )
+            return
+
         cur_supply = get_val(self.PARAM_SUPPLY_READ)
         cur_outdoor = get_val(self.PARAM_OUTDOOR_READ)
         cur_indoor = get_val(self.PARAM_INDOOR_READ)
+        if self.PARAM_GM_READ not in p:
+            logger.warning(
+                f"GM read ({self.PARAM_GM_READ}) missing from API response — using leash default 0.0."
+            )
         cur_pump_gm = get_val(self.PARAM_GM_READ)
         
         # Get System Mode from DB (as it's a virtual parameter calculated by DataLogger)
@@ -404,7 +425,16 @@ class GMController:
             if param:
                 reading = self.db.query(ParameterReading).filter_by(parameter_id=param.id).order_by(desc(ParameterReading.timestamp)).first()
                 if reading:
-                    system_mode = reading.value
+                    age = now.replace(tzinfo=None) - reading.timestamp
+                    if age <= timedelta(minutes=self.SENSOR_MAX_AGE_MINUTES):
+                        system_mode = reading.value
+                    else:
+                        # A stale 'hot water' (2.0) or 'defrost' (3.0) would pause
+                        # the GM bank indefinitely and disable over-heat shedding.
+                        # Fail toward heating accounting instead of trusting it.
+                        logger.warning(
+                            f"VP_SYSTEM_MODE reading is stale ({age}); defaulting to heating (1.0)."
+                        )
         except (AttributeError, TypeError) as e:
             logger.debug(f"System mode reading unavailable, using default (Heating): {e}")
 

@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import Optional, Tuple
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ class SafetyGuard:
         self.db = db_session
         self.INDOOR_TEMP_PARAM_STRING_ID = '40033'  # BT50 Nibe indoor sensor
         self.ABSOLUTE_MIN_TEMP_HARD_LIMIT = 5.0 # Degrees C, to prevent pipes from freezing
+        self.INDOOR_MAX_AGE_MINUTES = 30  # Older BT50 readings are treated as unknown
 
     def validate_decision(self, decision: AIDecisionSchema, device_id: str) -> Tuple[bool, str, Optional[float]]:
         # 1. Hämta inställt gränsvärde
@@ -40,7 +42,19 @@ class SafetyGuard:
                 .order_by(desc(ParameterReading.timestamp))\
                 .first()
 
-        current_indoor_temp = latest_reading.value if latest_reading else None
+        # A stale BT50 value must not be trusted as the freeze-protection input.
+        # Route stale/missing readings to the "unknown temp" branch below, which
+        # fails toward safety (blocks lowering heat). This is the one place where
+        # the fail-safe direction is intentionally warm, not REST.
+        current_indoor_temp = None
+        if latest_reading is not None:
+            age = datetime.utcnow() - latest_reading.timestamp
+            if age <= timedelta(minutes=self.INDOOR_MAX_AGE_MINUTES):
+                current_indoor_temp = latest_reading.value
+            else:
+                logger.warning(
+                    f"SafetyGuard: BT50 reading is stale ({age}); treating indoor temp as unknown."
+                )
 
         if current_indoor_temp is None:
             logger.warning(f"SafetyGuard: Could not read indoor temp (Param {self.INDOOR_TEMP_PARAM_STRING_ID})")

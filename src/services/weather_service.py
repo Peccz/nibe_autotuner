@@ -64,17 +64,34 @@ class SMHIWeatherService:
             forecasts = []
 
             for i, t in enumerate(times):
-                dt = datetime.fromisoformat(t).replace(tzinfo=timezone.utc)
+                try:
+                    dt = datetime.fromisoformat(t).replace(tzinfo=timezone.utc)
+                except (TypeError, ValueError):
+                    continue
                 if dt > cutoff:
                     break
+
+                # Open-Meteo occasionally returns null for an individual hour.
+                # Temperature is the critical field for planning — skip incomplete
+                # hours rather than letting int(None) drop the entire forecast.
+                temp = temps[i]
+                if temp is None:
+                    continue
+
+                wind  = winds[i]   if winds[i]   is not None else 0.0
+                wdir  = dirs[i]    if dirs[i]    is not None else 0
+                hum   = hums[i]    if hums[i]    is not None else 0
+                cloud = clouds[i]  if clouds[i]  is not None else 100
+                precip = precips[i] if precips[i] is not None else 0.0
+
                 forecasts.append(WeatherForecast(
                     timestamp=dt,
-                    temperature=temps[i],
-                    precipitation=precips[i],
-                    wind_speed=winds[i] / 3.6,          # km/h → m/s
-                    wind_direction=int(dirs[i]),
-                    humidity=int(hums[i]),
-                    cloud_cover=int(clouds[i] / 12.5),  # % → octas (0-8)
+                    temperature=float(temp),
+                    precipitation=float(precip),
+                    wind_speed=float(wind) / 3.6,          # km/h → m/s
+                    wind_direction=int(wdir),
+                    humidity=int(hum),
+                    cloud_cover=int(float(cloud) / 12.5),  # % → octas (0-8)
                 ))
 
             logger.info(f"Retrieved {len(forecasts)} forecast points from Open-Meteo")

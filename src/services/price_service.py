@@ -1,7 +1,7 @@
 import requests
 import json
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 from loguru import logger
@@ -26,6 +26,11 @@ class PriceService:
     ENERGY_TAX_INCL_VAT = 0.5488                        # Energiskatt: 54.88 öre/kWh (Inklusive moms)
     RETAILER_FEE = float(os.getenv("PRICE_RETAILER", 0.05)) # Elhandlare: Påslag + Elcertifikat (Default 5 öre/kWh)
     VAT_RATE = 1.25                                     # Moms: 25% (på spotpris + nätavgift + påslag)
+
+    # Single source of truth for "no price available" total cost (SEK/kWh).
+    # Used here AND by smart_planner so the fallback behaviour is identical on
+    # every code path (see DNA pitfall #2).
+    FALLBACK_PRICE_SEK = 1.0
     
     def __init__(self):
         self.zone = os.getenv("ELECTRICITY_ZONE", "SE3")
@@ -65,24 +70,37 @@ class PriceService:
         return self.get_price_details_at(dt)['total']
 
     def get_price_details_at(self, dt: datetime) -> Dict[str, float]:
-        """Returns detailed price info for a specific datetime"""
+        """Returns detailed price info for a specific datetime.
+
+        Matching is done in UTC so it does not depend on the host timezone
+        matching the price zone (DNA pitfall #2). Naive datetimes are assumed
+        to be system-local. When no price is available the total falls back to
+        FALLBACK_PRICE_SEK, identical to smart_planner's per-hour fallback.
+        """
         try:
             prices = self._get_prices_for_date(dt)
-            spot = 1.0 # Fallback
+            target_utc = (dt if dt.tzinfo else dt.astimezone()).astimezone(timezone.utc)
+
+            matched_spot = None
             if prices:
                 for p in prices:
                     try:
-                        start_time = datetime.fromisoformat(p['time_start'])
-                        if start_time.hour == dt.hour:
-                            spot = float(p['SEK_per_kWh'])
+                        start_utc = datetime.fromisoformat(p['time_start']).astimezone(timezone.utc)
+                        if (start_utc.year, start_utc.month, start_utc.day, start_utc.hour) == \
+                           (target_utc.year, target_utc.month, target_utc.day, target_utc.hour):
+                            matched_spot = float(p['SEK_per_kWh'])
                             break
-                    except: continue
-            
-            total = self._calculate_total_cost(spot, dt)
-            return {'total': total, 'spot': spot}
+                    except Exception:
+                        continue
+
+            if matched_spot is None:
+                return {'total': self.FALLBACK_PRICE_SEK, 'spot': 0.0}
+
+            total = self._calculate_total_cost(matched_spot, dt)
+            return {'total': total, 'spot': matched_spot}
         except Exception as e:
             logger.error(f"Error fetching price at {dt}: {e}")
-            return {'total': 1.50, 'spot': 0.50}
+            return {'total': self.FALLBACK_PRICE_SEK, 'spot': 0.0}
 
     def get_prices_yesterday(self) -> List[PricePoint]:
         yesterday = datetime.now() - timedelta(days=1)

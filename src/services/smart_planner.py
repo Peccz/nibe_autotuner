@@ -489,7 +489,7 @@ def calculate_plan():
         if p_obj:
             price_list.append(p_obj.price_per_kwh)
         else:
-            price_list.append(1.0)
+            price_list.append(price_service.FALLBACK_PRICE_SEK)
             price_fallback_hours.add(i)
 
         if forecasts:
