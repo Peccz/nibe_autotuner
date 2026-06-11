@@ -51,7 +51,15 @@ fi
 # 2. Sync Files
 echo ""
 echo "▶ [2/4] Syncing files to Raspberry Pi ($REMOTE_HOST)..."
-rsync -avz --exclude 'venv' --exclude '__pycache__' --exclude 'data/nibe_autotuner.db' --exclude '.git' \
+# IMPORTANT: never sync host-specific secrets/config or DB state over the RPi.
+# .env / tokens.json / *.myuplink_tokens.json hold production credentials and
+# PLANNER_ENGINE; data/*.db* (incl. -wal/-shm) is live state that must not be
+# clobbered. Overwriting any of these has caused a production regression before.
+rsync -avz \
+    --exclude 'venv' --exclude '__pycache__' --exclude '.git' --exclude '*.pyc' \
+    --exclude '.env' --exclude 'tokens.json' --exclude '.myuplink_tokens.json' --exclude '*.tokens.json' \
+    --exclude 'data/*.db' --exclude 'data/*.db-wal' --exclude 'data/*.db-shm' \
+    --exclude '*.log' --exclude '.codex' --exclude '.DS_Store' \
     ./ $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/
 
 if [ $? -eq 0 ]; then
