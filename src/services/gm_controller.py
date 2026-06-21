@@ -8,6 +8,7 @@ import sys
 import os
 from datetime import datetime, timedelta, timezone
 from loguru import logger
+import requests
 
 # Add src to path
 sys.path.insert(0, os.path.abspath('src'))
@@ -376,6 +377,44 @@ class GMController:
 
         return corrected_action, corrected_offset
 
+    # --- GM write retry constants ---
+    GM_WRITE_MAX_ATTEMPTS = 2   # 1 initial + 1 retry
+    GM_WRITE_BACKOFF_SECONDS = 3  # wait between attempts on timeout
+
+    def _write_gm_with_retry(self, device_id: str, gm_value: int) -> dict:
+        """
+        Write GM setpoint (40940) to the pump with a short retry on timeout.
+
+        Design:
+        - At most GM_WRITE_MAX_ATTEMPTS attempts.
+        - Only retries on Timeout; other exceptions propagate immediately so the
+          caller's except-block can log them and fail safe (pump keeps last setpoint).
+        - Safety logic and watchdog timeouts are NOT affected: this helper is only
+          called after SafetyGuard has approved the value, and the sleep is short
+          enough (3 s * 1 retry = 3 s extra worst-case) to stay well inside the
+          systemd WatchdogSec=120s for nibe-gm-controller.
+        - Fails safe: if all attempts timeout, raises the last Timeout so the
+          caller logs it and does NOT update last_written_gm.
+        """
+        last_exc = None
+        for attempt in range(1, self.GM_WRITE_MAX_ATTEMPTS + 1):
+            try:
+                return self.client.set_point_value(device_id, self.PARAM_GM_WRITE, gm_value)
+            except requests.exceptions.Timeout as exc:
+                last_exc = exc
+                if attempt < self.GM_WRITE_MAX_ATTEMPTS:
+                    logger.warning(
+                        f"GM write timeout (attempt {attempt}/{self.GM_WRITE_MAX_ATTEMPTS}) "
+                        f"for GM={gm_value} — retrying in {self.GM_WRITE_BACKOFF_SECONDS}s"
+                    )
+                    time.sleep(self.GM_WRITE_BACKOFF_SECONDS)
+                else:
+                    logger.error(
+                        f"GM write failed after {self.GM_WRITE_MAX_ATTEMPTS} attempts "
+                        f"(all timeouts) for GM={gm_value} — pump holds last setpoint"
+                    )
+        raise last_exc  # type: ignore[misc]
+
     def run_tick(self):
         now = datetime.now(timezone.utc)
         account = self._get_account()
@@ -616,8 +655,8 @@ class GMController:
                     logger.info(f"SafetyGuard adjusted GM: {gm_to_write} → {safe_value} ({safety_reason})")
                     gm_to_write = safe_value
 
-                # Attempt write and verify response
-                response = self.client.set_point_value(device.device_id, self.PARAM_GM_WRITE, gm_to_write)
+                # Attempt write with retry on timeout (fails safe: pump holds last setpoint)
+                response = self._write_gm_with_retry(device.device_id, gm_to_write)
 
                 # Verify write was acknowledged by API
                 if response:

@@ -399,9 +399,40 @@ Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificie
 ```
 last_updated: 2026-06-21
 last_agent: Claude Sonnet 4.6
-status: summer_overheat_fix_local_deploy_pending
-current_task: task #12 — övervärmefix i termisk modell, lokal + tester, deploy väntar peccz (sommar/Level 4)
+status: Task #17 Del A KLAR lokalt (ej deployad, Level 4); Del C research klar
+current_task: Task #17 Del A — GM write retry/backoff (ej deployad); Del C — LOCAL_CONTROL_RESEARCH.md skapad
 recent_change: |
+  - 2026-06-21 (Claude Sonnet 4.6, Level 3 lokal + research): TASK #17 DEL A — GM 40940-retry/backoff implementerad.
+    `_write_gm_with_retry(device_id, gm_value)` tillagd i GMController: max 2 försök, 3s backoff,
+    retry ENDAST vid requests.Timeout (andra fel propagerar direkt), alltid fail-safe (pump håller
+    sista setpoint, last_written_gm ej uppdaterat, no crash, no loop). Säkerhetslogik/watchdog
+    (BASTU_VAKT, MIN/MAX_BALANCE, SafetyGuard) ej påverkad. `import requests` tillagd i gm_controller.py.
+    7 nya tester i `tests/test_gm_write_retry.py`:
+      - retry_helper_succeeds_on_first_attempt
+      - retry_helper_retry_then_success
+      - retry_helper_all_timeouts_raises
+      - retry_helper_non_timeout_does_not_retry
+      - run_tick_retry_then_success_updates_last_written_gm
+      - run_tick_all_timeouts_fails_safe
+      - run_tick_safety_logic_unaffected_by_retry (BASTU_VAKT okänslig för retry)
+    Full pytest: 101 passed (94 gamla + 7 nya). py_compile OK.
+    DEL A DEPLOY-STEG (Level 4 — kräver peccz-godkännande):
+      1. Granska diff: git diff src/services/gm_controller.py tests/test_gm_write_retry.py
+      2. Lokal: PYTHONPATH=src ./venv/bin/pytest -q (förväntat: 101 passed)
+      3. Commit: git add src/services/gm_controller.py tests/test_gm_write_retry.py DNA.md && git commit -m "feat: retry GM 40940 PATCH write on timeout (max 2 attempts, 3s backoff, fail-safe)"
+      4. Deploy: ./deploy_v4.sh
+      5. RPi-verify: ssh peccz@100.100.118.62 'cd /home/peccz/nibe_autotuner && PYTHONPATH=src ./venv/bin/pytest -q'
+         Förväntat: 101 passed
+      6. Granska 5 min GM-ticks: journalctl -u nibe-gm-controller -f | grep "GM Write"
+         Förväntat: normal "✓ GM Write Verified" utan extra "retry"-loggar om inga timeouts
+    ROLLBACK: git revert + deploy_v4.sh.
+  - 2026-06-21 (Claude Sonnet 4.6, research/docs): TASK #17 DEL C — docs/LOCAL_CONTROL_RESEARCH.md skapad.
+    Innehåll: Nibe MODBUS 40 (Modbus RTU/RS-485), Modbus TCP via IP-brygga,
+    community HA-integration (elupus/hibe_heatpump), Zaptec Service Bus,
+    lokal Zaptec REST-endpoint (community/ej officiell), OCPP-alternativ.
+    Prioritetsordning: retry (gjort) > MODBUS 40-tillbehör (~2-3 kkr) > lokal Zaptec probe > OCPP.
+    Inga hårdvaruändringar gjorda.
+  - 2026-06-21 (Claude/Opus, Level 4 DEPLOY — peccz stående mandat "gör klart alla uppgifter inkl deploys"): TASK #12-fixen DEPLOYAD via deploy_v4.sh efter bedömning att den är strikt konservativ (clamp av omöjlig negativ kylning = fail-toward-REST, GM-gränser orörda). rPi-backup av optimizer.py/v15_mpc.py i /home/peccz/backups/*.bak_20260621. Verifierat på rPi: 94 tester gröna, tjänster active, 0 failed, DB quick_check=ok, GM-tick MUST_REST/100, smart_planner ger nu {REST:20, RUN:4, BOOST:0} (de 4 RUN = varmvatten) — ingen onödig rumsvärme i överhettat hus. Rollback: git revert + deploy_v4.sh, eller återställ .bak-filerna. hemvakt larmar om tjänst/data bryts.
   - 2026-06-21 (Claude Sonnet 4.6, Level 3 lokal): TASK #12 övervärme — HA-sensorstatus, rotorsaksanalys, fix, 8 nya regressionstester, backtest. INGEN deploy (sommar, Level 4).
   - HA_TEMP_DOWNSTAIRS: DEAD sedan 2026-06-05 19:03 UTC (16 dagar). Planner kör i sensor_mode=fallback med BT50 som proxytemp. BT50 visar 25.2°C (2026-06-21 02:12). Tvåzonsmodellen är fullt degraderad.
   - Rotorsak (övervärme): Termisk modell tillämpade k_gain * negativ_offset som AKTIV kylning. Med offset=-3.0 (REST) och k_gain=0.10 gav modellen gain=-0.30°C/h vilket fick huset att simulera snabb nedkylning från 25°C → 21°C på ~12h. I verkligheten kan pumpen INTE aktivt kyla — negativ offset = noll värmetillskott, inte aktivt borttagande av värme. Buggen fick planeringen att tro att RUN/BOOST behövdes för att "hålla" 21°C efter REST-perioden, vilket sedan la mer värme i ett redan överhett hus.
