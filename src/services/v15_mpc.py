@@ -115,12 +115,14 @@ def simulate_v15(
         solar = _solar_gain_for_hour(hour, clouds[i])
         supply = _approx_supply(outdoor, offset)
 
-        floor_gain = k_gain_floor * offset
+        # Negative offset means no heat input, not active cooling (pump cannot remove heat).
+        # Clamp to zero so only passive loss drives cooling in REST/low-offset mode.
+        floor_gain = max(0.0, k_gain_floor * offset)
         if supply > settings.SHUNT_SETPOINT:
             floor_gain *= 0.60
 
         dexter_boost = max(0.0, supply - settings.SHUNT_SETPOINT) * settings.RAD_BOOST_FACTOR
-        dexter_gain = k_gain_dexter * offset + dexter_boost
+        dexter_gain = max(0.0, k_gain_dexter * offset) + dexter_boost
 
         floor_loss = k_leak_floor * wind_factor * (floor - outdoor)
         dexter_loss = k_leak_dexter * wind_factor * (dexter - outdoor)

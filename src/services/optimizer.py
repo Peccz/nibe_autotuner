@@ -75,7 +75,9 @@ def predict_temperatures(
 
         delta_t = current_temp - outdoor
         loss = k_leak * lf * delta_t
-        gain = k_gain * offset
+        # Negative offset means reduced/no heat input, not active cooling.
+        # The heat pump cannot remove heat; only passive loss drives cooling.
+        gain = max(0.0, k_gain * offset)
 
         current_temp = current_temp - loss + gain
         temps.append(current_temp)
@@ -132,11 +134,12 @@ def predict_temperatures_two_zone(
         rad_boost = max(0.0, (supply - shunt) * boost)
 
         # Floor zone (shunt buffers it — less sensitive to offset swings)
-        t_floor += -k_leak_floor * lf * (t_floor - outdoor) + k_gain_floor * offset
+        # Negative offset means no heat input, not active cooling (pump cannot remove heat).
+        t_floor += -k_leak_floor * lf * (t_floor - outdoor) + max(0.0, k_gain_floor * offset)
         floor_temps.append(t_floor)
 
         # Radiator zone (baseline gain + boost above shunt)
-        t_rad += -k_leak_rad * lf * (t_rad - outdoor) + k_gain_rad * offset + rad_boost
+        t_rad += -k_leak_rad * lf * (t_rad - outdoor) + max(0.0, k_gain_rad * offset) + rad_boost
         rad_temps.append(t_rad)
 
     return floor_temps, rad_temps

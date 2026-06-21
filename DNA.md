@@ -397,11 +397,37 @@ Utomhusgivaren sitter på fasaden i västläge. Eftermiddagssol kan ge artificie
 *AI-agenter: uppdatera detta avsnitt efter varje session.*
 
 ```
-last_updated: 2026-06-11
-last_agent: Claude Opus 4.8
-status: robustness_fixes_local_not_deployed
-current_task: Robusthet/konsistens-fixar i styrloopen (stale/saknad data), lokalt + tester
+last_updated: 2026-06-21
+last_agent: Claude Sonnet 4.6
+status: summer_overheat_fix_local_deploy_pending
+current_task: task #12 — övervärmefix i termisk modell, lokal + tester, deploy väntar peccz (sommar/Level 4)
 recent_change: |
+  - 2026-06-21 (Claude Sonnet 4.6, Level 3 lokal): TASK #12 övervärme — HA-sensorstatus, rotorsaksanalys, fix, 8 nya regressionstester, backtest. INGEN deploy (sommar, Level 4).
+  - HA_TEMP_DOWNSTAIRS: DEAD sedan 2026-06-05 19:03 UTC (16 dagar). Planner kör i sensor_mode=fallback med BT50 som proxytemp. BT50 visar 25.2°C (2026-06-21 02:12). Tvåzonsmodellen är fullt degraderad.
+  - Rotorsak (övervärme): Termisk modell tillämpade k_gain * negativ_offset som AKTIV kylning. Med offset=-3.0 (REST) och k_gain=0.10 gav modellen gain=-0.30°C/h vilket fick huset att simulera snabb nedkylning från 25°C → 21°C på ~12h. I verkligheten kan pumpen INTE aktivt kyla — negativ offset = noll värmetillskott, inte aktivt borttagande av värme. Buggen fick planeringen att tro att RUN/BOOST behövdes för att "hålla" 21°C efter REST-perioden, vilket sedan la mer värme i ett redan överhett hus.
+  - Fix: `gain = max(0.0, k_gain * offset)` i `src/services/optimizer.py` (predict_temperatures + predict_temperatures_two_zone) och `floor_gain = max(0.0, k_gain_floor * offset)` / `dexter_gain = max(0.0, k_gain_dexter * offset) + dexter_boost` i `src/services/v15_mpc.py` (simulate_v15). Passiv K_LEAK-förlust hanterar kylning i stället.
+  - Backtest (syntetisk, hus=25°C utomhus=20°C): FÖRE fix → REST -3.0 predikterade 24.69°C efter 1h, 23.15°C efter 6h (felaktig aktiv kylning) → planerade RUN/BOOST. EFTER fix → REST -3.0 predikterar 24.99°C efter 1h, 24.91°C efter 24h (bara passiv förlust ~0.01°C/h) → V16 schemalägger 24h REST, 0 RUN, 0 BOOST.
+  - Verklig GM-data bekräftar systemet är safety-dominerat: senaste 30 dagar BT50 snitt 23.29°C, 43% BASTU_VAKT, 55% WARM_OVERRIDE, <1% RUN/BOOST. Pumpen startar bara för VV (55Hz kortbörst).
+  - Tester: 8 nya regressionstester i `tests/test_summer_overheat_fix.py`, full `pytest -q` 94 passed (86 gamla + 8 nya).
+  - DEPLOY-CHECKPOINT (väntar peccz): se §11 open_issues och exakta deploy-steg nedan.
+
+  DEPLOY-STEG (peccz kör när sommar/Level 4 är godkänt):
+  1. Granska diff: `git diff src/services/optimizer.py src/services/v15_mpc.py tests/test_summer_overheat_fix.py`
+  2. Lokal verifiering: `cd /home/peccz/AI/nibe_autotuner && PYTHONPATH=src ./venv/bin/pytest -q` (förväntat: 94 passed)
+  3. Commit: `git add src/services/optimizer.py src/services/v15_mpc.py tests/test_summer_overheat_fix.py DNA.md && git commit -m "fix: clamp negative thermal gain to zero (pump cannot actively cool house)"`
+  4. Deploy: `./deploy_v4.sh`
+  5. RPi-verifiering direkt efter deploy:
+     a. `ssh peccz@100.100.118.62 'cd /home/peccz/nibe_autotuner && PYTHONPATH=src ./venv/bin/pytest -q'` (förväntat: 94 passed)
+     b. `ssh peccz@100.100.118.62 'sudo systemctl status nibe-gm-controller nibe-smart-planner.timer'` (båda active)
+     c. Vänta 1h, kör manuell smart_planner: `ssh peccz@100.100.118.62 'cd /home/peccz/nibe_autotuner && PYTHONPATH=src ./venv/bin/python src/services/smart_planner.py'`
+     d. Granska logg: förväntat `sensor_mode=fallback`, `planned_actions={'REST': 20+, 'RUN': 4-, 'BOOST': 0}` om BT50 fortfarande >22°C
+     e. Granska GM-ticks 15 min: `ssh peccz@100.100.118.62 "sqlite3 data/nibe_autotuner.db 'SELECT timestamp, action, safety_override, gm_written FROM gm_transactions ORDER BY timestamp DESC LIMIT 15'"` — förväntat MUST_REST/BASTU_VAKT eller WARM_OVERRIDE om temp sjunkit under 23.5°C
+  6. Om ngt är fel: `ssh peccz@100.100.118.62 'echo "PLANNER_ENGINE=v14" >> /home/peccz/nibe_autotuner/.env'` (lägg till rad för att tvinga V14 som fallback), kör smart_planner manuellt.
+
+  NOTERA: Fixen ger korrektare modellbeteende men ändrar INTE de faktiska safety-gränserna (BASTU_VAKT=23.5°C, MIN_BALANCE=-2000, MAX_BALANCE=200 är orörda). Det enda operationella resultatet är att planerarens simulerade plan går till fler REST-timmar när huset är överhett — GM-kontrollern höll det ändå via BASTU_VAKT/WARM_OVERRIDE, men nu planerar planneraren korrekt från börja.
+
+  KALIBRERING EFTER SOMMAR: Kalibreringshistoriken har k_leak=0.00135 (kalibrerat vinter/vår). För höst/vinter kan kalibreringen behöva återställas. data_logger kör nattlig EMA-kalibrering automatiskt — följ upp att k_leak ökar tillbaka mot 0.002 i september-oktober.
+
   - 2026-06-11 (Claude, Level 3 + deploy): Besparingsmätning implementerad och deployad. Ny `src/services/savings_report.py` fyller daily_performance-kolumnerna baseline_kwh/baseline_cost_sek/savings_sek/savings_percent (fanns i schemat sedan start, aldrig populerade). Baseline = samma kompressorenergi fördelad efter värmebehov (max(0, 17°C − ute)) i stället för pris; mäter ren prisförflyttning, VV ingår på båda sidor (konservativt). Hook i `_aggregate_daily_performance` (midnatt), `scripts/backfill_savings.py` (historik via elprisetjustnu, dry-run default, `--recompute-all` för metodkonsistens) och `scripts/savings_report.py` (månadsrapport, read-only).
   - ROTORSAK ai_evaluator: cron 05:30 (`run_ai_evaluation.sh`) har kraschat varje natt sedan ~2026-03-25 med UNIQUE constraint på daily_performance.date — data_logger-aggregeringen (midnatt) skapar raden först, ai_evaluator INSERT:ar i stället för UPDATE. Dess sommarbaseline är dessutom trasig (0 kWh → negativ nonsensbesparing). BESLUTSPUNKT till peccz: ta bort cron-raden (auto-mode-klassificeraren nekade borttagning; crontab-backup i `/tmp/nibe_savings_deploy_20260611/crontab_before`).
   - Hela serien omräknad metodkonsistent på RPi: 144/158 dygn ifyllda. Resultat: total prisförflyttningsbesparing +68 kr på 158 dygn (+1,9 %); vinter (jan–mar) ±0 kr, vår/försommar +5–8 %. Slutsats: prisförflyttning i VP är nästan värdelös i högvinter (kontinuerligt behov + warm-override-dominerad GM); den flyttbara lasten i hushållet är EV-laddningen. Gamla ai_evaluator-siffror (~10 kr/dygn december) var metodologiskt uppblåsta.
@@ -582,10 +608,11 @@ recent_change: |
   - Efter WAL-återställning verifierades journal_mode=wal, planned_heating_schedule uppdaterades till 2026-04-15 06:00:00 och smart_planner körde igenom utan database is locked
   - nibe-mobile, nibe-autotuner, nibe-gm-controller och nibe-api är active efter WAL-återställningen; /api/v7/dashboard svarar 200
 open_issues:
+  - DEPLOY PENDING (task #12): gain-fix i optimizer.py + v15_mpc.py + 8 nya tester redo lokalt; deploy väntar peccz (sommar/Level 4). Exakta steg i recent_change ovan.
+  - HA_TEMP_DOWNSTAIRS dead sedan 2026-06-05 (16+ dagar). Planner kör sensor_mode=fallback. BT50 used som proxytemp. Prioritet: repararera HA/IKEA-sensorn.
+  - BT50 visar 25.2°C (2026-06-21): huset är hett av sol/internvärme, inte av pumpen (som kör nästan uteslutande BASTU_VAKT/WARM_OVERRIDE). Pumpen startar bara för VV-produktion kortbörst.
   - Följ upp V16 active efter 12-24h: övervärmetid, REST/BOOST-fördelning, morgonkomfort, warmoverride/BASTU-ticks och om HA fallback fortsätter dominera
-  - HA/IKEA-zonsensorerna är fortfarande huvudrisk; V16 kör konservativt på BT50/gap-fallback men primär zonfeedback bör repareras
-  - Huset är fortfarande för varmt trots V15 active: åtgärda övervärmeläge och natt-BOOST innan ytterligare prisoptimering prioriteras
-  - HA/IKEA-zonsensorerna är stale igen från 2026-06-05 19:03 UTC; primär zonfeedback behöver repareras eller fallback-logiken göras striktare
+  - Huset är fortfarande för varmt trots V15/V16 active: åtgärda övervärmeläge och natt-BOOST innan ytterligare prisoptimering prioriteras
   - Current V15-plan kan BOOST:a nattetid när framtida priser saknas/faller tillbaka till 1.0; blockera sådan BOOST när aktuell/fallbackad zon ligger över övre komfortband
   - Följ upp V15 active efter första natten: Dexter-min, nedervåningsmin, övervärmetid, REST/BOOST-fördelning, warmoverride-ticks och om morgonkomforten håller
   - Vädringsskyddet är deployat och körs i GM-controller; följ upp 12-24h att det inte ger falska vädringshändelser och att riktig lokal vädring blockerar BOOST/recovery
@@ -622,6 +649,7 @@ open_issues:
 
 | Datum | Vad |
 |-------|-----|
+| 2026-06-21 | Task #12: Termisk modellfix — gain=max(0,k_gain*offset) i optimizer.py + v15_mpc.py. 8 nya regressionstester (test_summer_overheat_fix.py). Full pytest 94 passed. Ej deployad (sommar/Level 4, deploy väntar peccz). |
 | 2026-06-08 | BT50→nedervåning kalibrerad lokalt från historisk HA/IKEA-data: 30d offset ca -0.10°C, bucketad fallback implementerad i planner/GM-controller, full pytest 62 passed; ej deployad |
 | 2026-06-07 | Lokal arbetskatalog städad och pushad i tre commits; RPi live-katalog ersatt med ren release från Git HEAD `6206a92`, gamla katalogen backupad, V16-plan och GM-ticks verifierade; RPi full pytest 61 passed |
 | 2026-06-06 | V16 robust styrlogik implementerad lokalt: strikt komfort/övervärme/pris-prioritet, `PLANNER_ENGINE=v16_active`, V16 i backtestrapporten och full pytest 61 passed; ej deployad |
